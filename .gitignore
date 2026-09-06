@@ -91,3 +91,6 @@ ffdec-path.ts
 
 # versions dump for debugging
 versions-dump.txt
+
+# AndroidBuild local heavy workspace
+/.work/
