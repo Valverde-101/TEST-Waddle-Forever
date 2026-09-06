@@ -32,8 +32,6 @@ function Resolve-WaddleAndroidBuildRoot {
     $candidates.Add([string]$env:ANDROIDBUILD_ROOT)
   }
 
-  # Prefer the root implied by the canonical Repositories/<repo> layout when
-  # this script is already running from an AndroidBuild-managed checkout.
   try {
     $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
     $repoInfo = [IO.DirectoryInfo]$repoRoot
@@ -43,8 +41,6 @@ function Resolve-WaddleAndroidBuildRoot {
     }
   } catch {}
 
-  # Fall back to discovering AndroidBuild on any ready local drive instead of
-  # baking V:/D:/C: into the project adapter.
   foreach ($drive in [IO.DriveInfo]::GetDrives()) {
     try {
       if (-not $drive.IsReady) { continue }
@@ -197,7 +193,7 @@ function Test-WaddleToolchain {
   if (-not $node) { $node = Get-Command node -ErrorAction SilentlyContinue }
   if (-not $node) { throw 'NODE=FAIL missing' }
   $nodeVersion = (& $node.Source --version).Trim().TrimStart('v')
-  if ($nodeVersion -ne '20.12.2') { throw "NODE=FAIL required=20.12.2 actual=$nodeVersion" }
+  if ($nodeVersion -ne '20.19.0') { throw "NODE=FAIL required=20.19.0 actual=$nodeVersion" }
 
   $yarn = Get-Command yarn.cmd -ErrorAction SilentlyContinue
   if (-not $yarn) { $yarn = Get-Command yarn -ErrorAction SilentlyContinue }
@@ -211,7 +207,7 @@ function Test-WaddleToolchain {
 
   Write-Host "NODE=PASS version=$nodeVersion"
   Write-Host "YARN=PASS version=$yarnVersion"
-  Write-Host "NPM=INFO version=$npmVersion reference=9.8.1"
+  Write-Host "NPM=INFO version=$npmVersion"
 
   $ffdec = Ensure-AndroidBuildFFDec -AndroidBuildRoot $AndroidBuildRoot -Version '26.2.1'
   Write-Host "FFDEC=PASS version=26.2.1 path=$($ffdec.path)"
