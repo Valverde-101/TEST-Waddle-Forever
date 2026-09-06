@@ -45,7 +45,7 @@ function Install-WaddleDependencies {
   $exit = 1
   Push-Location $RepoRoot
   try {
-    & $yarn.Source install --frozen-lockfile --non-interactive --modules-folder $target --cache-folder $cache
+    & $yarn.Source install --frozen-lockfile --non-interactive --modules-folder $target --cache-folder $cache | Out-Host
     $exit = $LASTEXITCODE
   } finally {
     Pop-Location
