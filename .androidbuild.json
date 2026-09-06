@@ -58,7 +58,7 @@
     "build_seconds": 7200
   },
   "core": {
-    "minimum_version": "3.0.13",
+    "minimum_version": "3.0.14",
     "stable_path": "Core/Current"
   },
   "toolchain": {
