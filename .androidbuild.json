@@ -62,9 +62,11 @@
     "stable_path": "Core/Current"
   },
   "toolchain": {
-    "node": "20.12.2",
-    "npm_reference": "9.8.1",
+    "node": "20.19.0",
+    "npm_reference": "10.8.2",
     "yarn": "1.22.22",
+    "node_owner": "androidbuild-global",
+    "node_managed_path": "Tools/Node/20.19.0/x64",
     "ffdec": {
       "owner": "androidbuild-global",
       "version": "26.2.1"
