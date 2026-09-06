@@ -83,7 +83,6 @@
   "devDependencies": {
     "@types/archiver": "^6.0.3",
     "@types/discord-rpc": "^4.0.3",
-    "@types/electron-prompt": "^1.6.1",
     "@types/express": "^5.0.0",
     "@types/node": "^18.13.0",
     "@types/unzipper": "^0.10.10",
@@ -110,7 +109,6 @@
     "electron-fetch": "^1.9.1",
     "electron-is-dev": "^2.0.0",
     "electron-log": "^5.0.0-beta.16",
-    "electron-prompt": "^1.7.0",
     "electron-store": "^8.1.0",
     "electron-updater": "^5.3.0",
     "express": "^4.21.0",
