@@ -23,14 +23,59 @@ function Resolve-WaddleRepoRoot {
 
 function Resolve-WaddleAndroidBuildRoot {
   param([hashtable]$Context)
-  $candidates = @()
-  if ($Context.ContainsKey('androidbuild_root') -and $Context.androidbuild_root) { $candidates += [string]$Context.androidbuild_root }
-  if ($env:ANDROIDBUILD_ROOT) { $candidates += $env:ANDROIDBUILD_ROOT }
-  $candidates += @('V:\AndroidBuild','D:\AndroidBuild','C:\AndroidBuild')
-  foreach ($candidate in ($candidates | Select-Object -Unique)) {
-    if (Test-Path -LiteralPath $candidate -PathType Container) { return [IO.Path]::GetFullPath($candidate) }
+
+  $candidates = New-Object System.Collections.Generic.List[string]
+  if ($Context.ContainsKey('androidbuild_root') -and $Context.androidbuild_root) {
+    $candidates.Add([string]$Context.androidbuild_root)
   }
-  throw 'ANDROIDBUILD_ROOT=FAIL no_known_root'
+  if ($env:ANDROIDBUILD_ROOT -and -not $candidates.Contains([string]$env:ANDROIDBUILD_ROOT)) {
+    $candidates.Add([string]$env:ANDROIDBUILD_ROOT)
+  }
+
+  # Prefer the root implied by the canonical Repositories/<repo> layout when
+  # this script is already running from an AndroidBuild-managed checkout.
+  try {
+    $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+    $repoInfo = [IO.DirectoryInfo]$repoRoot
+    if ($repoInfo.Parent -and $repoInfo.Parent.Name -ieq 'Repositories' -and $repoInfo.Parent.Parent) {
+      $inferred = $repoInfo.Parent.Parent.FullName
+      if (-not $candidates.Contains($inferred)) { $candidates.Add($inferred) }
+    }
+  } catch {}
+
+  # Fall back to discovering AndroidBuild on any ready local drive instead of
+  # baking V:/D:/C: into the project adapter.
+  foreach ($drive in [IO.DriveInfo]::GetDrives()) {
+    try {
+      if (-not $drive.IsReady) { continue }
+      $candidate = [IO.Path]::Combine($drive.RootDirectory.FullName, 'AndroidBuild')
+      if (-not $candidates.Contains($candidate)) { $candidates.Add($candidate) }
+    } catch {}
+  }
+
+  foreach ($candidate in $candidates) {
+    try { $full = (Resolve-Path -LiteralPath $candidate -ErrorAction Stop).Path } catch { continue }
+    $module = Join-Path $full 'Core\Current\AndroidBuild.psd1'
+    if (Test-Path -LiteralPath $module -PathType Leaf) {
+      return [IO.Path]::GetFullPath($full)
+    }
+  }
+  throw 'ANDROIDBUILD_ROOT=FAIL current_core_not_found'
+}
+
+function Get-WaddleRequiredCoreVersion {
+  $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+  $configPath = Join-Path $repoRoot '.androidbuild.json'
+  if (-not (Test-Path -LiteralPath $configPath -PathType Leaf)) {
+    throw "ANDROIDBUILD_CONFIG=FAIL missing=$configPath"
+  }
+  $config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+  $required = [string]$config.core.minimum_version
+  if ([string]::IsNullOrWhiteSpace($required)) {
+    throw 'ANDROIDBUILD_CONFIG=FAIL core.minimum_version_missing'
+  }
+  try { [void][version]$required } catch { throw "ANDROIDBUILD_CONFIG=FAIL invalid_core_minimum=$required" }
+  return $required
 }
 
 function Import-WaddleCore {
@@ -41,10 +86,11 @@ function Import-WaddleCore {
   }
   Import-Module $module -Force
   $version = [string](Get-AndroidBuildCoreVersion)
-  if ([version]$version -lt [version]'3.0.13') {
-    throw "ANDROIDBUILD_CORE=FAIL required=3.0.13 actual=$version"
+  $required = Get-WaddleRequiredCoreVersion
+  if ([version]$version -lt [version]$required) {
+    throw "ANDROIDBUILD_CORE=FAIL required=$required actual=$version"
   }
-  Write-Host "ANDROIDBUILD_CORE=PASS version=$version"
+  Write-Host "ANDROIDBUILD_CORE=PASS version=$version required=$required root=$AndroidBuildRoot"
 }
 
 function Ensure-WaddleDirectory {
