@@ -24,18 +24,18 @@ jobs:
       - name: Use Waddle reference Node
         uses: actions/setup-node@v7
         with:
-          node-version: 20.12.2
+          node-version: 20.19.0
 
       - name: Pin Yarn Classic
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           npm install --global yarn@1.22.22
-          if ((node --version).Trim() -ne 'v20.12.2') { throw "NODE_SETUP=FAIL actual=$(node --version)" }
+          if ((node --version).Trim() -ne 'v20.19.0') { throw "NODE_SETUP=FAIL actual=$(node --version)" }
           if ((yarn --version).Trim() -ne '1.22.22') { throw "YARN_SETUP=FAIL actual=$(yarn --version)" }
           Write-Host "NODE_SETUP=PASS version=$(node --version)"
           Write-Host "YARN_SETUP=PASS version=$(yarn --version)"
-          Write-Host "NPM_SETUP=INFO version=$(npm --version) reference=9.8.1"
+          Write-Host "NPM_SETUP=INFO version=$(npm --version)"
 
       - name: Resolve AndroidBuild Core 3.0.14+
         shell: powershell
