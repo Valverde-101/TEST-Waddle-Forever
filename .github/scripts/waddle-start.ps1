@@ -9,6 +9,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'waddle-common.ps1')
 . (Join-Path $PSScriptRoot 'waddle-managed-node.ps1')
 . (Join-Path $PSScriptRoot 'waddle-local-runtime.ps1')
+. (Join-Path $PSScriptRoot 'waddle-workspace-resilience.ps1')
 
 $ctx = @{}
 if ($AndroidBuildRoot) { $ctx.androidbuild_root = $AndroidBuildRoot }
@@ -24,6 +25,7 @@ Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_NODE_EXE' -Value $managedNode.no
 Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_NPM_CMD' -Value $managedNode.npm
 Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_YARN_CMD' -Value $managedNode.yarn
 Import-WaddleLocalEnv -Path $envPath
+$dependencies = Invoke-WaddleDependencyBootstrap -RepoRoot $repo -WorkRoot $workspace.work_root
 Test-WaddlePepperFlash -RepoRoot $repo | Out-Null
 
 $git = Get-AndroidBuildGitPath $root
@@ -75,6 +77,7 @@ $state = [ordered]@{
   managed_node_home = $managedNode.home
   managed_node_exe = $managedNode.node
   electron = $electron
+  dependency_mode = $dependencies.mode
   ppapi_flash_path = $flash.path
   ppapi_flash_version = $flash.version
   ffdec_path = $toolchain.ffdec
@@ -84,7 +87,8 @@ $state = [ordered]@{
 }
 $state | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $statePath -Encoding UTF8
 
-Write-Host "WADDLE_START=PASS pid=$($process.Id) sha=$sha node=$($managedNode.node)"
+Write-Host "WADDLE_START=PASS pid=$($process.Id) sha=$sha node=$($managedNode.node) dependencies=$($dependencies.mode)"
 Write-Host "WADDLE_PPAPI_FLASH=PASS path=$($flash.path) version=$($flash.version)"
+Write-Host 'WADDLE_VISUAL_STUDIO=NOT_REQUIRED'
 Write-Host "WADDLE_RUNTIME_STDOUT=$stdout"
 Write-Host "WADDLE_RUNTIME_STDERR=$stderr"
