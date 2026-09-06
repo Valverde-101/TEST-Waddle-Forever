@@ -6,6 +6,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'waddle-common.ps1')
 . (Join-Path $PSScriptRoot 'waddle-managed-node.ps1')
+. (Join-Path $PSScriptRoot 'waddle-workspace-resilience.ps1')
 
 $ctx = Get-WaddleContext -ContextPath $ContextPath
 $repo = Resolve-WaddleRepoRoot -Context $ctx
