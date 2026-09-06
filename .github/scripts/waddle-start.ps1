@@ -7,6 +7,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'waddle-common.ps1')
+. (Join-Path $PSScriptRoot 'waddle-local-runtime.ps1')
 
 $ctx = @{}
 if ($AndroidBuildRoot) { $ctx.androidbuild_root = $AndroidBuildRoot }
@@ -14,7 +15,10 @@ $repo = Resolve-WaddleRepoRoot -Context $ctx
 $root = Resolve-WaddleAndroidBuildRoot -Context $ctx
 Import-WaddleCore -AndroidBuildRoot $root
 $workspace = Initialize-WaddleWorkspace -RepoRoot $repo -AndroidBuildRoot $root
-Test-WaddleToolchain -AndroidBuildRoot $root | Out-Null
+$toolchain = Test-WaddleToolchain -AndroidBuildRoot $root
+$envPath = Update-WaddleLocalEnv -RepoRoot $repo -AndroidBuildRoot $root -WorkRoot $workspace.work_root -FFDecPath $toolchain.ffdec
+Import-WaddleLocalEnv -Path $envPath
+Test-WaddlePepperFlash -RepoRoot $repo | Out-Null
 
 $git = Get-AndroidBuildGitPath $root
 $sha = (& $git -C $repo rev-parse HEAD).Trim()
@@ -33,10 +37,11 @@ if (-not $SkipBuild) {
 }
 
 $entry = Join-Path $repo 'compiled\client\main.js'
-$electron = Join-Path $repo 'node_modules\.bin\electron.cmd'
+$electron = Join-Path $workspace.work_root 'dependencies\node_modules\.bin\electron.cmd'
 if (-not (Test-Path -LiteralPath $entry -PathType Leaf)) { throw "WADDLE_START=FAIL compiled_entry_missing=$entry" }
-if (-not (Test-Path -LiteralPath $electron -PathType Leaf)) { throw "WADDLE_START=FAIL electron_missing=$electron" }
+if (-not (Test-Path -LiteralPath $electron -PathType Leaf)) { throw "WADDLE_START=FAIL electron_missing=$electron run=Waddle-Setup.cmd" }
 
+$flash = Test-WaddlePepperFlash -RepoRoot $repo
 $runtimeLogs = Join-Path $workspace.work_root 'logs\runtime'
 New-Item -ItemType Directory -Force -Path $runtimeLogs | Out-Null
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
@@ -47,14 +52,24 @@ $statePath = Join-Path $workspace.work_root 'state\waddle-client.json'
 $env:NODE_ENV = 'dev'
 $command = "`"$electron`" `"$entry`""
 $process = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d','/s','/c',$command) -WorkingDirectory $repo -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+Start-Sleep -Seconds 3
+$process.Refresh()
+if ($process.HasExited) {
+  $tail = if (Test-Path -LiteralPath $stderr) { (Get-Content -LiteralPath $stderr -Tail 30 -ErrorAction SilentlyContinue) -join ' | ' } else { '' }
+  throw "WADDLE_START=FAIL process_exited code=$($process.ExitCode) stderr=$tail"
+}
 
 $state = [ordered]@{
-  schema = 'waddle-client-state/v1'
+  schema = 'waddle-client-state/v2'
   status = 'RUNNING'
   pid = $process.Id
   source_sha = $sha
   repo_root = $repo
   work_root = $workspace.work_root
+  electron = $electron
+  ppapi_flash_path = $flash.path
+  ppapi_flash_version = $flash.version
+  ffdec_path = $toolchain.ffdec
   stdout = $stdout
   stderr = $stderr
   started_utc = [DateTime]::UtcNow.ToString('o')
@@ -62,5 +77,6 @@ $state = [ordered]@{
 $state | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $statePath -Encoding UTF8
 
 Write-Host "WADDLE_START=PASS pid=$($process.Id) sha=$sha"
+Write-Host "WADDLE_PPAPI_FLASH=PASS path=$($flash.path) version=$($flash.version)"
 Write-Host "WADDLE_RUNTIME_STDOUT=$stdout"
 Write-Host "WADDLE_RUNTIME_STDERR=$stderr"

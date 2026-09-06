@@ -6,6 +6,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'waddle-common.ps1')
+. (Join-Path $PSScriptRoot 'waddle-local-runtime.ps1')
 
 $ctx = @{}
 if ($AndroidBuildRoot) { $ctx.androidbuild_root = $AndroidBuildRoot }
@@ -14,9 +15,15 @@ $root = Resolve-WaddleAndroidBuildRoot -Context $ctx
 Import-WaddleCore -AndroidBuildRoot $root
 $workspace = Initialize-WaddleWorkspace -RepoRoot $repo -AndroidBuildRoot $root
 $toolchain = Test-WaddleToolchain -AndroidBuildRoot $root
+$envPath = Update-WaddleLocalEnv -RepoRoot $repo -AndroidBuildRoot $root -WorkRoot $workspace.work_root -FFDecPath $toolchain.ffdec
+Import-WaddleLocalEnv -Path $envPath
+$dependencies = Install-WaddleDependencies -RepoRoot $repo -WorkRoot $workspace.work_root
+$flash = Test-WaddlePepperFlash -RepoRoot $repo
 
 Write-Host "WADDLE_BOOTSTRAP=PASS repo=$repo work=$($workspace.work_root)"
 Write-Host "WADDLE_NODE=$($toolchain.node)"
 Write-Host "WADDLE_YARN=$($toolchain.yarn)"
 Write-Host "WADDLE_FFDEC=$($toolchain.ffdec)"
-Write-Host 'NEXT=Invoke-AndroidBuildBuild or .github/scripts/waddle-build.ps1 through Core'
+Write-Host "WADDLE_ELECTRON=$($dependencies.electron)"
+Write-Host "WADDLE_FLASH=$($flash.path)"
+Write-Host 'NEXT=yarn start or Waddle-Start.cmd'

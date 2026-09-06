@@ -135,6 +135,36 @@ jobs:
           }
           Invoke-AndroidBuildProjectHook -RepoRoot $env:WADDLE_CANONICAL_REPO -Hook precheck -Context $ctx -TimeoutSeconds 1800 | Out-Host
 
+      - name: Validate human local setup and direct Yarn install
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Push-Location $env:WADDLE_CANONICAL_REPO
+          try {
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.github\scripts\waddle-bootstrap.ps1' -AndroidBuildRoot $env:ANDROIDBUILD_ROOT
+            if($LASTEXITCODE -ne 0){throw "LOCAL_SETUP=FAIL bootstrap_exit=$LASTEXITCODE"}
+
+            # Reproduce the command a user naturally types. .yarnrc must keep it in .work
+            # and it must not fail with EINVAL/readlink on the node_modules junction.
+            & yarn.cmd install --frozen-lockfile --non-interactive
+            if($LASTEXITCODE -ne 0){throw "DIRECT_YARN_INSTALL=FAIL exit=$LASTEXITCODE"}
+
+            $link=Join-Path $env:WADDLE_CANONICAL_REPO 'node_modules'
+            $item=Get-Item -LiteralPath $link -Force
+            if(($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0){throw "DIRECT_YARN_INSTALL=FAIL node_modules_not_junction=$link"}
+            $target=Join-Path $env:WADDLE_CANONICAL_REPO '.work\dependencies\node_modules\electron\package.json'
+            if(-not(Test-Path -LiteralPath $target -PathType Leaf)){throw "DIRECT_YARN_INSTALL=FAIL electron_missing=$target"}
+
+            $envFile=Join-Path $env:WADDLE_CANONICAL_REPO '.env'
+            $envText=Get-Content -LiteralPath $envFile -Raw
+            foreach($key in @('ANDROIDBUILD_ROOT=','WADDLE_WORK_ROOT=','FFDEC_PATH=','WADDLE_PPAPI_FLASH_PATH=','WADDLE_PPAPI_FLASH_VERSION=32.0.0.303')){
+              if(-not $envText.Contains($key)){throw "LOCAL_ENV=FAIL missing=$key"}
+            }
+            Write-Host 'LOCAL_SETUP=PASS direct_yarn_install=true managed_env=true'
+          } finally {
+            Pop-Location
+          }
+
       - name: Build through AndroidBuild Core
         shell: powershell
         run: |
@@ -179,5 +209,7 @@ jobs:
             $item=Get-Item -LiteralPath (Join-Path $env:WADDLE_CANONICAL_REPO $linkName) -Force
             if(($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0){throw "LOCAL_INTEGRATION=FAIL not_junction=$linkName"}
           }
+          $flash=Join-Path $env:WADDLE_CANONICAL_REPO 'assets\flash\pepflashplayer64_32_0_0_303.dll'
+          if(-not(Test-Path -LiteralPath $flash -PathType Leaf)){throw "LOCAL_INTEGRATION=FAIL pepper_flash_missing=$flash"}
           Write-Host "LOCAL_INTEGRATION=PASS repo=$env:WADDLE_CANONICAL_REPO work=$work sha=$env:WADDLE_EXPECTED_SHA"
           Write-Host 'ANDROID=NOT_APPLICABLE APK=NOT_APPLICABLE PHYSICAL_ADB=NOT_APPLICABLE'

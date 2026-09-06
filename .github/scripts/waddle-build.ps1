@@ -5,13 +5,15 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'waddle-common.ps1')
+. (Join-Path $PSScriptRoot 'waddle-local-runtime.ps1')
 
 $ctx = Get-WaddleContext -ContextPath $ContextPath
 $repo = Resolve-WaddleRepoRoot -Context $ctx
 $androidBuildRoot = Resolve-WaddleAndroidBuildRoot -Context $ctx
 Import-WaddleCore -AndroidBuildRoot $androidBuildRoot
 $workspace = Initialize-WaddleWorkspace -RepoRoot $repo -AndroidBuildRoot $androidBuildRoot
-Test-WaddleToolchain -AndroidBuildRoot $androidBuildRoot | Out-Null
+$toolchain = Test-WaddleToolchain -AndroidBuildRoot $androidBuildRoot
+Enable-WaddleLocalNodeTooling -WorkRoot $workspace.work_root | Out-Null
 
 if ($ctx.ContainsKey('expected_sha') -and $ctx.expected_sha) {
   Test-AndroidBuildExactHead -RepoRoot $repo -ExpectedSha ([string]$ctx.expected_sha) -AndroidBuildRoot $androidBuildRoot | Out-Null
@@ -147,7 +149,8 @@ function Test-WaddleInstalledCompilerContract {
   }
 
   $alias = Get-WaddlePackageBin -PackageName 'tsc-alias' -BinName 'tsc-alias'
-  Write-Host "COMPILER_CONTRACT=PASS build_typescript=$($typescript7.version) lint_typescript=$($typescriptLint.version) eslint=$($eslint.version) typescript_eslint=8.63.0 tsc_alias=$($alias.version) direct_package_bins=true"
+  $tsx = Get-WaddlePackageBin -PackageName 'tsx' -BinName 'tsx'
+  Write-Host "COMPILER_CONTRACT=PASS build_typescript=$($typescript7.version) lint_typescript=$($typescriptLint.version) eslint=$($eslint.version) typescript_eslint=8.63.0 tsc_alias=$($alias.version) tsx=$($tsx.version) direct_package_bins=true"
 }
 
 function Reset-WaddleCompiledOutput {
@@ -173,19 +176,15 @@ Start-Transcript -LiteralPath $transcript -Force | Out-Null
 try {
   Push-Location $repo
   try {
-    # discord-rpc declares register-scheme as an optional transitive dependency. Yarn
-    # may warn if that native addon cannot compile on the host; the project does not
-    # import register-scheme directly, so that warning is non-blocking. We must keep
-    # optional dependencies enabled because TypeScript 7 supplies its platform-native
-    # compiler package through the same optional-dependency mechanism.
     Write-Host 'OPTIONAL_REGISTER_SCHEME=NON_BLOCKING source=discord-rpc reason=not_directly_required_by_waddle_integration'
     Invoke-WaddleCommand -Name 'yarn-install' -Arguments @('install','--frozen-lockfile','--non-interactive','--cache-folder',$env:YARN_CACHE_FOLDER)
+    Enable-WaddleLocalNodeTooling -WorkRoot $workspace.work_root | Out-Null
     Test-WaddleInstalledCompilerContract
-    Invoke-WaddleCommand -Name 'build-packages' -Arguments @('build-packages')
 
-    # The project intentionally uses two TypeScript installations while TS7's public
-    # API is not yet consumable by typescript-eslint: TS 7.0.2 compiles Waddle, while
-    # TS 6.0.3 is the supported API consumed by ESLint/typescript-eslint.
+    # Do not rely on Yarn Classic to discover local .bin shims when modules are
+    # physically stored under .work. Execute the package-declared TSX binary directly.
+    Invoke-WaddleNodePackageBin -Name 'build-packages' -PackageName 'tsx' -BinName 'tsx' -Arguments @('scripts/build-packages.ts')
+
     Reset-WaddleCompiledOutput
     Invoke-WaddleNodePackageBin -Name 'tsc' -PackageName 'typescript-7' -BinName 'tsc'
     Invoke-WaddleNodePackageBin -Name 'tsc-alias' -PackageName 'tsc-alias' -BinName 'tsc-alias'
@@ -206,6 +205,7 @@ try {
     compiled = (Join-Path $workspace.work_root 'build\compiled')
     dist = (Join-Path $workspace.work_root 'dist\package')
     yarn_cache = $env:YARN_CACHE_FOLDER
+    node_path = $env:NODE_PATH
     optional_register_scheme = 'NON_BLOCKING'
     build_typescript = '7.0.2'
     lint_typescript = '6.0.3'
