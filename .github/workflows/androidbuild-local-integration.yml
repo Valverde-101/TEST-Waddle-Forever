@@ -135,14 +135,42 @@ jobs:
           }
           Invoke-AndroidBuildProjectHook -RepoRoot $env:WADDLE_CANONICAL_REPO -Hook precheck -Context $ctx -TimeoutSeconds 1800 | Out-Host
 
+      - name: Validate Setup and Start failure persistence
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Push-Location $env:WADDLE_CANONICAL_REPO
+          try {
+            $env:WADDLE_NONINTERACTIVE='1'
+            foreach($action in @('Setup','Start')){
+              $env:WADDLE_LAUNCHER_SELFTEST_FAIL='1'
+              $cmd="Waddle-$action.cmd"
+              & cmd.exe /d /c $cmd
+              $code=$LASTEXITCODE
+              Remove-Item Env:WADDLE_LAUNCHER_SELFTEST_FAIL -ErrorAction SilentlyContinue
+              if($code -eq 0){throw "LAUNCHER_FAILURE_PERSISTENCE=FAIL action=$action reason=unexpected_success"}
+              $log=Join-Path $env:WADDLE_CANONICAL_REPO ('.work\logs\launcher\'+$action.ToLowerInvariant()+'-last.log')
+              if(-not(Test-Path -LiteralPath $log -PathType Leaf)){throw "LAUNCHER_FAILURE_PERSISTENCE=FAIL action=$action reason=last_log_missing path=$log"}
+              $text=Get-Content -LiteralPath $log -Raw
+              if(-not $text.Contains('WADDLE_LAUNCHER_SELFTEST_FAIL')){throw "LAUNCHER_FAILURE_PERSISTENCE=FAIL action=$action reason=selftest_marker_missing"}
+              if(-not $text.Contains('WADDLE_LAUNCHER=FAIL')){throw "LAUNCHER_FAILURE_PERSISTENCE=FAIL action=$action reason=fail_marker_missing"}
+              Write-Host "LAUNCHER_FAILURE_PERSISTENCE=PASS action=$action exit=$code log=$log"
+            }
+          } finally {
+            Remove-Item Env:WADDLE_LAUNCHER_SELFTEST_FAIL -ErrorAction SilentlyContinue
+            Remove-Item Env:WADDLE_NONINTERACTIVE -ErrorAction SilentlyContinue
+            Pop-Location
+          }
+
       - name: Validate human local setup and direct Yarn install
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           Push-Location $env:WADDLE_CANONICAL_REPO
           try {
-            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.github\scripts\waddle-bootstrap.ps1' -AndroidBuildRoot $env:ANDROIDBUILD_ROOT
-            if($LASTEXITCODE -ne 0){throw "LOCAL_SETUP=FAIL bootstrap_exit=$LASTEXITCODE"}
+            $env:WADDLE_NONINTERACTIVE='1'
+            & cmd.exe /d /c 'Waddle-Setup.cmd'
+            if($LASTEXITCODE -ne 0){throw "LOCAL_SETUP=FAIL setup_cmd_exit=$LASTEXITCODE"}
 
             # Reproduce the command a user naturally types. .yarnrc must keep it in .work
             # and it must not fail with EINVAL/readlink on the node_modules junction.
@@ -160,8 +188,11 @@ jobs:
             foreach($key in @('ANDROIDBUILD_ROOT=','WADDLE_WORK_ROOT=','FFDEC_PATH=','WADDLE_PPAPI_FLASH_PATH=','WADDLE_PPAPI_FLASH_VERSION=32.0.0.303')){
               if(-not $envText.Contains($key)){throw "LOCAL_ENV=FAIL missing=$key"}
             }
-            Write-Host 'LOCAL_SETUP=PASS direct_yarn_install=true managed_env=true'
+            $setupLog=Join-Path $env:WADDLE_CANONICAL_REPO '.work\logs\launcher\setup-last.log'
+            if(-not(Test-Path -LiteralPath $setupLog -PathType Leaf)){throw "LOCAL_SETUP=FAIL launcher_log_missing=$setupLog"}
+            Write-Host "LOCAL_SETUP=PASS direct_yarn_install=true managed_env=true launcher_log=$setupLog"
           } finally {
+            Remove-Item Env:WADDLE_NONINTERACTIVE -ErrorAction SilentlyContinue
             Pop-Location
           }
 
@@ -199,6 +230,7 @@ jobs:
             'swf-analysis',
             'diagnostics',
             'logs\build',
+            'logs\launcher',
             'state\waddle-build-summary.json',
             'state\build-provenance.json'
           )){
