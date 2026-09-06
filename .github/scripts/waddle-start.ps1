@@ -7,6 +7,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'waddle-common.ps1')
+. (Join-Path $PSScriptRoot 'waddle-managed-node.ps1')
 . (Join-Path $PSScriptRoot 'waddle-local-runtime.ps1')
 
 $ctx = @{}
@@ -14,6 +15,7 @@ if ($AndroidBuildRoot) { $ctx.androidbuild_root = $AndroidBuildRoot }
 $repo = Resolve-WaddleRepoRoot -Context $ctx
 $root = Resolve-WaddleAndroidBuildRoot -Context $ctx
 Import-WaddleCore -AndroidBuildRoot $root
+$managedNode = Enable-WaddleManagedNodeToolchain -AndroidBuildRoot $root
 $workspace = Initialize-WaddleWorkspace -RepoRoot $repo -AndroidBuildRoot $root
 $toolchain = Test-WaddleToolchain -AndroidBuildRoot $root
 $envPath = Update-WaddleLocalEnv -RepoRoot $repo -AndroidBuildRoot $root -WorkRoot $workspace.work_root -FFDecPath $toolchain.ffdec
@@ -60,12 +62,14 @@ if ($process.HasExited) {
 }
 
 $state = [ordered]@{
-  schema = 'waddle-client-state/v2'
+  schema = 'waddle-client-state/v3'
   status = 'RUNNING'
   pid = $process.Id
   source_sha = $sha
   repo_root = $repo
   work_root = $workspace.work_root
+  managed_node_home = $managedNode.home
+  managed_node_exe = $managedNode.node
   electron = $electron
   ppapi_flash_path = $flash.path
   ppapi_flash_version = $flash.version
@@ -76,7 +80,7 @@ $state = [ordered]@{
 }
 $state | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $statePath -Encoding UTF8
 
-Write-Host "WADDLE_START=PASS pid=$($process.Id) sha=$sha"
+Write-Host "WADDLE_START=PASS pid=$($process.Id) sha=$sha node=$($managedNode.node)"
 Write-Host "WADDLE_PPAPI_FLASH=PASS path=$($flash.path) version=$($flash.version)"
 Write-Host "WADDLE_RUNTIME_STDOUT=$stdout"
 Write-Host "WADDLE_RUNTIME_STDERR=$stderr"
