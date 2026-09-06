@@ -18,7 +18,7 @@ concurrency:
 jobs:
   local-integration:
     runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
-    timeout-minutes: 180
+    timeout-minutes: 300
 
     steps:
       - name: Use Waddle reference Node
@@ -37,22 +37,37 @@ jobs:
           Write-Host "YARN_SETUP=PASS version=$(yarn --version)"
           Write-Host "NPM_SETUP=INFO version=$(npm --version) reference=9.8.1"
 
-      - name: Resolve AndroidBuild Core
+      - name: Resolve AndroidBuild Core 3.0.14+
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $roots=@()
-          if($env:ANDROIDBUILD_ROOT){$roots+=$env:ANDROIDBUILD_ROOT}
-          $roots+=@('V:\AndroidBuild','D:\AndroidBuild','C:\AndroidBuild')
-          $root=$roots|Where-Object{Test-Path -LiteralPath (Join-Path $_ 'Core\Current\AndroidBuild.psd1')}|Select-Object -First 1
+          Set-StrictMode -Version Latest
+          $roots=New-Object System.Collections.Generic.List[string]
+          if($env:ANDROIDBUILD_ROOT){$roots.Add([string]$env:ANDROIDBUILD_ROOT)}
+          foreach($drive in [IO.DriveInfo]::GetDrives()){
+            try{
+              if(-not $drive.IsReady){continue}
+              $candidate=[IO.Path]::Combine($drive.RootDirectory.FullName,'AndroidBuild')
+              if(-not $roots.Contains($candidate)){$roots.Add($candidate)}
+            }catch{}
+          }
+          $root=$null
+          foreach($candidate in $roots){
+            try{$full=(Resolve-Path -LiteralPath $candidate -ErrorAction Stop).Path}catch{continue}
+            if(Test-Path -LiteralPath (Join-Path $full 'Core\Current\AndroidBuild.psd1') -PathType Leaf){$root=$full;break}
+          }
           if(-not $root){throw 'ANDROIDBUILD_CORE=FAIL current_not_found'}
-          $root=[IO.Path]::GetFullPath($root)
+          $env:ANDROIDBUILD_ROOT=$root
           "ANDROIDBUILD_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Import-Module (Join-Path $root 'Core\Current\AndroidBuild.psd1') -Force
           $version=[string](Get-AndroidBuildCoreVersion)
-          if([version]$version -lt [version]'3.0.13'){throw "ANDROIDBUILD_CORE=FAIL required=3.0.13 actual=$version"}
+          if([version]$version -lt [version]'3.0.14'){throw "ANDROIDBUILD_CORE=FAIL required=3.0.14 actual=$version"}
+          $sync=(Get-Command Sync-AndroidBuildRepositoryExactHead -ErrorAction Stop)
+          foreach($parameter in @('FetchTimeoutSeconds','FetchDepth')){
+            if(-not $sync.Parameters.ContainsKey($parameter)){throw "ANDROIDBUILD_CORE=FAIL missing_sync_parameter=$parameter version=$version"}
+          }
           Enable-AndroidBuildPortableTools -AndroidBuildRoot $root | Out-Null
-          Write-Host "ANDROIDBUILD_CORE=PASS version=$version root=$root"
+          Write-Host "ANDROIDBUILD_CORE=PASS version=$version root=$root large_repo_sync=true"
           Write-Host "EXPECTED_SHA=$env:WADDLE_EXPECTED_SHA"
 
       - name: Capture AUTO_REPO health before heavy sync
@@ -60,7 +75,8 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           $profiles=Join-Path $env:ANDROIDBUILD_ROOT 'PC-PROFILES'
-          $states=@(Get-ChildItem -LiteralPath $profiles -Filter 'PC-WILLTHOM-auto-repo-state*.json' -File -ErrorAction SilentlyContinue | Sort-Object Name)
+          $machine=[string]$env:COMPUTERNAME
+          $states=@(Get-ChildItem -LiteralPath $profiles -Filter ($machine+'-auto-repo-state*.json') -File -ErrorAction SilentlyContinue | Sort-Object Name)
           foreach($stateFile in $states){
             try {
               $state=Get-Content -LiteralPath $stateFile.FullName -Raw | ConvertFrom-Json
@@ -77,43 +93,28 @@ jobs:
           }
           Write-Host "AUTO_REPO_PROCESS_COUNT=$($procs.Count)"
 
-      - name: Synchronize canonical repository at exact SHA
+      - name: Synchronize canonical repository at exact SHA through Core
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
+          Set-StrictMode -Version Latest
           Import-Module (Join-Path $env:ANDROIDBUILD_ROOT 'Core\Current\AndroidBuild.psd1') -Force
           Enable-AndroidBuildPortableTools -AndroidBuildRoot $env:ANDROIDBUILD_ROOT | Out-Null
           $repo=Join-Path $env:ANDROIDBUILD_ROOT 'Repositories\TEST-Waddle-Forever'
           $sourceRemote='https://github.com/${{ github.repository }}.git'
-          $git=Get-AndroidBuildGitPath $env:ANDROIDBUILD_ROOT
-          if(-not(Test-Path -LiteralPath $repo -PathType Container)){New-Item -ItemType Directory -Force -Path $repo|Out-Null}
-          if(-not(Test-Path -LiteralPath (Join-Path $repo '.git') -PathType Container)){
-            $init=Invoke-AndroidBuildProcess -FilePath $git -ArgumentList @('-c','init.defaultBranch=dev','init',$repo) -TimeoutSeconds 120 -AllowNonZeroExit -StreamOutput
-            if($init.exit_code -ne 0){throw "WADDLE_PREFETCH=FAIL stage=init exit=$($init.exit_code)"}
-          }
-          $remote='androidbuild-source'
-          $get=Invoke-AndroidBuildProcess -FilePath $git -ArgumentList @('-C',$repo,'remote','get-url',$remote) -TimeoutSeconds 30 -AllowNonZeroExit
-          if($get.exit_code -eq 0){
-            $set=Invoke-AndroidBuildProcess -FilePath $git -ArgumentList @('-C',$repo,'remote','set-url',$remote,$sourceRemote) -TimeoutSeconds 30 -AllowNonZeroExit
-            if($set.exit_code -ne 0){throw "WADDLE_PREFETCH=FAIL stage=remote_set exit=$($set.exit_code)"}
-          }else{
-            $add=Invoke-AndroidBuildProcess -FilePath $git -ArgumentList @('-C',$repo,'remote','add',$remote,$sourceRemote) -TimeoutSeconds 30 -AllowNonZeroExit
-            if($add.exit_code -ne 0){throw "WADDLE_PREFETCH=FAIL stage=remote_add exit=$($add.exit_code)"}
-          }
-          $null=Invoke-AndroidBuildProcess -FilePath $git -ArgumentList @('-C',$repo,'config','core.longpaths','true') -TimeoutSeconds 30 -AllowNonZeroExit
-          Write-Host "WADDLE_PREFETCH=START sha=$env:WADDLE_EXPECTED_SHA timeout_seconds=1800"
-          $prefetch=Invoke-AndroidBuildProcess -FilePath $git -ArgumentList @('-C',$repo,'-c','http.lowSpeedLimit=0','fetch','--force','--no-tags','--progress',$remote,$env:WADDLE_EXPECTED_SHA) -TimeoutSeconds 1800 -AllowNonZeroExit -StreamOutput
-          if($prefetch.exit_code -ne 0){throw "WADDLE_PREFETCH=FAIL stage=fetch exit=$($prefetch.exit_code) stderr=$($prefetch.stderr.Trim())"}
-          Write-Host "WADDLE_PREFETCH=PASS sha=$env:WADDLE_EXPECTED_SHA"
+          Write-Host "WADDLE_CORE_SYNC=START repo=$repo sha=$env:WADDLE_EXPECTED_SHA timeout_seconds=7200 depth=1"
           $sync=Sync-AndroidBuildRepositoryExactHead `
             -RepoRoot $repo `
             -ExpectedSha $env:WADDLE_EXPECTED_SHA `
             -AndroidBuildRoot $env:ANDROIDBUILD_ROOT `
             -AllowTrackedReset `
             -CleanUntracked `
-            -SourceRemote $sourceRemote
+            -SourceRemote $sourceRemote `
+            -FetchTimeoutSeconds 7200 `
+            -FetchDepth 1
           "WADDLE_CANONICAL_REPO=$repo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "REPOSITORY_SYNC=PASS repo=$repo sha=$($sync.actual_sha) remote=$sourceRemote"
+          if([string]$sync.actual_sha -ne [string]$env:WADDLE_EXPECTED_SHA){throw "REPOSITORY_SYNC=FAIL expected=$env:WADDLE_EXPECTED_SHA actual=$($sync.actual_sha)"}
+          Write-Host "WADDLE_CORE_SYNC=PASS repo=$repo sha=$($sync.actual_sha) timeout_seconds=$($sync.fetch_timeout_seconds) depth=$($sync.fetch_depth) remote=$sourceRemote"
 
       - name: Initialize Core workspace and project precheck
         shell: powershell
