@@ -1,0 +1,56 @@
+name: Regenerate Yarn Lock (temporary)
+
+on:
+  push:
+    branches:
+      - feat/androidbuild-core-waddle-local-20260905
+    paths:
+      - package.json
+      - .github/workflows/regenerate-yarn-lock.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Sparse checkout dependency manifests only
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            package.json
+            yarn.lock
+
+      - name: Use reference Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20.12.2
+          check-latest: false
+
+      - name: Pin Yarn Classic
+        run: npm install --global yarn@1.22.22
+
+      - name: Regenerate lockfile without package scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf node_modules
+          yarn install --non-interactive --ignore-scripts
+          git diff --check -- yarn.lock
+          test -s yarn.lock
+          echo "LOCKFILE_GENERATION=PASS"
+          git diff --stat -- yarn.lock
+
+      - name: Upload generated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: waddle-yarn-lock
+          path: yarn.lock
+          if-no-files-found: error
+          retention-days: 1
