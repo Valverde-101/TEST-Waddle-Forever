@@ -10,6 +10,10 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+if ($env:WADDLE_LAUNCHER_SELFTEST_FAIL -eq '1') {
+  $SelfTestFailure = $true
+}
+
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $logDir = Join-Path $repo '.work\logs\launcher'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
