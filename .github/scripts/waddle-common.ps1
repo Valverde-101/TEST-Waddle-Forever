@@ -63,13 +63,16 @@ function Ensure-WaddleJunction {
   if (Test-Path -LiteralPath $LinkPath) {
     $item = Get-Item -LiteralPath $LinkPath -Force
     if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-      $actualTarget = $null
-      try { $actualTarget = [string]$item.Target } catch {}
-      if ($actualTarget) {
-        $actual = [IO.Path]::GetFullPath((Join-Path $item.Parent.FullName $actualTarget))
-        if ($actual.TrimEnd('\') -ne $target.TrimEnd('\')) {
-          throw "WORK_JUNCTION=FAIL path=$LinkPath target=$actual expected=$target"
-        }
+      $actualTargetRaw = $null
+      try { $actualTargetRaw = @($item.Target)[0] } catch {}
+      if (-not $actualTargetRaw) { throw "WORK_JUNCTION=FAIL target_unreadable=$LinkPath" }
+      if ([IO.Path]::IsPathRooted([string]$actualTargetRaw)) {
+        $actual = [IO.Path]::GetFullPath([string]$actualTargetRaw)
+      } else {
+        $actual = [IO.Path]::GetFullPath((Join-Path $item.Parent.FullName ([string]$actualTargetRaw)))
+      }
+      if ($actual.TrimEnd('\') -ne $target.TrimEnd('\')) {
+        throw "WORK_JUNCTION=FAIL path=$LinkPath target=$actual expected=$target"
       }
       Write-Host "WORK_JUNCTION=PASS path=$LinkPath target=$target mode=existing"
       return
