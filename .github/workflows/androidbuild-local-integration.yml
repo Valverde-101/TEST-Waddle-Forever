@@ -18,7 +18,7 @@ concurrency:
 jobs:
   local-integration:
     runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
-    timeout-minutes: 150
+    timeout-minutes: 180
 
     steps:
       - name: Use Waddle reference Node
@@ -55,6 +55,28 @@ jobs:
           Write-Host "ANDROIDBUILD_CORE=PASS version=$version root=$root"
           Write-Host "EXPECTED_SHA=$env:WADDLE_EXPECTED_SHA"
 
+      - name: Capture AUTO_REPO health before heavy sync
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $profiles=Join-Path $env:ANDROIDBUILD_ROOT 'PC-PROFILES'
+          $states=@(Get-ChildItem -LiteralPath $profiles -Filter 'PC-WILLTHOM-auto-repo-state*.json' -File -ErrorAction SilentlyContinue | Sort-Object Name)
+          foreach($stateFile in $states){
+            try {
+              $state=Get-Content -LiteralPath $stateFile.FullName -Raw | ConvertFrom-Json
+              Write-Host ("AUTO_REPO_STATE file={0} slot={1} status={2} repo={3} job={4} updated={5} detail={6}" -f $stateFile.Name,$state.slot,$state.status,$state.repository,$state.job,$state.updated_at,$state.detail)
+            } catch {
+              Write-Host "AUTO_REPO_STATE_WARN file=$($stateFile.Name) error=$($_.Exception.Message)"
+            }
+          }
+          $procs=@(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+            ($_.Name -eq 'Runner.Listener.exe' -or $_.Name -eq 'Runner.Worker.exe') -and $_.CommandLine -match '\\Runners\\AutoRepos\\slot-'
+          })
+          foreach($p in $procs){
+            Write-Host "AUTO_REPO_PROCESS pid=$($p.ProcessId) name=$($p.Name) cmd=$($p.CommandLine)"
+          }
+          Write-Host "AUTO_REPO_PROCESS_COUNT=$($procs.Count)"
+
       - name: Synchronize canonical repository at exact SHA
         shell: powershell
         run: |
@@ -63,6 +85,26 @@ jobs:
           Enable-AndroidBuildPortableTools -AndroidBuildRoot $env:ANDROIDBUILD_ROOT | Out-Null
           $repo=Join-Path $env:ANDROIDBUILD_ROOT 'Repositories\TEST-Waddle-Forever'
           $sourceRemote='https://github.com/${{ github.repository }}.git'
+          $git=Get-AndroidBuildGitPath $env:ANDROIDBUILD_ROOT
+          if(-not(Test-Path -LiteralPath $repo -PathType Container)){New-Item -ItemType Directory -Force -Path $repo|Out-Null}
+          if(-not(Test-Path -LiteralPath (Join-Path $repo '.git') -PathType Container)){
+            $init=Invoke-AndroidBuildProcess -FilePath $git -ArgumentList @('-c','init.defaultBranch=dev','init',$repo) -TimeoutSeconds 120 -AllowNonZeroExit -StreamOutput
+            if($init.exit_code -ne 0){throw "WADDLE_PREFETCH=FAIL stage=init exit=$($init.exit_code)"}
+          }
+          $remote='androidbuild-source'
+          $get=Invoke-AndroidBuildProcess -FilePath $git -ArgumentList @('-C',$repo,'remote','get-url',$remote) -TimeoutSeconds 30 -AllowNonZeroExit
+          if($get.exit_code -eq 0){
+            $set=Invoke-AndroidBuildProcess -FilePath $git -ArgumentList @('-C',$repo,'remote','set-url',$remote,$sourceRemote) -TimeoutSeconds 30 -AllowNonZeroExit
+            if($set.exit_code -ne 0){throw "WADDLE_PREFETCH=FAIL stage=remote_set exit=$($set.exit_code)"}
+          }else{
+            $add=Invoke-AndroidBuildProcess -FilePath $git -ArgumentList @('-C',$repo,'remote','add',$remote,$sourceRemote) -TimeoutSeconds 30 -AllowNonZeroExit
+            if($add.exit_code -ne 0){throw "WADDLE_PREFETCH=FAIL stage=remote_add exit=$($add.exit_code)"}
+          }
+          $null=Invoke-AndroidBuildProcess -FilePath $git -ArgumentList @('-C',$repo,'config','core.longpaths','true') -TimeoutSeconds 30 -AllowNonZeroExit
+          Write-Host "WADDLE_PREFETCH=START sha=$env:WADDLE_EXPECTED_SHA timeout_seconds=1800"
+          $prefetch=Invoke-AndroidBuildProcess -FilePath $git -ArgumentList @('-C',$repo,'-c','http.lowSpeedLimit=0','fetch','--force','--no-tags','--progress',$remote,$env:WADDLE_EXPECTED_SHA) -TimeoutSeconds 1800 -AllowNonZeroExit -StreamOutput
+          if($prefetch.exit_code -ne 0){throw "WADDLE_PREFETCH=FAIL stage=fetch exit=$($prefetch.exit_code) stderr=$($prefetch.stderr.Trim())"}
+          Write-Host "WADDLE_PREFETCH=PASS sha=$env:WADDLE_EXPECTED_SHA"
           $sync=Sync-AndroidBuildRepositoryExactHead `
             -RepoRoot $repo `
             -ExpectedSha $env:WADDLE_EXPECTED_SHA `
