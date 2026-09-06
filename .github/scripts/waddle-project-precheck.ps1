@@ -76,6 +76,18 @@ if ([string]$config.project.kind -ne 'custom') { throw "PROJECT_KIND=FAIL expect
 if ([bool]$config.android.applicable) { throw 'ANDROID_SCOPE=FAIL expected_not_applicable' }
 if ([string]$config.toolchain.node -ne '20.19.0') { throw "NODE_CONTRACT=FAIL expected=20.19.0 actual=$($config.toolchain.node)" }
 if ([string]$config.toolchain.yarn -ne '1.22.22') { throw "YARN_CONTRACT=FAIL expected=1.22.22 actual=$($config.toolchain.yarn)" }
+$coreMinimum = [string]$config.core.minimum_version
+$coreActual = [string](Get-AndroidBuildCoreVersion)
+try {
+  $minimumVersion = [version]$coreMinimum
+  $actualVersion = [version]$coreActual
+} catch {
+  throw "WADDLE_CORE_CONTRACT=FAIL invalid_version minimum=$coreMinimum actual=$coreActual"
+}
+if ($actualVersion -lt $minimumVersion) {
+  throw "WADDLE_CORE_CONTRACT=FAIL minimum=$coreMinimum actual=$coreActual"
+}
+Write-Host "WADDLE_CORE_CONTRACT=PASS minimum=$coreMinimum actual=$coreActual source=.androidbuild.json"
 
 $git = Get-AndroidBuildGitPath $androidBuildRoot
 $ignoreProbe = '.work/.androidbuild-work-root'
