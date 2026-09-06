@@ -161,6 +161,9 @@ jobs:
             Remove-Item Env:WADDLE_NONINTERACTIVE -ErrorAction SilentlyContinue
             Pop-Location
           }
+          # Both nonzero exits above are intentional and already asserted. Do not let
+          # PowerShell's final $LASTEXITCODE turn this successful negative test red.
+          $global:LASTEXITCODE=0
 
       - name: Validate human local setup and direct Yarn install
         shell: powershell
