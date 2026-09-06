@@ -1,6 +1,23 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Enable-WaddleLocalNodeTooling {
+  param([Parameter(Mandatory)][string]$WorkRoot)
+
+  $modules = [IO.Path]::GetFullPath((Join-Path $WorkRoot 'dependencies\node_modules'))
+  $bin = [IO.Path]::GetFullPath((Join-Path $modules '.bin'))
+  $env:WADDLE_NODE_MODULES = $modules
+  $env:NODE_PATH = $modules
+
+  $pathParts = @([string]$env:PATH -split ';' | Where-Object { $_ })
+  if (-not ($pathParts | Where-Object { $_.TrimEnd('\') -ieq $bin.TrimEnd('\') })) {
+    $env:PATH = "$bin;$env:PATH"
+  }
+
+  Write-Host "WADDLE_NODE_TOOLING=PASS modules=$modules bin=$bin"
+  [pscustomobject]@{ status='PASS'; modules=$modules; bin=$bin }
+}
+
 function Remove-WaddleJunctionOnly {
   param([Parameter(Mandatory)][string]$Path)
 
@@ -66,6 +83,7 @@ function Install-WaddleDependencies {
     throw "WADDLE_DEPENDENCIES=FAIL electron_legacy_contract expected_major=10 actual=$($electron.version)"
   }
 
+  Enable-WaddleLocalNodeTooling -WorkRoot $WorkRoot | Out-Null
   Write-Host "WADDLE_DEPENDENCIES=PASS target=$target cache=$cache electron=$($electron.version) duration_ms=$($sw.ElapsedMilliseconds)"
   [pscustomobject]@{
     status = 'PASS'
@@ -140,10 +158,13 @@ function Update-WaddleLocalEnv {
     Copy-Item -LiteralPath $template -Destination $envPath
   }
 
+  $modules = [IO.Path]::GetFullPath((Join-Path $WorkRoot 'dependencies\node_modules'))
   $flash = Get-WaddlePepperFlashPath -RepoRoot $RepoRoot
   Set-WaddleEnvValue -Path $envPath -Name 'ANDROIDBUILD_ROOT' -Value ([IO.Path]::GetFullPath($AndroidBuildRoot))
   Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_REPO_ROOT' -Value ([IO.Path]::GetFullPath($RepoRoot))
   Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_WORK_ROOT' -Value ([IO.Path]::GetFullPath($WorkRoot))
+  Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_NODE_MODULES' -Value $modules
+  Set-WaddleEnvValue -Path $envPath -Name 'NODE_PATH' -Value $modules
   Set-WaddleEnvValue -Path $envPath -Name 'FFDEC_PATH' -Value ([IO.Path]::GetFullPath($FFDecPath))
   Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_PPAPI_FLASH_PATH' -Value ([IO.Path]::GetFullPath($flash))
   Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_PPAPI_FLASH_VERSION' -Value '32.0.0.303'
@@ -165,5 +186,6 @@ function Import-WaddleLocalEnv {
     $value = $line.Substring($idx+1)
     [Environment]::SetEnvironmentVariable($name,$value,'Process')
   }
+  if ($env:WADDLE_WORK_ROOT) { Enable-WaddleLocalNodeTooling -WorkRoot $env:WADDLE_WORK_ROOT | Out-Null }
   Write-Host "WADDLE_ENV_IMPORT=PASS path=$Path"
 }
