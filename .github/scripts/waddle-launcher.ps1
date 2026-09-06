@@ -10,10 +10,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-if ($env:WADDLE_LAUNCHER_SELFTEST_FAIL -eq '1') {
-  $SelfTestFailure = $true
-}
-
+# Self-test failure is deliberately command-line only. Never read a process/user
+# environment variable here: an inherited WADDLE_LAUNCHER_SELFTEST_FAIL must not
+# be able to brick a real double-click Setup/Start session.
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $logDir = Join-Path $repo '.work\logs\launcher'
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
@@ -63,9 +62,8 @@ if ($SelfTestFailure) {
 } else {
   try {
     # Run the actual action in a child PowerShell. cmd.exe merges stderr into stdout
-    # before it reaches this wrapper, so benign native warnings (for example Yarn
-    # package metadata warnings) are logged and displayed but cannot be promoted into
-    # terminating PowerShell ErrorRecords. The child exit code remains authoritative.
+    # before it reaches this wrapper, so benign native warnings are logged/displayed
+    # without being promoted into terminating PowerShell ErrorRecords.
     $command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$target`" 2>&1"
     & cmd.exe /d /s /c $command | ForEach-Object {
       $line = [string]$_
@@ -90,8 +88,6 @@ if ($SelfTestFailure) {
   }
 }
 
-# Write the terminal classification before producing the stable *-last.log copy so
-# the file is self-contained for humans and future Inspector/CI consumers.
 if ($exitCode -ne 0) {
   Write-WaddleLauncherLine -Text "WADDLE_LAUNCHER=FAIL action=$Action exit=$exitCode" -Color Red
 } else {
