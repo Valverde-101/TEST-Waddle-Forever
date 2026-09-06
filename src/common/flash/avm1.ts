@@ -126,7 +126,7 @@ export function createBytecode(code: PCodeRep): Uint8Array {
       const action = line[0];
       const args = line.slice(1);
       switch (action) {
-        case Action.Push:
+        case Action.Push: {
           numbers.push(Action.Push);
           let bytes = 0;
           args.forEach(arg => {
@@ -154,6 +154,7 @@ export function createBytecode(code: PCodeRep): Uint8Array {
             }
           });
           break;
+        }
         default:
           throw new Error(`Unimplemented bytecode with arguments: ${action}`);
       }
