@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   local-integration:
-    runs-on: [windows-build, android-parallel, pc-willthom, general]
+    runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
     timeout-minutes: 150
 
     steps:
