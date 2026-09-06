@@ -1,5 +1,15 @@
 @echo off
-setlocal
+setlocal EnableExtensions
 cd /d "%~dp0"
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".github\scripts\waddle-bootstrap.ps1"
-exit /b %ERRORLEVEL%
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".github\scripts\waddle-launcher.ps1" -Action setup
+set "WADDLE_EXIT=%ERRORLEVEL%"
+if "%WADDLE_EXIT%"=="0" exit /b 0
+
+echo.
+echo ============================================================
+echo WADDLE SETUP FAILED - the window will stay open.
+echo Log: %~dp0.work\logs\launcher\setup-last.log
+echo ============================================================
+if not "%WADDLE_NONINTERACTIVE%"=="1" pause
+exit /b %WADDLE_EXIT%
