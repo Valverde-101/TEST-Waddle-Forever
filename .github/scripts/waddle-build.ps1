@@ -37,6 +37,89 @@ function Invoke-WaddleCommand {
   Write-Host "WADDLE_STEP=PASS name=$Name duration_ms=$($sw.ElapsedMilliseconds)"
 }
 
+function Get-WaddlePackageBin {
+  param(
+    [Parameter(Mandatory)][string]$PackageName,
+    [Parameter(Mandatory)][string]$BinName
+  )
+
+  $packageRoot = Join-Path (Join-Path $repo 'node_modules') $PackageName
+  $manifestPath = Join-Path $packageRoot 'package.json'
+  if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+    throw "PACKAGE_BIN=FAIL package=$PackageName reason=manifest_missing path=$manifestPath"
+  }
+
+  $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+  $relative = $null
+  if ($manifest.bin -is [string]) {
+    $relative = [string]$manifest.bin
+  } elseif ($manifest.bin) {
+    $property = $manifest.bin.PSObject.Properties | Where-Object { $_.Name -eq $BinName } | Select-Object -First 1
+    if ($property) { $relative = [string]$property.Value }
+  }
+  if ([string]::IsNullOrWhiteSpace($relative)) {
+    throw "PACKAGE_BIN=FAIL package=$PackageName bin=$BinName reason=bin_not_declared version=$($manifest.version)"
+  }
+
+  $path = [IO.Path]::GetFullPath((Join-Path $packageRoot $relative))
+  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+    throw "PACKAGE_BIN=FAIL package=$PackageName bin=$BinName reason=target_missing version=$($manifest.version) path=$path"
+  }
+
+  Write-Host "PACKAGE_BIN=PASS package=$PackageName version=$($manifest.version) bin=$BinName path=$path"
+  [pscustomobject]@{
+    package = $PackageName
+    version = [string]$manifest.version
+    bin = $BinName
+    path = $path
+  }
+}
+
+function Invoke-WaddleNodePackageBin {
+  param(
+    [Parameter(Mandatory)][string]$Name,
+    [Parameter(Mandatory)][string]$PackageName,
+    [Parameter(Mandatory)][string]$BinName,
+    [string[]]$Arguments = @()
+  )
+
+  $resolved = Get-WaddlePackageBin -PackageName $PackageName -BinName $BinName
+  $node = Get-Command node.exe -ErrorAction SilentlyContinue
+  if (-not $node) { $node = Get-Command node -ErrorAction Stop }
+
+  Write-Host "WADDLE_STEP=START name=$Name package=$PackageName package_version=$($resolved.version)"
+  $sw = [Diagnostics.Stopwatch]::StartNew()
+  & $node.Source $resolved.path @Arguments
+  $code = $LASTEXITCODE
+  $sw.Stop()
+  if ($code -ne 0) {
+    throw "WADDLE_STEP=FAIL name=$Name package=$PackageName exit=$code duration_ms=$($sw.ElapsedMilliseconds)"
+  }
+  Write-Host "WADDLE_STEP=PASS name=$Name package=$PackageName duration_ms=$($sw.ElapsedMilliseconds)"
+}
+
+function Test-WaddleInstalledCompilerContract {
+  $typescript = Get-WaddlePackageBin -PackageName 'typescript' -BinName 'tsc'
+  if ([string]$typescript.version -ne '7.0.2') {
+    throw "TYPESCRIPT_CONTRACT=FAIL expected=7.0.2 actual=$($typescript.version)"
+  }
+
+  if ($env:OS -eq 'Windows_NT' -and [Environment]::Is64BitOperatingSystem) {
+    $nativeManifest = Join-Path $repo 'node_modules\@typescript\typescript-win32-x64\package.json'
+    if (-not (Test-Path -LiteralPath $nativeManifest -PathType Leaf)) {
+      throw "TYPESCRIPT_NATIVE=FAIL platform=win32-x64 missing=$nativeManifest"
+    }
+    $native = Get-Content -LiteralPath $nativeManifest -Raw | ConvertFrom-Json
+    if ([string]$native.version -ne [string]$typescript.version) {
+      throw "TYPESCRIPT_NATIVE=FAIL platform=win32-x64 compiler=$($typescript.version) native=$($native.version)"
+    }
+    Write-Host "TYPESCRIPT_NATIVE=PASS platform=win32-x64 version=$($native.version)"
+  }
+
+  $alias = Get-WaddlePackageBin -PackageName 'tsc-alias' -BinName 'tsc-alias'
+  Write-Host "COMPILER_CONTRACT=PASS typescript=$($typescript.version) tsc_alias=$($alias.version) direct_package_bins=true"
+}
+
 function Reset-WaddleCompiledOutput {
   $link = Join-Path $repo 'compiled'
   $target = Join-Path $workspace.work_root 'build\compiled'
@@ -61,14 +144,18 @@ try {
   Push-Location $repo
   try {
     Invoke-WaddleCommand -Name 'yarn-install' -Arguments @('install','--frozen-lockfile','--non-interactive','--cache-folder',$env:YARN_CACHE_FOLDER)
+    Test-WaddleInstalledCompilerContract
     Invoke-WaddleCommand -Name 'build-packages' -Arguments @('build-packages')
 
     # Upstream `yarn build-tsc` begins with scripts/remove-compiled.mjs, which removes
     # the compatibility junction itself. Reproduce the same build sequence while
-    # cleaning the real .work target and recreating the junction before tsc writes.
+    # cleaning the real .work target and recreating the junction before the compiler writes.
+    # TypeScript 7 is resolved from its installed package manifest instead of relying
+    # on Yarn Classic's Windows .bin shim, which can be absent even when the package
+    # and its platform-native compiler are installed correctly.
     Reset-WaddleCompiledOutput
-    Invoke-WaddleCommand -Name 'tsc' -Arguments @('exec','tsc')
-    Invoke-WaddleCommand -Name 'tsc-alias' -Arguments @('exec','tsc-alias')
+    Invoke-WaddleNodePackageBin -Name 'tsc' -PackageName 'typescript' -BinName 'tsc'
+    Invoke-WaddleNodePackageBin -Name 'tsc-alias' -PackageName 'tsc-alias' -BinName 'tsc-alias'
     Invoke-WaddleCommand -Name 'build-browser' -Arguments @('build-browser')
     Invoke-WaddleCommand -Name 'copy-files' -Arguments @('copy-files')
     Invoke-WaddleCommand -Name 'lint' -Arguments @('lint')
