@@ -19,6 +19,10 @@ $managedNode = Enable-WaddleManagedNodeToolchain -AndroidBuildRoot $root
 $workspace = Initialize-WaddleWorkspace -RepoRoot $repo -AndroidBuildRoot $root
 $toolchain = Test-WaddleToolchain -AndroidBuildRoot $root
 $envPath = Update-WaddleLocalEnv -RepoRoot $repo -AndroidBuildRoot $root -WorkRoot $workspace.work_root -FFDecPath $toolchain.ffdec
+Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_NODE_HOME' -Value $managedNode.home
+Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_NODE_EXE' -Value $managedNode.node
+Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_NPM_CMD' -Value $managedNode.npm
+Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_YARN_CMD' -Value $managedNode.yarn
 Import-WaddleLocalEnv -Path $envPath
 Test-WaddlePepperFlash -RepoRoot $repo | Out-Null
 
