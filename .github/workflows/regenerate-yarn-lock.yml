@@ -30,7 +30,7 @@ jobs:
       - name: Use reference Node
         uses: actions/setup-node@v7
         with:
-          node-version: 20.12.2
+          node-version: 20.19.0
           check-latest: false
 
       - name: Pin Yarn Classic
