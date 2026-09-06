@@ -1,0 +1,51 @@
+param(
+  [Parameter(Mandatory=$false)][string]$ContextPath
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'waddle-common.ps1')
+
+$ctx = Get-WaddleContext -ContextPath $ContextPath
+$repo = Resolve-WaddleRepoRoot -Context $ctx
+$androidBuildRoot = Resolve-WaddleAndroidBuildRoot -Context $ctx
+
+Import-WaddleCore -AndroidBuildRoot $androidBuildRoot
+$workspace = Initialize-WaddleWorkspace -RepoRoot $repo -AndroidBuildRoot $androidBuildRoot
+$toolchain = Test-WaddleToolchain -AndroidBuildRoot $androidBuildRoot
+
+$configPath = Join-Path $repo '.androidbuild.json'
+$config = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
+if ([string]$config.project.kind -ne 'custom') { throw "PROJECT_KIND=FAIL expected=custom actual=$($config.project.kind)" }
+if ([bool]$config.android.applicable) { throw 'ANDROID_SCOPE=FAIL expected_not_applicable' }
+
+# Validate the ignore contract semantically through Git instead of depending on
+# one textual spelling of the .gitignore rule. This catches the real invariant:
+# mutable .work content must be ignored and must never become tracked source.
+$git = Get-AndroidBuildGitPath $androidBuildRoot
+$ignoreProbe = '.work/.androidbuild-work-root'
+& $git -C $repo check-ignore -q -- $ignoreProbe
+$ignoreExit = $LASTEXITCODE
+if ($ignoreExit -ne 0) {
+  throw "WORK_GITIGNORE=FAIL probe=$ignoreProbe exit=$ignoreExit"
+}
+$trackedWork = @(& $git -C $repo ls-files -- '.work')
+if ($LASTEXITCODE -ne 0) { throw "WORK_TRACKING_CHECK=FAIL exit=$LASTEXITCODE" }
+if ($trackedWork.Count -gt 0) {
+  throw "WORK_TRACKING_CHECK=FAIL tracked=$($trackedWork -join ',')"
+}
+Write-Host "WORK_GITIGNORE=PASS probe=$ignoreProbe semantic=true"
+Write-Host 'WORK_TRACKING_CHECK=PASS tracked=0'
+
+if ($ctx.ContainsKey('expected_sha') -and $ctx.expected_sha) {
+  Test-AndroidBuildExactHead -RepoRoot $repo -ExpectedSha ([string]$ctx.expected_sha) -AndroidBuildRoot $androidBuildRoot | Out-Null
+  Write-Host "EXACT_HEAD=PASS sha=$($ctx.expected_sha)"
+}
+
+Write-Host "WADDLE_REPO_ROOT=PASS path=$repo"
+Write-Host "WADDLE_WORK_ROOT=PASS path=$($workspace.work_root)"
+Write-Host 'ANDROID=NOT_APPLICABLE'
+Write-Host 'APK_FINAL=NOT_APPLICABLE'
+Write-Host 'APK_APPROVE_ADB=NOT_APPLICABLE'
+Write-Host 'PHYSICAL_ADB=NOT_APPLICABLE'
+Write-Host 'WADDLE_PROJECT_PRECHECK=PASS'

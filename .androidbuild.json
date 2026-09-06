@@ -1,0 +1,86 @@
+{
+  "$schema": "androidbuild-project/v3",
+  "project": {
+    "id": "waddle-forever",
+    "display_name": "Waddle Forever",
+    "kind": "custom",
+    "adapter": "repo-hooks",
+    "repository": "Valverde-101/TEST-Waddle-Forever",
+    "source_directory": ".",
+    "platform": "windows-electron-flash"
+  },
+  "workspace": {
+    "directory": ".work",
+    "reuse": true,
+    "retention_generations": 3,
+    "heavy_storage_policy": "all-mutable-heavy-artifacts-under-work",
+    "pools": [
+      "dependencies",
+      "build",
+      "dist",
+      "runtime",
+      "downloads",
+      "content",
+      "swf-analysis",
+      "diagnostics",
+      "logs",
+      "evidence-staging",
+      "tmp"
+    ]
+  },
+  "cache": {
+    "enabled": true,
+    "global_cas": true,
+    "repository_cache": true,
+    "native": false,
+    "fingerprint_files": [
+      ".androidbuild.json",
+      "package.json",
+      "yarn.lock",
+      "tsconfig.json",
+      "tsconfig.esm.json"
+    ]
+  },
+  "hooks": {
+    "precheck": ".github/scripts/waddle-project-precheck.ps1",
+    "build": ".github/scripts/waddle-build.ps1"
+  },
+  "github": {
+    "self_hosted": true,
+    "auth_provider": "androidbuild-provider",
+    "app_preferred": true
+  },
+  "broker": {
+    "mode": "existing-auto-repo-broker",
+    "do_not_duplicate": true
+  },
+  "timeouts": {
+    "build_seconds": 7200
+  },
+  "core": {
+    "minimum_version": "3.0.14",
+    "stable_path": "Core/Current"
+  },
+  "toolchain": {
+    "node": "20.12.2",
+    "npm_reference": "9.8.1",
+    "yarn": "1.22.22",
+    "ffdec": {
+      "owner": "androidbuild-global",
+      "version": "26.2.1"
+    }
+  },
+  "android": {
+    "applicable": false
+  },
+  "physical": {
+    "required": false,
+    "adb": "not-applicable",
+    "device_lock": false
+  },
+  "delivery": {
+    "type": "desktop-artifacts",
+    "apk_final": "not-applicable",
+    "apk_approve_adb": "not-applicable"
+  }
+}

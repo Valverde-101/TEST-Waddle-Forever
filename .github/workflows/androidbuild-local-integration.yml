@@ -1,0 +1,183 @@
+name: Waddle AndroidBuild Local Integration
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [dev]
+  push:
+    branches: [dev]
+
+permissions:
+  contents: read
+
+env:
+  WADDLE_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: waddle-core-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  local-integration:
+    runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
+    timeout-minutes: 300
+
+    steps:
+      - name: Use Waddle reference Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 20.19.0
+
+      - name: Pin Yarn Classic
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          npm install --global yarn@1.22.22
+          if ((node --version).Trim() -ne 'v20.19.0') { throw "NODE_SETUP=FAIL actual=$(node --version)" }
+          if ((yarn --version).Trim() -ne '1.22.22') { throw "YARN_SETUP=FAIL actual=$(yarn --version)" }
+          Write-Host "NODE_SETUP=PASS version=$(node --version)"
+          Write-Host "YARN_SETUP=PASS version=$(yarn --version)"
+          Write-Host "NPM_SETUP=INFO version=$(npm --version)"
+
+      - name: Resolve AndroidBuild Core 3.0.14+
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Set-StrictMode -Version Latest
+          $roots=New-Object System.Collections.Generic.List[string]
+          if($env:ANDROIDBUILD_ROOT){$roots.Add([string]$env:ANDROIDBUILD_ROOT)}
+          foreach($drive in [IO.DriveInfo]::GetDrives()){
+            try{
+              if(-not $drive.IsReady){continue}
+              $candidate=[IO.Path]::Combine($drive.RootDirectory.FullName,'AndroidBuild')
+              if(-not $roots.Contains($candidate)){$roots.Add($candidate)}
+            }catch{}
+          }
+          $root=$null
+          foreach($candidate in $roots){
+            try{$full=(Resolve-Path -LiteralPath $candidate -ErrorAction Stop).Path}catch{continue}
+            if(Test-Path -LiteralPath (Join-Path $full 'Core\Current\AndroidBuild.psd1') -PathType Leaf){$root=$full;break}
+          }
+          if(-not $root){throw 'ANDROIDBUILD_CORE=FAIL current_not_found'}
+          $env:ANDROIDBUILD_ROOT=$root
+          "ANDROIDBUILD_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Import-Module (Join-Path $root 'Core\Current\AndroidBuild.psd1') -Force
+          $version=[string](Get-AndroidBuildCoreVersion)
+          if([version]$version -lt [version]'3.0.14'){throw "ANDROIDBUILD_CORE=FAIL required=3.0.14 actual=$version"}
+          $sync=(Get-Command Sync-AndroidBuildRepositoryExactHead -ErrorAction Stop)
+          foreach($parameter in @('FetchTimeoutSeconds','FetchDepth')){
+            if(-not $sync.Parameters.ContainsKey($parameter)){throw "ANDROIDBUILD_CORE=FAIL missing_sync_parameter=$parameter version=$version"}
+          }
+          Enable-AndroidBuildPortableTools -AndroidBuildRoot $root | Out-Null
+          Write-Host "ANDROIDBUILD_CORE=PASS version=$version root=$root large_repo_sync=true"
+          Write-Host "EXPECTED_SHA=$env:WADDLE_EXPECTED_SHA"
+
+      - name: Capture AUTO_REPO health before heavy sync
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $profiles=Join-Path $env:ANDROIDBUILD_ROOT 'PC-PROFILES'
+          $machine=[string]$env:COMPUTERNAME
+          $states=@(Get-ChildItem -LiteralPath $profiles -Filter ($machine+'-auto-repo-state*.json') -File -ErrorAction SilentlyContinue | Sort-Object Name)
+          foreach($stateFile in $states){
+            try {
+              $state=Get-Content -LiteralPath $stateFile.FullName -Raw | ConvertFrom-Json
+              Write-Host ("AUTO_REPO_STATE file={0} slot={1} status={2} repo={3} job={4} updated={5} detail={6}" -f $stateFile.Name,$state.slot,$state.status,$state.repository,$state.job,$state.updated_at,$state.detail)
+            } catch {
+              Write-Host "AUTO_REPO_STATE_WARN file=$($stateFile.Name) error=$($_.Exception.Message)"
+            }
+          }
+          $procs=@(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+            ($_.Name -eq 'Runner.Listener.exe' -or $_.Name -eq 'Runner.Worker.exe') -and $_.CommandLine -match '\\Runners\\AutoRepos\\slot-'
+          })
+          foreach($p in $procs){
+            Write-Host "AUTO_REPO_PROCESS pid=$($p.ProcessId) name=$($p.Name) cmd=$($p.CommandLine)"
+          }
+          Write-Host "AUTO_REPO_PROCESS_COUNT=$($procs.Count)"
+
+      - name: Synchronize canonical repository at exact SHA through Core
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Set-StrictMode -Version Latest
+          Import-Module (Join-Path $env:ANDROIDBUILD_ROOT 'Core\Current\AndroidBuild.psd1') -Force
+          Enable-AndroidBuildPortableTools -AndroidBuildRoot $env:ANDROIDBUILD_ROOT | Out-Null
+          $repo=Join-Path $env:ANDROIDBUILD_ROOT 'Repositories\TEST-Waddle-Forever'
+          $sourceRemote='https://github.com/${{ github.repository }}.git'
+          Write-Host "WADDLE_CORE_SYNC=START repo=$repo sha=$env:WADDLE_EXPECTED_SHA timeout_seconds=7200 depth=1"
+          $sync=Sync-AndroidBuildRepositoryExactHead `
+            -RepoRoot $repo `
+            -ExpectedSha $env:WADDLE_EXPECTED_SHA `
+            -AndroidBuildRoot $env:ANDROIDBUILD_ROOT `
+            -AllowTrackedReset `
+            -CleanUntracked `
+            -SourceRemote $sourceRemote `
+            -FetchTimeoutSeconds 7200 `
+            -FetchDepth 1
+          "WADDLE_CANONICAL_REPO=$repo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          if([string]$sync.actual_sha -ne [string]$env:WADDLE_EXPECTED_SHA){throw "REPOSITORY_SYNC=FAIL expected=$env:WADDLE_EXPECTED_SHA actual=$($sync.actual_sha)"}
+          Write-Host "WADDLE_CORE_SYNC=PASS repo=$repo sha=$($sync.actual_sha) timeout_seconds=$($sync.fetch_timeout_seconds) depth=$($sync.fetch_depth) remote=$sourceRemote"
+
+      - name: Initialize Core workspace and project precheck
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Import-Module (Join-Path $env:ANDROIDBUILD_ROOT 'Core\Current\AndroidBuild.psd1') -Force
+          Initialize-AndroidBuildProjectWork -RepoRoot $env:WADDLE_CANONICAL_REPO -EnsureGitIgnore | Out-Null
+          $ctx=@{
+            repo_root=$env:WADDLE_CANONICAL_REPO
+            androidbuild_root=$env:ANDROIDBUILD_ROOT
+            expected_sha=$env:WADDLE_EXPECTED_SHA
+            repository='${{ github.repository }}'
+            run_id='${{ github.run_id }}'
+            job_id='${{ github.job }}'
+            runner_name=$env:RUNNER_NAME
+          }
+          Invoke-AndroidBuildProjectHook -RepoRoot $env:WADDLE_CANONICAL_REPO -Hook precheck -Context $ctx -TimeoutSeconds 1800 | Out-Host
+
+      - name: Build through AndroidBuild Core
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Import-Module (Join-Path $env:ANDROIDBUILD_ROOT 'Core\Current\AndroidBuild.psd1') -Force
+          $result=Invoke-AndroidBuildBuild `
+            -RepoRoot $env:WADDLE_CANONICAL_REPO `
+            -AndroidBuildRoot $env:ANDROIDBUILD_ROOT `
+            -ExpectedSha $env:WADDLE_EXPECTED_SHA `
+            -Repository '${{ github.repository }}' `
+            -RunId '${{ github.run_id }}' `
+            -JobId '${{ github.job }}' `
+            -RunnerName $env:RUNNER_NAME `
+            -LeaseWaitSeconds 1200
+          $result | ConvertTo-Json -Depth 12 | Write-Host
+
+      - name: Verify local integration contract
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Import-Module (Join-Path $env:ANDROIDBUILD_ROOT 'Core\Current\AndroidBuild.psd1') -Force
+          Test-AndroidBuildExactHead -RepoRoot $env:WADDLE_CANONICAL_REPO -ExpectedSha $env:WADDLE_EXPECTED_SHA -AndroidBuildRoot $env:ANDROIDBUILD_ROOT | Out-Null
+          $work=Join-Path $env:WADDLE_CANONICAL_REPO '.work'
+          foreach($required in @(
+            '.androidbuild-work-root',
+            'dependencies\node_modules',
+            'build\compiled',
+            'dist\package',
+            'cache\yarn',
+            'runtime',
+            'content',
+            'swf-analysis',
+            'diagnostics',
+            'logs\build',
+            'state\waddle-build-summary.json',
+            'state\build-provenance.json'
+          )){
+            $p=Join-Path $work $required
+            if(-not(Test-Path -LiteralPath $p)){throw "LOCAL_INTEGRATION=FAIL missing=$p"}
+          }
+          foreach($linkName in @('node_modules','compiled','dist')){
+            $item=Get-Item -LiteralPath (Join-Path $env:WADDLE_CANONICAL_REPO $linkName) -Force
+            if(($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0){throw "LOCAL_INTEGRATION=FAIL not_junction=$linkName"}
+          }
+          Write-Host "LOCAL_INTEGRATION=PASS repo=$env:WADDLE_CANONICAL_REPO work=$work sha=$env:WADDLE_EXPECTED_SHA"
+          Write-Host 'ANDROID=NOT_APPLICABLE APK=NOT_APPLICABLE PHYSICAL_ADB=NOT_APPLICABLE'
