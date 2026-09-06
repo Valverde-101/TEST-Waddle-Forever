@@ -78,9 +78,6 @@ function Ensure-WaddleJunction {
     Start-Sleep -Milliseconds ([Math]::Min(1500,200 * $attempt))
   }
 
-  # PowerShell's Junction provider can intermittently return Access denied while a
-  # scanner/process releases a directory handle. mklink /J uses the native path and
-  # is a safe final fallback after bounded retries.
   & cmd.exe /d /c "mklink /J `"$link`" `"$target`"" | Out-Null
   $mklinkExit = $LASTEXITCODE
   $finalTarget = Get-WaddleJunctionTarget -Path $link
@@ -176,13 +173,12 @@ function Invoke-WaddleDependencyBootstrap {
   }
 
   Write-Host "WADDLE_DEPENDENCIES=INSTALL reason=$($tree.reason) fingerprint_changed=$(-not $stateMatches) no_visual_studio_required=true"
-  $installError = $null
   try {
     $installed = Install-WaddleDependencies -RepoRoot $RepoRoot -WorkRoot $WorkRoot
   } catch {
     $installError = $_.Exception.Message
-    # Yarn may have completed successfully while PowerShell lost a race recreating
-    # the repo junction. Recover the link and classify from the installed tree.
+    $junctionOnly = ($installError -match '(?i)access.*denied|acceso denegado|WORK_JUNCTION=FAIL|New-Item.*Junction')
+    if (-not $junctionOnly -or $installError -match '^WADDLE_DEPENDENCIES=FAIL exit=') { throw }
     Ensure-WaddleJunction -LinkPath $link -TargetPath $target
     $recovered = Test-WaddleDependencyTree -RepoRoot $RepoRoot -WorkRoot $WorkRoot
     if (-not $recovered.ready) { throw }
