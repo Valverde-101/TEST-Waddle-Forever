@@ -21,12 +21,6 @@ jobs:
     timeout-minutes: 150
 
     steps:
-      - name: Checkout exact Waddle source
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ env.WADDLE_EXPECTED_SHA }}
-          fetch-depth: 1
-
       - name: Use Waddle reference Node
         uses: actions/setup-node@v4
         with:
@@ -68,15 +62,16 @@ jobs:
           Import-Module (Join-Path $env:ANDROIDBUILD_ROOT 'Core\Current\AndroidBuild.psd1') -Force
           Enable-AndroidBuildPortableTools -AndroidBuildRoot $env:ANDROIDBUILD_ROOT | Out-Null
           $repo=Join-Path $env:ANDROIDBUILD_ROOT 'Repositories\TEST-Waddle-Forever'
+          $sourceRemote='https://github.com/${{ github.repository }}.git'
           $sync=Sync-AndroidBuildRepositoryExactHead `
             -RepoRoot $repo `
             -ExpectedSha $env:WADDLE_EXPECTED_SHA `
             -AndroidBuildRoot $env:ANDROIDBUILD_ROOT `
             -AllowTrackedReset `
             -CleanUntracked `
-            -SourceRemote $env:GITHUB_WORKSPACE
+            -SourceRemote $sourceRemote
           "WADDLE_CANONICAL_REPO=$repo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "REPOSITORY_SYNC=PASS repo=$repo sha=$($sync.actual_sha)"
+          Write-Host "REPOSITORY_SYNC=PASS repo=$repo sha=$($sync.actual_sha) remote=$sourceRemote"
 
       - name: Initialize Core workspace and project precheck
         shell: powershell
