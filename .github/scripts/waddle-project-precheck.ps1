@@ -20,17 +20,19 @@ $toolchain = Test-WaddleToolchain -AndroidBuildRoot $androidBuildRoot
 # in PATH while Waddle requires Node 20.19.0. When a foreign system Node exists,
 # deliberately put it first, then prove the resolver restores the managed toolchain.
 $foreignCandidates = New-Object System.Collections.Generic.List[string]
-foreach ($candidate in @(
-  (Join-Path $env:ProgramFiles 'nodejs\node.exe'),
-  (if (${env:ProgramFiles(x86)}) { Join-Path ${env:ProgramFiles(x86)} 'nodejs\node.exe' } else { $null })
-)) {
+$programFilesX86 = ${env:ProgramFiles(x86)}
+$knownForeignPaths = New-Object System.Collections.Generic.List[string]
+if ($env:ProgramFiles) { $knownForeignPaths.Add((Join-Path $env:ProgramFiles 'nodejs\node.exe')) }
+if ($programFilesX86) { $knownForeignPaths.Add((Join-Path $programFilesX86 'nodejs\node.exe')) }
+foreach ($candidate in $knownForeignPaths) {
   if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf) -and -not $foreignCandidates.Contains($candidate)) {
     $foreignCandidates.Add($candidate)
   }
 }
 foreach ($candidate in @(& where.exe node.exe 2>$null)) {
-  if ($candidate -and (Test-Path -LiteralPath $candidate -PathType Leaf) -and -not $foreignCandidates.Contains([string]$candidate)) {
-    $foreignCandidates.Add([string]$candidate)
+  $candidateText = [string]$candidate
+  if ($candidateText -and (Test-Path -LiteralPath $candidateText -PathType Leaf) -and -not $foreignCandidates.Contains($candidateText)) {
+    $foreignCandidates.Add($candidateText)
   }
 }
 $foreignNode = $null
@@ -48,7 +50,7 @@ if ($foreignNode) {
   try {
     $foreignHome = Split-Path -Parent $foreignNode
     $withoutManaged = @([string]$savedPath -split ';' | Where-Object { $_ -and $_.TrimEnd('\') -ine $managedNode.home.TrimEnd('\') -and $_.TrimEnd('\') -ine $foreignHome.TrimEnd('\') })
-    $env:PATH = @($foreignHome) + $withoutManaged -join ';'
+    $env:PATH = (@($foreignHome) + $withoutManaged) -join ';'
     $beforeNode = (Get-Command node.exe -ErrorAction Stop).Source
     $beforeVersion = (& $beforeNode --version).Trim().TrimStart('v')
     if ($beforeVersion -eq '20.19.0') { throw "WADDLE_FOREIGN_NODE_ISOLATION=FAIL fixture_not_foreign path=$beforeNode" }
