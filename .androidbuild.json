@@ -43,7 +43,7 @@
   },
   "hooks": {
     "precheck": ".github/scripts/waddle-project-precheck.ps1",
-    "build": ".github/scripts/waddle-build.ps1"
+    "build": ".github/scripts/waddle-build-entry.ps1"
   },
   "github": {
     "self_hosted": true,
