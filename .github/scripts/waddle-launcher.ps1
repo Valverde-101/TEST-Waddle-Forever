@@ -10,7 +10,10 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-if ($env:WADDLE_LAUNCHER_SELFTEST_FAIL -eq '1') {
+# A real desktop session must never enter the synthetic failure path because of a
+# leaked environment variable. Environment-driven selftest remains available only
+# to noninteractive CI; humans can also invoke -SelfTestFailure explicitly.
+if ($env:WADDLE_NONINTERACTIVE -eq '1' -and $env:WADDLE_LAUNCHER_SELFTEST_FAIL -eq '1') {
   $SelfTestFailure = $true
 }
 
@@ -62,10 +65,6 @@ if ($SelfTestFailure) {
   Write-WaddleLauncherLine -Text $failureMessage -Color Red
 } else {
   try {
-    # Run the actual action in a child PowerShell. cmd.exe merges stderr into stdout
-    # before it reaches this wrapper, so benign native warnings (for example Yarn
-    # package metadata warnings) are logged and displayed but cannot be promoted into
-    # terminating PowerShell ErrorRecords. The child exit code remains authoritative.
     $command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$target`" 2>&1"
     & cmd.exe /d /s /c $command | ForEach-Object {
       $line = [string]$_
@@ -90,8 +89,6 @@ if ($SelfTestFailure) {
   }
 }
 
-# Write the terminal classification before producing the stable *-last.log copy so
-# the file is self-contained for humans and future Inspector/CI consumers.
 if ($exitCode -ne 0) {
   Write-WaddleLauncherLine -Text "WADDLE_LAUNCHER=FAIL action=$Action exit=$exitCode" -Color Red
 } else {
