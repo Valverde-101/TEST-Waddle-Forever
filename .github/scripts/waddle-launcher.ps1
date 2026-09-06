@@ -90,6 +90,14 @@ if ($SelfTestFailure) {
   }
 }
 
+# Write the terminal classification before producing the stable *-last.log copy so
+# the file is self-contained for humans and future Inspector/CI consumers.
+if ($exitCode -ne 0) {
+  Write-WaddleLauncherLine -Text "WADDLE_LAUNCHER=FAIL action=$Action exit=$exitCode" -Color Red
+} else {
+  Write-WaddleLauncherLine -Text "WADDLE_LAUNCHER=PASS action=$Action exit=0" -Color Green
+}
+
 try {
   Copy-Item -LiteralPath $runLog -Destination $lastLog -Force
 } catch {
@@ -107,5 +115,5 @@ if ($exitCode -ne 0) {
   exit $exitCode
 }
 
-Write-Host "WADDLE_LAUNCHER=PASS action=$Action log=$runLog"
+Write-Host "Persistent launcher log: $lastLog"
 exit 0
