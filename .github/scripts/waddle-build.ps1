@@ -173,7 +173,12 @@ Start-Transcript -LiteralPath $transcript -Force | Out-Null
 try {
   Push-Location $repo
   try {
-    Invoke-WaddleCommand -Name 'yarn-install' -Arguments @('install','--frozen-lockfile','--non-interactive','--cache-folder',$env:YARN_CACHE_FOLDER)
+    # register-scheme is an optional transitive dependency of discord-rpc. Building it
+    # with the host Node ABI is neither required for Waddle's compile/lint integration
+    # nor appropriate for the embedded Electron 10 ABI, so CI intentionally omits
+    # optional dependencies instead of installing a system-wide Visual C++ toolchain.
+    Write-Host 'OPTIONAL_DEPENDENCIES=SKIP reason=host_node_native_addons_not_part_of_integration_contract'
+    Invoke-WaddleCommand -Name 'yarn-install' -Arguments @('install','--frozen-lockfile','--non-interactive','--ignore-optional','--cache-folder',$env:YARN_CACHE_FOLDER)
     Test-WaddleInstalledCompilerContract
     Invoke-WaddleCommand -Name 'build-packages' -Arguments @('build-packages')
 
@@ -200,6 +205,7 @@ try {
     compiled = (Join-Path $workspace.work_root 'build\compiled')
     dist = (Join-Path $workspace.work_root 'dist\package')
     yarn_cache = $env:YARN_CACHE_FOLDER
+    optional_dependencies = 'SKIPPED'
     build_typescript = '7.0.2'
     lint_typescript = '6.0.3'
     eslint = '8.57.1'
