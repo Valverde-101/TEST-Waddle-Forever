@@ -37,13 +37,40 @@ function Invoke-WaddleCommand {
   Write-Host "WADDLE_STEP=PASS name=$Name duration_ms=$($sw.ElapsedMilliseconds)"
 }
 
+function Reset-WaddleCompiledOutput {
+  $link = Join-Path $repo 'compiled'
+  $target = Join-Path $workspace.work_root 'build\compiled'
+
+  if (Test-Path -LiteralPath $link) {
+    $item = Get-Item -LiteralPath $link -Force
+    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+      & cmd.exe /d /c "rmdir `"$link`"" | Out-Null
+      if ($LASTEXITCODE -ne 0) { throw "COMPILED_RESET=FAIL remove_junction exit=$LASTEXITCODE" }
+    } else {
+      Remove-Item -LiteralPath $link -Recurse -Force
+    }
+  }
+  if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
+  New-Item -ItemType Directory -Force -Path $target | Out-Null
+  Ensure-WaddleJunction -LinkPath $link -TargetPath $target
+  Write-Host "COMPILED_RESET=PASS target=$target"
+}
+
 Start-Transcript -LiteralPath $transcript -Force | Out-Null
 try {
   Push-Location $repo
   try {
     Invoke-WaddleCommand -Name 'yarn-install' -Arguments @('install','--frozen-lockfile','--non-interactive','--cache-folder',$env:YARN_CACHE_FOLDER)
     Invoke-WaddleCommand -Name 'build-packages' -Arguments @('build-packages')
-    Invoke-WaddleCommand -Name 'build-tsc' -Arguments @('build-tsc')
+
+    # Upstream `yarn build-tsc` begins with scripts/remove-compiled.mjs, which removes
+    # the compatibility junction itself. Reproduce the same build sequence while
+    # cleaning the real .work target and recreating the junction before tsc writes.
+    Reset-WaddleCompiledOutput
+    Invoke-WaddleCommand -Name 'tsc' -Arguments @('exec','tsc')
+    Invoke-WaddleCommand -Name 'tsc-alias' -Arguments @('exec','tsc-alias')
+    Invoke-WaddleCommand -Name 'build-browser' -Arguments @('build-browser')
+    Invoke-WaddleCommand -Name 'copy-files' -Arguments @('copy-files')
     Invoke-WaddleCommand -Name 'lint' -Arguments @('lint')
   } finally {
     Pop-Location
