@@ -5,11 +5,13 @@ const http = require('http');
 const path = require('path');
 const { app, BrowserWindow } = require('electron');
 
-// Waddle has two intentionally separate roots on Windows:
-// - sourceRoot: mutable user/content root (media, settings, .env, evidence)
-// - runtimeAppRoot: immutable deployed executable app (compiled + runtime deps)
-// Keeping cwd at sourceRoot preserves the real desktop launch semantics while
-// allowing CI to prove that executable JS is loaded from the external runtime.
+// Waddle has three intentionally separate roots on Windows:
+// - sourceRoot: persistent repository/content root (media, settings, .env, node_modules)
+// - runtimeAppRoot: immutable deployed executable app (compiled code only)
+// - runtimeModulesRoot: the single canonical dependency tree in sourceRoot/node_modules
+// Keeping cwd at sourceRoot preserves real desktop semantics while Electron and
+// compiled executable code run from the external runtime. Dependencies are not
+// duplicated into .work or into each runtime snapshot.
 const inferredRoot = path.resolve(__dirname, '..');
 const sourceRoot = path.resolve(process.env.WADDLE_SOURCE_ROOT || inferredRoot);
 const runtimeAppRoot = path.resolve(process.env.WADDLE_RUNTIME_APP_ROOT || sourceRoot);
@@ -47,7 +49,11 @@ const pluginPath = path.resolve(
 );
 const pluginVersion = (process.env.WADDLE_PPAPI_FLASH_VERSION || '32.0.0.303').trim();
 const compiledRoot = path.join(runtimeAppRoot, 'compiled');
-const runtimeModulesRoot = path.join(runtimeAppRoot, 'node_modules');
+const runtimeModulesRoot = path.resolve(
+  process.env.WADDLE_RUNTIME_NODE_MODULES
+  || process.env.WADDLE_NODE_MODULES
+  || path.join(sourceRoot, 'node_modules')
+);
 const settingsBackup = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath) : null;
 
 let server = null;
@@ -90,7 +96,7 @@ function finish(code, payload) {
 
 function basePayload(status, reason, extra = {}) {
   return {
-    schema: 'waddle-flash-runtime-probe/v4',
+    schema: 'waddle-flash-runtime-probe/v5-repo-deps',
     status,
     reason,
     electron: process.versions.electron || null,
@@ -102,6 +108,7 @@ function basePayload(status, reason, extra = {}) {
     runtime_app_root: runtimeAppRoot,
     runtime_compiled_root: compiledRoot,
     runtime_node_modules: runtimeModulesRoot,
+    dependency_layout: 'repo_physical',
     cwd: process.cwd(),
     plugin_path: pluginPath,
     plugin_version: pluginVersion,
@@ -136,6 +143,9 @@ if (!fs.existsSync(path.join(compiledRoot, 'server', 'file-server', 'index.js'))
 }
 if (!fs.existsSync(runtimeModulesRoot)) {
   finish(41, basePayload('FAIL', 'runtime_node_modules_missing'));
+}
+if (path.resolve(runtimeModulesRoot) !== path.resolve(path.join(sourceRoot, 'node_modules'))) {
+  finish(41, basePayload('FAIL', 'runtime_node_modules_not_canonical_repo_root'));
 }
 if (!fs.existsSync(path.join(sourceRoot, 'media', 'default'))) {
   finish(41, basePayload('FAIL', 'source_media_default_missing'));
@@ -180,9 +190,8 @@ const appReady = app.whenReady().then(async () => {
     answered_packages: 'probe',
   }));
 
-  // Load the server-side runtime dependency explicitly from the deployed app.
-  // This prevents the probe script's own source-tree location from accidentally
-  // resolving express through the mutable build node_modules junction.
+  // Load dependencies explicitly from the one repository node_modules tree.
+  // This proves the external runtime does not hide a second dependency copy.
   const express = require(path.join(runtimeModulesRoot, 'express'));
   const settingsModule = require(path.join(compiledRoot, 'server', 'settings.js'));
   const settingsManager = settingsModule.default || settingsModule;
