@@ -7,6 +7,7 @@ $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
 $launcher = Join-Path $PSScriptRoot 'waddle-launcher.ps1'
 $summaryPath = Join-Path $repo '.work\state\waddle-build-summary.json'
+$clientStatePath = Join-Path $repo '.work\state\waddle-client.json'
 $compiledEntry = Join-Path $repo 'compiled\client\main.js'
 $compiledServer = Join-Path $repo 'compiled\server\file-server\index.js'
 $reuse = $false
@@ -25,6 +26,149 @@ function Get-WaddleSmartStartFingerprint {
   $bytes = [Text.Encoding]::UTF8.GetBytes(($parts -join '|'))
   $sha = [Security.Cryptography.SHA256]::Create()
   try { return ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','') } finally { $sha.Dispose() }
+}
+
+function Get-WaddleRuntimeEvents {
+  param(
+    [Parameter(Mandatory)][string]$Path,
+    [Parameter(Mandatory)][int]$ProcessId
+  )
+
+  $events = New-Object System.Collections.Generic.List[object]
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return @() }
+
+  foreach ($line in @(Get-Content -LiteralPath $Path -ErrorAction SilentlyContinue)) {
+    $text = [string]$line
+    if ([string]::IsNullOrWhiteSpace($text) -or -not $text.TrimStart().StartsWith('{')) { continue }
+    try {
+      $item = $text | ConvertFrom-Json -ErrorAction Stop
+      $pidProperty = $item.PSObject.Properties['pid']
+      $eventProperty = $item.PSObject.Properties['event']
+      if (-not $pidProperty -or -not $eventProperty) { continue }
+      if ([int]$pidProperty.Value -ne $ProcessId) { continue }
+      $events.Add($item)
+    } catch {}
+  }
+  return @($events)
+}
+
+function Get-WaddleRuntimeFailure {
+  param([Parameter(Mandatory)][object[]]$Events)
+
+  foreach ($event in $Events) {
+    $name = [string]$event.event
+    if ($name -eq 'uncaught-exception' -or $name -eq 'unhandled-rejection' -or $name -eq 'render-process-gone' -or $name -eq 'window-unresponsive') {
+      return $event
+    }
+    if ($name -eq 'window-did-fail-load') {
+      $mainFrame = $event.PSObject.Properties['isMainFrame']
+      if (-not $mainFrame -or [bool]$mainFrame.Value) { return $event }
+    }
+  }
+  return $null
+}
+
+function Stop-WaddleRuntimeAfterHealthFailure {
+  try {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $launcher -Action stop | Out-Host
+    $global:LASTEXITCODE = 0
+  } catch {}
+}
+
+function Assert-WaddleRuntimeHealthy {
+  param([Parameter(Mandatory)][string]$ExpectedSha)
+
+  $stateDeadline = [DateTime]::UtcNow.AddSeconds(10)
+  $state = $null
+  do {
+    if (Test-Path -LiteralPath $clientStatePath -PathType Leaf) {
+      try {
+        $candidate = Get-Content -LiteralPath $clientStatePath -Raw | ConvertFrom-Json -ErrorAction Stop
+        if ([string]$candidate.status -eq 'RUNNING' -and [int]$candidate.pid -gt 0) {
+          $state = $candidate
+          break
+        }
+      } catch {}
+    }
+    Start-Sleep -Milliseconds 200
+  } while ([DateTime]::UtcNow -lt $stateDeadline)
+
+  if (-not $state) {
+    Stop-WaddleRuntimeAfterHealthFailure
+    throw "WADDLE_RUNTIME_HEALTH=FAIL reason=running_state_missing path=$clientStatePath"
+  }
+
+  $pid = [int]$state.pid
+  $stateSha = ([string]$state.source_sha).Trim().ToLowerInvariant()
+  $expected = ([string]$ExpectedSha).Trim().ToLowerInvariant()
+  if ([string]::IsNullOrWhiteSpace($stateSha) -or $stateSha -ne $expected) {
+    Stop-WaddleRuntimeAfterHealthFailure
+    throw "WADDLE_RUNTIME_HEALTH=FAIL reason=state_sha_mismatch expected=$expected actual=$stateSha pid=$pid"
+  }
+
+  $stderr = [string]$state.stderr
+  if ([string]::IsNullOrWhiteSpace($stderr)) {
+    Stop-WaddleRuntimeAfterHealthFailure
+    throw "WADDLE_RUNTIME_HEALTH=FAIL reason=diagnostic_path_missing pid=$pid"
+  }
+
+  $deadline = [DateTime]::UtcNow.AddSeconds(45)
+  $lastEvent = 'none'
+  do {
+    $process = Get-Process -Id $pid -ErrorAction SilentlyContinue
+    if (-not $process) {
+      $tail = if (Test-Path -LiteralPath $stderr -PathType Leaf) { (@(Get-Content -LiteralPath $stderr -Tail 8 -ErrorAction SilentlyContinue) -join ' | ') } else { 'diagnostic_file_missing' }
+      Stop-WaddleRuntimeAfterHealthFailure
+      throw "WADDLE_RUNTIME_HEALTH=FAIL reason=process_exited_before_ready pid=$pid last_event=$lastEvent diagnostic=$stderr tail=$tail"
+    }
+
+    $events = @(Get-WaddleRuntimeEvents -Path $stderr -ProcessId $pid)
+    if ($events.Count -gt 0) {
+      $lastEvent = [string]$events[$events.Count - 1].event
+    }
+
+    $failure = Get-WaddleRuntimeFailure -Events $events
+    if ($failure) {
+      $failureJson = $failure | ConvertTo-Json -Compress -Depth 8
+      Stop-WaddleRuntimeAfterHealthFailure
+      throw "WADDLE_RUNTIME_HEALTH=FAIL reason=runtime_event pid=$pid diagnostic=$stderr event=$failureJson"
+    }
+
+    $ready = @($events | Where-Object { [string]$_.event -eq 'main-window-ready' } | Select-Object -Last 1)
+    if ($ready.Count -gt 0) {
+      Start-Sleep -Seconds 2
+      $process = Get-Process -Id $pid -ErrorAction SilentlyContinue
+      if (-not $process) {
+        Stop-WaddleRuntimeAfterHealthFailure
+        throw "WADDLE_RUNTIME_HEALTH=FAIL reason=process_exited_after_ready pid=$pid diagnostic=$stderr"
+      }
+
+      $events = @(Get-WaddleRuntimeEvents -Path $stderr -ProcessId $pid)
+      $failure = Get-WaddleRuntimeFailure -Events $events
+      if ($failure) {
+        $failureJson = $failure | ConvertTo-Json -Compress -Depth 8
+        Stop-WaddleRuntimeAfterHealthFailure
+        throw "WADDLE_RUNTIME_HEALTH=FAIL reason=runtime_event_after_ready pid=$pid diagnostic=$stderr event=$failureJson"
+      }
+
+      $readyEvent = @($events | Where-Object { [string]$_.event -eq 'main-window-ready' } | Select-Object -Last 1)[0]
+      $urlProperty = $readyEvent.PSObject.Properties['url']
+      $url = if ($urlProperty) { [string]$urlProperty.Value } else { '' }
+      if ([string]::IsNullOrWhiteSpace($url) -or $url -notmatch '^https?://') {
+        Stop-WaddleRuntimeAfterHealthFailure
+        throw "WADDLE_RUNTIME_HEALTH=FAIL reason=main_window_url_invalid pid=$pid url=$url diagnostic=$stderr"
+      }
+
+      Write-Host "WADDLE_RUNTIME_HEALTH=PASS pid=$pid sha=$expected event=main-window-ready url=$url diagnostic=$stderr"
+      return
+    }
+
+    Start-Sleep -Milliseconds 250
+  } while ([DateTime]::UtcNow -lt $deadline)
+
+  $tail = if (Test-Path -LiteralPath $stderr -PathType Leaf) { (@(Get-Content -LiteralPath $stderr -Tail 12 -ErrorAction SilentlyContinue) -join ' | ') } else { 'diagnostic_file_missing' }
+  Stop-WaddleRuntimeAfterHealthFailure
+  throw "WADDLE_RUNTIME_HEALTH=FAIL reason=main_window_ready_timeout pid=$pid last_event=$lastEvent diagnostic=$stderr tail=$tail"
 }
 
 try {
@@ -74,4 +218,12 @@ if ($reuse) {
 }
 $exit = $LASTEXITCODE
 $global:LASTEXITCODE = 0
-exit $exit
+if ($exit -ne 0) { exit $exit }
+
+try {
+  Assert-WaddleRuntimeHealthy -ExpectedSha $currentSha
+  exit 0
+} catch {
+  Write-Error $_.Exception.Message
+  exit 1
+}
