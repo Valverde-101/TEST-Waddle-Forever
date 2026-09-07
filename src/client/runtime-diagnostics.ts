@@ -1,9 +1,11 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 import type { BrowserWindow } from 'electron';
 
 const runtimeLogDirectory = path.join(process.cwd(), '.work', 'logs', 'runtime');
 const explicitDiagnosticPath = process.env.WADDLE_RUNTIME_DIAGNOSTIC_LOG?.trim();
+const runtimeLeaseRoot = path.join(process.cwd(), '.work', 'state', 'runtime-leases');
 
 const getLatestLauncherStderr = (): string | undefined => {
   try {
@@ -78,6 +80,93 @@ export const writeRuntimeDiagnostic = (event: string, detail: Record<string, unk
   appendRuntimeDiagnostic(event, detail, false);
 };
 
+type RuntimeLease = {
+  id: string;
+  directory: string;
+  heartbeat: string;
+  timer: NodeJS.Timeout;
+};
+
+let runtimeLease: RuntimeLease | undefined;
+
+const releaseRuntimeLease = () => {
+  if (!runtimeLease) {
+    return;
+  }
+
+  try {
+    clearInterval(runtimeLease.timer);
+    fs.rmSync(runtimeLease.directory, { recursive: true, force: true });
+  } catch {
+    // A force-killed process cannot clean its lease either. PowerShell removes
+    // same-host dead-PID leases immediately and remote leases after heartbeat
+    // expiry, so cleanup here is intentionally best effort.
+  } finally {
+    runtimeLease = undefined;
+  }
+};
+
+const acquireRuntimeLease = () => {
+  if (runtimeLease) {
+    return runtimeLease;
+  }
+
+  const machine = os.hostname();
+  const token = Math.random().toString(16).slice(2);
+  const id = `${machine}-${process.pid}-${Date.now()}-${token}`.replace(/[^a-zA-Z0-9_.-]/g, '_');
+  const directory = path.join(runtimeLeaseRoot, id);
+  const ownerPath = path.join(directory, 'owner.json');
+  const heartbeat = path.join(directory, 'heartbeat');
+
+  fs.mkdirSync(runtimeLeaseRoot, { recursive: true });
+  fs.mkdirSync(directory, { recursive: false });
+
+  const owner = {
+    schema: 'waddle-runtime-lease/v1',
+    id,
+    machine,
+    pid: process.pid,
+    cwd: process.cwd(),
+    electron: process.versions.electron ?? null,
+    started_utc: new Date().toISOString()
+  };
+  fs.writeFileSync(ownerPath, JSON.stringify(owner), 'utf8');
+  fs.writeFileSync(heartbeat, new Date().toISOString(), 'utf8');
+
+  let consecutiveFailures = 0;
+  const timer = setInterval(() => {
+    try {
+      fs.writeFileSync(heartbeat, new Date().toISOString(), 'utf8');
+      consecutiveFailures = 0;
+    } catch (error) {
+      consecutiveFailures += 1;
+      appendRuntimeDiagnostic('runtime-lease-heartbeat-failed', {
+        lease: directory,
+        consecutiveFailures,
+        error: serializeError(error)
+      }, false);
+      if (consecutiveFailures >= 3) {
+        // Continuing without a shared heartbeat would allow another machine to
+        // treat this client as stale and mutate node_modules/compiled underneath
+        // it. Fail closed instead of risking corruption.
+        process.exit(1);
+      }
+    }
+  }, 5000);
+  timer.unref();
+
+  runtimeLease = { id, directory, heartbeat, timer };
+  process.once('exit', releaseRuntimeLease);
+
+  appendRuntimeDiagnostic('runtime-lease-acquired', {
+    lease: directory,
+    machine,
+    heartbeatIntervalMs: 5000
+  }, Boolean(explicitDiagnosticPath));
+
+  return runtimeLease;
+};
+
 let diagnosticsInstalled = false;
 
 export const installRuntimeDiagnostics = () => {
@@ -96,6 +185,15 @@ export const installRuntimeDiagnostics = () => {
     cwd: process.cwd(),
     explicitPath: Boolean(explicitDiagnosticPath)
   }, Boolean(explicitDiagnosticPath));
+
+  try {
+    acquireRuntimeLease();
+  } catch (error) {
+    const detail = serializeError(error);
+    appendRuntimeDiagnostic('runtime-lease-acquire-failed', detail, false);
+    const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    throw new Error(`WADDLE_RUNTIME_LEASE=FAIL root=${runtimeLeaseRoot} error=${message}`);
+  }
 
   process.on('unhandledRejection', reason => {
     writeRuntimeDiagnostic('unhandled-rejection', serializeError(reason));
