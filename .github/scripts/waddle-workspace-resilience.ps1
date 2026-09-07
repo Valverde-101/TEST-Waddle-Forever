@@ -47,6 +47,7 @@ function Ensure-WaddleJunction {
       }
       & cmd.exe /d /c "rmdir `"$link`"" | Out-Null
       if ($LASTEXITCODE -ne 0) { throw "WORK_JUNCTION=FAIL remove_wrong_target=$link exit=$LASTEXITCODE" }
+      $global:LASTEXITCODE = 0
     } else {
       $entries = @(Get-ChildItem -LiteralPath $link -Force -ErrorAction SilentlyContinue)
       if ($entries.Count -gt 0) { throw "WORK_JUNCTION=FAIL physical_directory_not_empty=$link" }
@@ -64,6 +65,7 @@ function Ensure-WaddleJunction {
           return
         }
         & cmd.exe /d /c "rmdir `"$link`"" 2>$null | Out-Null
+        $global:LASTEXITCODE = 0
       }
       New-Item -ItemType Junction -Path $link -Target $target -ErrorAction Stop | Out-Null
       $actual = Get-WaddleJunctionTarget -Path $link
@@ -80,6 +82,7 @@ function Ensure-WaddleJunction {
 
   & cmd.exe /d /c "mklink /J `"$link`" `"$target`"" | Out-Null
   $mklinkExit = $LASTEXITCODE
+  $global:LASTEXITCODE = 0
   $finalTarget = Get-WaddleJunctionTarget -Path $link
   if ($mklinkExit -ne 0 -or -not $finalTarget -or $finalTarget.TrimEnd('\') -ine $target.TrimEnd('\')) {
     throw "WORK_JUNCTION=FAIL path=$link target=$target attempts=$Attempts mklink_exit=$mklinkExit last_error=$lastError"
@@ -93,7 +96,8 @@ function Test-WaddleDependencyTree {
     [Parameter(Mandatory)][string]$WorkRoot
   )
 
-  $target = Join-Path $WorkRoot 'dependencies\node_modules'
+  Assert-WaddleWindowsOnly
+  $target = Get-WaddleNodeModulesPath -WorkRoot $WorkRoot
   $packagePath = Join-Path $RepoRoot 'package.json'
   if (-not (Test-Path -LiteralPath $packagePath -PathType Leaf)) { return [pscustomobject]@{ ready=$false; reason='package_json_missing' } }
   $package = Get-Content -LiteralPath $packagePath -Raw | ConvertFrom-Json
@@ -112,13 +116,22 @@ function Test-WaddleDependencyTree {
 
   $electronManifest = Join-Path $target 'electron\package.json'
   $electron = Get-Content -LiteralPath $electronManifest -Raw | ConvertFrom-Json
-  if (-not ([string]$electron.version).StartsWith('10.')) {
+  if ([string]$electron.version -ne '10.4.7') {
     return [pscustomobject]@{ ready=$false; reason="electron_contract:$($electron.version)" }
   }
-  if ($env:OS -eq 'Windows_NT' -and [Environment]::Is64BitOperatingSystem) {
-    $native = Join-Path $target '@typescript\typescript-win32-x64\package.json'
-    if (-not (Test-Path -LiteralPath $native -PathType Leaf)) {
-      return [pscustomobject]@{ ready=$false; reason='typescript_native_missing' }
+  foreach ($runtimeFile in @('electron\dist\electron.exe','electron\dist\icudtl.dat','electron\dist\resources.pak')) {
+    $runtimePath = Join-Path $target $runtimeFile
+    if (-not (Test-Path -LiteralPath $runtimePath -PathType Leaf)) { return [pscustomobject]@{ ready=$false; reason="electron_runtime_missing:$runtimeFile" } }
+  }
+
+  $native = Join-Path $target '@typescript\typescript-win32-x64\package.json'
+  if (-not (Test-Path -LiteralPath $native -PathType Leaf)) {
+    return [pscustomobject]@{ ready=$false; reason='typescript_native_missing' }
+  }
+  foreach ($wrapper in @('copyfiles.cmd','electron.cmd','eslint.cmd','tsc-alias.cmd','tsx.cmd')) {
+    $wrapperPath = Join-Path $target ('.bin\' + $wrapper)
+    if (-not (Test-Path -LiteralPath $wrapperPath -PathType Leaf)) {
+      return [pscustomobject]@{ ready=$false; reason="bin_wrapper_missing:$wrapper" }
     }
   }
   return [pscustomobject]@{ ready=$true; reason='complete'; electron=[string]$electron.version }
@@ -135,7 +148,9 @@ function Write-WaddleDependencyState {
   New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
   $path = Join-Path $stateDir 'dependencies.json'
   [ordered]@{
-    schema='waddle-dependencies/v1'
+    schema='waddle-dependencies/v2'
+    platform='windows-x64'
+    root='dependencies/current/node_modules'
     fingerprint=$Fingerprint
     electron=$Electron
     mode=$Mode
@@ -150,7 +165,8 @@ function Invoke-WaddleDependencyBootstrap {
     [Parameter(Mandatory)][string]$WorkRoot
   )
 
-  $target = Join-Path $WorkRoot 'dependencies\node_modules'
+  Assert-WaddleWindowsOnly
+  $target = Get-WaddleNodeModulesPath -WorkRoot $WorkRoot
   $link = Join-Path $RepoRoot 'node_modules'
   $fingerprint = Get-WaddleDependencyFingerprint -RepoRoot $RepoRoot
   $statePath = Join-Path $WorkRoot 'state\dependencies.json'
@@ -159,7 +175,7 @@ function Invoke-WaddleDependencyBootstrap {
   if (Test-Path -LiteralPath $statePath -PathType Leaf) {
     try {
       $state = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
-      $stateMatches = ([string]$state.fingerprint -eq $fingerprint)
+      $stateMatches = ([string]$state.fingerprint -eq $fingerprint -and [string]$state.root -eq 'dependencies/current/node_modules')
     } catch {}
   }
 
@@ -168,29 +184,18 @@ function Invoke-WaddleDependencyBootstrap {
     Enable-WaddleLocalNodeTooling -WorkRoot $WorkRoot | Out-Null
     $mode = if ($stateMatches) { 'reused' } else { 'adopted_existing' }
     Write-WaddleDependencyState -WorkRoot $WorkRoot -Fingerprint $fingerprint -Electron $tree.electron -Mode $mode | Out-Null
-    Write-Host "WADDLE_DEPENDENCIES=PASS mode=$mode target=$target electron=$($tree.electron) fingerprint=$fingerprint"
+    Write-Host "WADDLE_DEPENDENCIES=PASS mode=$mode target=$target electron=$($tree.electron) fingerprint=$fingerprint runtime_isolated=true"
     return [pscustomobject]@{ status='PASS'; node_modules=$target; electron=$tree.electron; fingerprint=$fingerprint; mode=$mode }
   }
 
-  Write-Host "WADDLE_DEPENDENCIES=INSTALL reason=$($tree.reason) fingerprint_changed=$(-not $stateMatches) no_visual_studio_required=true"
-  try {
-    $installed = Install-WaddleDependencies -RepoRoot $RepoRoot -WorkRoot $WorkRoot
-  } catch {
-    $installError = $_.Exception.Message
-    $junctionOnly = ($installError -match '(?i)access.*denied|acceso denegado|WORK_JUNCTION=FAIL|New-Item.*Junction')
-    if (-not $junctionOnly -or $installError -match '^WADDLE_DEPENDENCIES=FAIL exit=') { throw }
-    Ensure-WaddleJunction -LinkPath $link -TargetPath $target
-    $recovered = Test-WaddleDependencyTree -RepoRoot $RepoRoot -WorkRoot $WorkRoot
-    if (-not $recovered.ready) { throw }
-    $installed = [pscustomobject]@{ status='PASS'; node_modules=$target; electron=$recovered.electron }
-    Write-Host "WADDLE_DEPENDENCIES=RECOVERED reason=junction_post_install install_error=$installError"
-  }
+  Write-Host "WADDLE_DEPENDENCIES=INSTALL reason=$($tree.reason) fingerprint_changed=$(-not $stateMatches) target=$target no_visual_studio_required=true"
+  $installed = Install-WaddleDependencies -RepoRoot $RepoRoot -WorkRoot $WorkRoot
 
   Ensure-WaddleJunction -LinkPath $link -TargetPath $target
   $final = Test-WaddleDependencyTree -RepoRoot $RepoRoot -WorkRoot $WorkRoot
   if (-not $final.ready) { throw "WADDLE_DEPENDENCIES=FAIL post_install_tree=$($final.reason)" }
   Enable-WaddleLocalNodeTooling -WorkRoot $WorkRoot | Out-Null
   Write-WaddleDependencyState -WorkRoot $WorkRoot -Fingerprint $fingerprint -Electron $final.electron -Mode 'installed' | Out-Null
-  Write-Host "WADDLE_DEPENDENCIES=PASS mode=installed target=$target electron=$($final.electron) fingerprint=$fingerprint no_visual_studio_required=true"
+  Write-Host "WADDLE_DEPENDENCIES=PASS mode=installed target=$target electron=$($final.electron) fingerprint=$fingerprint no_visual_studio_required=true runtime_isolated=true"
   return [pscustomobject]@{ status='PASS'; node_modules=$target; electron=$final.electron; fingerprint=$fingerprint; mode='installed' }
 }

@@ -1,6 +1,13 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Assert-WaddleWindowsOnly {
+  if ($env:OS -ne 'Windows_NT') { throw "WADDLE_PLATFORM=FAIL windows_required actual=$($env:OS)" }
+  if (-not [Environment]::Is64BitOperatingSystem) { throw 'WADDLE_PLATFORM=FAIL windows_x64_required' }
+  if (-not [Environment]::Is64BitProcess) { throw 'WADDLE_PLATFORM=FAIL powershell_x64_required' }
+  Write-Host "WADDLE_PLATFORM=PASS os=Windows arch=x64 powershell=$($PSVersionTable.PSVersion)"
+}
+
 function Get-WaddleContext {
   param([string]$ContextPath)
   if ([string]::IsNullOrWhiteSpace($ContextPath)) { return @{} }
@@ -113,20 +120,22 @@ function Ensure-WaddleJunction {
       } else {
         $actual = [IO.Path]::GetFullPath((Join-Path $item.Parent.FullName ([string]$actualTargetRaw)))
       }
-      if ($actual.TrimEnd('\') -ne $target.TrimEnd('\')) {
-        throw "WORK_JUNCTION=FAIL path=$LinkPath target=$actual expected=$target"
+      if ($actual.TrimEnd('\') -ieq $target.TrimEnd('\')) {
+        Write-Host "WORK_JUNCTION=PASS path=$LinkPath target=$target mode=existing"
+        return
       }
-      Write-Host "WORK_JUNCTION=PASS path=$LinkPath target=$target mode=existing"
-      return
+      & cmd.exe /d /c "rmdir `"$LinkPath`"" | Out-Null
+      if ($LASTEXITCODE -ne 0) { throw "WORK_JUNCTION=FAIL remove_wrong_target=$LinkPath exit=$LASTEXITCODE" }
+    } else {
+      $hasEntries = @(Get-ChildItem -LiteralPath $LinkPath -Force -ErrorAction SilentlyContinue).Count -gt 0
+      if ($hasEntries) {
+        $robocopy = Get-Command robocopy.exe -ErrorAction Stop
+        & $robocopy.Source $LinkPath $target /E /MOVE /R:2 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Host
+        if ($LASTEXITCODE -ge 8) { throw "WORK_JUNCTION=FAIL migrate=$LinkPath robocopy_exit=$LASTEXITCODE" }
+        $global:LASTEXITCODE = 0
+      }
+      Remove-Item -LiteralPath $LinkPath -Force -Recurse -ErrorAction SilentlyContinue
     }
-
-    $hasEntries = @(Get-ChildItem -LiteralPath $LinkPath -Force -ErrorAction SilentlyContinue).Count -gt 0
-    if ($hasEntries) {
-      $robocopy = Get-Command robocopy.exe -ErrorAction Stop
-      & $robocopy.Source $LinkPath $target /E /MOVE /R:2 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Host
-      if ($LASTEXITCODE -ge 8) { throw "WORK_JUNCTION=FAIL migrate=$LinkPath robocopy_exit=$LASTEXITCODE" }
-    }
-    Remove-Item -LiteralPath $LinkPath -Force -Recurse -ErrorAction SilentlyContinue
   }
 
   New-Item -ItemType Junction -Path $LinkPath -Target $target | Out-Null
@@ -138,15 +147,15 @@ function Initialize-WaddleWorkspace {
     [Parameter(Mandatory)][string]$RepoRoot,
     [Parameter(Mandatory)][string]$AndroidBuildRoot
   )
-  if ($env:OS -ne 'Windows_NT') { throw 'WADDLE_WORKSPACE=FAIL windows_required' }
+  Assert-WaddleWindowsOnly
 
   $coreWork = Initialize-AndroidBuildProjectWork -RepoRoot $RepoRoot -EnsureGitIgnore
   $work = [string]$coreWork.work_root
 
   foreach ($relative in @(
-    'dependencies\node_modules',
+    'dependencies\current\node_modules',
     'cache\yarn',
-    'runtime',
+    'runtime\interactive',
     'downloads',
     'content',
     'swf-analysis',
@@ -159,7 +168,13 @@ function Initialize-WaddleWorkspace {
     Ensure-WaddleDirectory (Join-Path $work $relative)
   }
 
-  Ensure-WaddleJunction -LinkPath (Join-Path $RepoRoot 'node_modules') -TargetPath (Join-Path $work 'dependencies\node_modules')
+  $legacyDependencies = Join-Path $work 'dependencies\node_modules'
+  if (Test-Path -LiteralPath $legacyDependencies) {
+    Write-Host "WADDLE_LEGACY_DEPENDENCIES=INFO path=$legacyDependencies action=preserved_lock_safe_migration"
+  }
+
+  $currentModules = Join-Path $work 'dependencies\current\node_modules'
+  Ensure-WaddleJunction -LinkPath (Join-Path $RepoRoot 'node_modules') -TargetPath $currentModules
   Ensure-WaddleJunction -LinkPath (Join-Path $RepoRoot 'compiled') -TargetPath (Join-Path $work 'build\compiled')
   Ensure-WaddleJunction -LinkPath (Join-Path $RepoRoot 'dist') -TargetPath (Join-Path $work 'dist\package')
 
@@ -176,33 +191,33 @@ function Initialize-WaddleWorkspace {
   $env:YARN_CACHE_FOLDER = Join-Path $work 'cache\yarn'
   $env:WADDLE_WORK_ROOT = $work
   $env:WADDLE_REPO_ROOT = $RepoRoot
+  $env:WADDLE_NODE_MODULES = $currentModules
   $env:ANDROIDBUILD_ROOT = $AndroidBuildRoot
 
   [pscustomobject]@{
     status = 'PASS'
     repo_root = $RepoRoot
     work_root = $work
+    node_modules = $currentModules
     yarn_cache = $env:YARN_CACHE_FOLDER
   }
 }
 
 function Test-WaddleToolchain {
   param([Parameter(Mandatory)][string]$AndroidBuildRoot)
+  Assert-WaddleWindowsOnly
 
   $node = Get-Command node.exe -ErrorAction SilentlyContinue
-  if (-not $node) { $node = Get-Command node -ErrorAction SilentlyContinue }
   if (-not $node) { throw 'NODE=FAIL missing' }
   $nodeVersion = (& $node.Source --version).Trim().TrimStart('v')
   if ($nodeVersion -ne '20.19.0') { throw "NODE=FAIL required=20.19.0 actual=$nodeVersion" }
 
   $yarn = Get-Command yarn.cmd -ErrorAction SilentlyContinue
-  if (-not $yarn) { $yarn = Get-Command yarn -ErrorAction SilentlyContinue }
   if (-not $yarn) { throw 'YARN=FAIL missing' }
   $yarnVersion = (& $yarn.Source --version).Trim()
   if ($yarnVersion -ne '1.22.22') { throw "YARN=FAIL required=1.22.22 actual=$yarnVersion" }
 
   $npm = Get-Command npm.cmd -ErrorAction SilentlyContinue
-  if (-not $npm) { $npm = Get-Command npm -ErrorAction SilentlyContinue }
   $npmVersion = if ($npm) { (& $npm.Source --version).Trim() } else { 'missing' }
 
   Write-Host "NODE=PASS version=$nodeVersion"
