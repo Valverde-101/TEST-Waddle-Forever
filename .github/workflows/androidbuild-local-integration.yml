@@ -106,16 +106,17 @@ jobs:
           $ErrorActionPreference='Stop'
           Set-StrictMode -Version Latest
           $repo=$env:WADDLE_CANONICAL_REPO
-          $common=Join-Path $repo '.github\scripts\waddle-common.ps1'
           $analyzer=Join-Path $repo '.github\scripts\waddle-swf-analysis.ps1'
-          if(-not(Test-Path -LiteralPath $common -PathType Leaf)){throw "WADDLE_SWF_ANALYSIS=FAIL common_missing=$common"}
+          $clientStatePath=Join-Path $repo '.work\state\waddle-client.json'
           if(-not(Test-Path -LiteralPath $analyzer -PathType Leaf)){throw "WADDLE_SWF_ANALYSIS=FAIL analyzer_missing=$analyzer"}
-          . $common
-          $toolchain=Test-WaddleToolchain -AndroidBuildRoot $env:ANDROIDBUILD_ROOT
+          if(-not(Test-Path -LiteralPath $clientStatePath -PathType Leaf)){throw "WADDLE_SWF_ANALYSIS=FAIL client_state_missing=$clientStatePath"}
+          $clientState=Get-Content -LiteralPath $clientStatePath -Raw | ConvertFrom-Json
+          $ffdec=[string]$clientState.ffdec_path
+          if([string]::IsNullOrWhiteSpace($ffdec) -or -not(Test-Path -LiteralPath $ffdec -PathType Leaf)){throw "WADDLE_SWF_ANALYSIS=FAIL certified_ffdec_missing=$ffdec"}
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $analyzer `
             -RepoRoot $repo `
             -WorkRoot (Join-Path $repo '.work') `
-            -FFDecPath $toolchain.ffdec `
+            -FFDecPath $ffdec `
             -DeepBudget 8 `
             -FFDecTimeoutSeconds 12
           if($LASTEXITCODE -ne 0){throw "WADDLE_SWF_ANALYSIS=FAIL exit=$LASTEXITCODE"}
