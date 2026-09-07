@@ -265,9 +265,15 @@ try {
   if ($startExit -ne 0) { throw "WADDLE_CERT=FAIL actual_start_exit=$startExit" }
   if (-not (Test-Path -LiteralPath $clientStatePath -PathType Leaf)) { throw "WADDLE_CERT=FAIL client_state_missing=$clientStatePath" }
   $clientState = Get-Content -LiteralPath $clientStatePath -Raw | ConvertFrom-Json
-  if ([string]$clientState.schema -ne 'waddle-client-state/v9') { throw "WADDLE_CERT=FAIL client_schema=$($clientState.schema)" }
+  if ([string]$clientState.schema -ne 'waddle-client-state/v10') { throw "WADDLE_CERT=FAIL client_schema=$($clientState.schema)" }
   if ([string]$clientState.status -ne 'RUNNING' -or [string]$clientState.source_sha -ne $ExpectedSha) { throw "WADDLE_CERT=FAIL client_state status=$($clientState.status) sha=$($clientState.source_sha)" }
   if ([string]$clientState.runtime_mode -ne 'external_deployment' -or [string]$clientState.electron_launch_mode -ne 'external_runtime_start_process') { throw "WADDLE_CERT=FAIL client_runtime mode=$($clientState.runtime_mode) launch=$($clientState.electron_launch_mode)" }
+  if ($null -eq $clientState.PSObject.Properties['dependency_mutation_while_running'] -or [bool]$clientState.dependency_mutation_while_running) {
+    throw "WADDLE_CERT=FAIL client_dependency_mutation_contract value=$($clientState.dependency_mutation_while_running)"
+  }
+  if ([string]$clientState.dependency_mode -notin @('reused','adopted_repo_existing')) {
+    throw "WADDLE_CERT=FAIL start_reinstalled_dependencies mode=$($clientState.dependency_mode)"
+  }
   foreach ($pair in @(
     @{name='runtime_root'; value=[string]$clientState.runtime_root},
     @{name='app_entry'; value=[string]$clientState.runtime_app_entry},
@@ -286,7 +292,7 @@ try {
   $clientCim = Get-CimInstance Win32_Process -Filter "ProcessId=$startedClientId" -ErrorAction Stop
   if ([IO.Path]::GetFullPath([string]$clientCim.ExecutablePath) -ne [IO.Path]::GetFullPath([string]$clientState.electron_executable)) { throw "WADDLE_CERT=FAIL client_executable actual=$($clientCim.ExecutablePath) expected=$($clientState.electron_executable)" }
   if ($startWatch.Elapsed.TotalMinutes -ge 3) { throw "WADDLE_CERT=FAIL launcher_return_too_slow duration_ms=$($startWatch.ElapsedMilliseconds)" }
-  Write-Host "WADDLE_CERT_START=PASS process_id=$startedClientId launcher_return_ms=$($startWatch.ElapsedMilliseconds) runtime=$($clientState.runtime_root)"
+  Write-Host "WADDLE_CERT_START=PASS process_id=$startedClientId launcher_return_ms=$($startWatch.ElapsedMilliseconds) runtime=$($clientState.runtime_root) dependency_mode=$($clientState.dependency_mode)"
 
   # 6) The single repo node_modules tree is immutable while Electron is alive.
   # We deliberately do NOT run yarn here: mutating the same dependency tree that
