@@ -111,8 +111,7 @@ export const instrumentRuntimeWindow = (window: BrowserWindow, label: string) =>
   window.webContents.on('render-process-gone', (_event, details) => {
     writeRuntimeDiagnostic('render-process-gone', {
       label,
-      reason: details.reason,
-      exitCode: details.exitCode
+      reason: details.reason
     });
   });
 
