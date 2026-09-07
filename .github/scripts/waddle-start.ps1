@@ -69,21 +69,36 @@ if (-not (Test-Path -LiteralPath $electron -PathType Leaf)) { throw "WADDLE_STAR
 # command line before Electron receives it. Launch the packaged electron.exe
 # directly so there is no intermediary shell, no .cmd shim and no V:/UNC
 # quoting ambiguity.
-$electronVersionOutput = @(& $electron --version 2>&1)
-$electronProbeExit = $LASTEXITCODE
+$previousRunAsNode = [Environment]::GetEnvironmentVariable('ELECTRON_RUN_AS_NODE','Process')
+$previousErrorActionPreference = $ErrorActionPreference
+$electronVersionOutput = @()
+$electronProbeExit = -1
+try {
+  [Environment]::SetEnvironmentVariable('ELECTRON_RUN_AS_NODE','1','Process')
+  $ErrorActionPreference = 'Continue'
+  $electronVersionOutput = @(& $electron -p "process.versions.electron" 2>&1)
+  $electronProbeExit = $LASTEXITCODE
+} finally {
+  $ErrorActionPreference = $previousErrorActionPreference
+  if ($null -eq $previousRunAsNode) {
+    Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
+  } else {
+    [Environment]::SetEnvironmentVariable('ELECTRON_RUN_AS_NODE',$previousRunAsNode,'Process')
+  }
+}
 $electronVersion = (($electronVersionOutput | ForEach-Object { [string]$_ }) -join '').Trim().TrimStart('v')
 if ($electronProbeExit -ne 0) {
   throw "WADDLE_START=FAIL electron_probe_exit=$electronProbeExit executable=$electron output=$($electronVersionOutput -join ' | ')"
 }
 if ([string]::IsNullOrWhiteSpace($electronVersion)) {
-  throw "WADDLE_START=FAIL electron_probe_empty executable=$electron"
+  throw "WADDLE_START=FAIL electron_probe_empty executable=$electron mode=run_as_node"
 }
 if ($electronVersion -ne [string]$dependencies.electron) {
   throw "WADDLE_START=FAIL electron_version_mismatch manifest=$($dependencies.electron) executable=$electronVersion path=$electron"
 }
 Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_ELECTRON_EXE' -Value ([IO.Path]::GetFullPath($electron))
 [Environment]::SetEnvironmentVariable('WADDLE_ELECTRON_EXE',[IO.Path]::GetFullPath($electron),'Process')
-Write-Host "WADDLE_ELECTRON_RUNTIME=PASS version=$electronVersion executable=$electron launch_mode=direct_exe"
+Write-Host "WADDLE_ELECTRON_RUNTIME=PASS version=$electronVersion executable=$electron launch_mode=direct_exe probe_mode=run_as_node"
 
 $flash = Test-WaddlePepperFlash -RepoRoot $repo
 $runtimeLogs = Join-Path $workspace.work_root 'logs\runtime'
@@ -94,8 +109,11 @@ $stderr = Join-Path $runtimeLogs "client-$stamp.stderr.log"
 $statePath = Join-Path $workspace.work_root 'state\waddle-client.json'
 
 $env:NODE_ENV = 'dev'
+# Never inherit ELECTRON_RUN_AS_NODE into the real desktop client; that mode is
+# used only for the deterministic runtime probe above.
+Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
 # A Windows path cannot contain a double quote, so quoting the one application
-# argument is sufficient for ProcessStartInfo/Start-Process argument parsing.
+# argument is sufficient for Start-Process argument parsing.
 $entryArgument = '"' + $entry + '"'
 $process = Start-Process -FilePath $electron -ArgumentList $entryArgument -WorkingDirectory $repo -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
 Start-Sleep -Seconds 3
