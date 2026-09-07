@@ -1,0 +1,113 @@
+name: Waddle Flash Runtime Gate
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [dev]
+  push:
+    branches: [dev]
+
+permissions:
+  contents: read
+
+env:
+  WADDLE_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: waddle-flash-runtime-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  flash-runtime:
+    runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
+    timeout-minutes: 120
+
+    steps:
+      - name: Resolve AndroidBuild Core and exact Waddle SHA
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Set-StrictMode -Version Latest
+          $roots=New-Object System.Collections.Generic.List[string]
+          if($env:ANDROIDBUILD_ROOT){$roots.Add([string]$env:ANDROIDBUILD_ROOT)}
+          foreach($drive in [IO.DriveInfo]::GetDrives()){
+            try {
+              if(-not $drive.IsReady){continue}
+              $candidate=[IO.Path]::Combine($drive.RootDirectory.FullName,'AndroidBuild')
+              if(-not $roots.Contains($candidate)){$roots.Add($candidate)}
+            } catch {}
+          }
+          $root=$null
+          foreach($candidate in $roots){
+            try{$full=(Resolve-Path -LiteralPath $candidate -ErrorAction Stop).Path}catch{continue}
+            if(Test-Path -LiteralPath (Join-Path $full 'Core\Current\AndroidBuild.psd1') -PathType Leaf){$root=$full;break}
+          }
+          if(-not $root){throw 'FLASH_GATE=FAIL androidbuild_core_not_found'}
+          $env:ANDROIDBUILD_ROOT=$root
+          "ANDROIDBUILD_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Import-Module (Join-Path $root 'Core\Current\AndroidBuild.psd1') -Force
+          Enable-AndroidBuildPortableTools -AndroidBuildRoot $root | Out-Null
+          $version=[string](Get-AndroidBuildCoreVersion)
+          if([version]$version -lt [version]'3.0.17'){throw "FLASH_GATE=FAIL core_required=3.0.17 actual=$version"}
+          $repo=Join-Path $root 'Repositories\TEST-Waddle-Forever'
+          $sync=Sync-AndroidBuildRepositoryExactHead `
+            -RepoRoot $repo `
+            -ExpectedSha $env:WADDLE_EXPECTED_SHA `
+            -AndroidBuildRoot $root `
+            -AllowTrackedReset `
+            -CleanUntracked `
+            -SourceRemote 'https://github.com/${{ github.repository }}.git' `
+            -FetchTimeoutSeconds 7200 `
+            -FetchDepth 1
+          if([string]$sync.actual_sha -ne [string]$env:WADDLE_EXPECTED_SHA){throw "FLASH_GATE=FAIL exact_head expected=$env:WADDLE_EXPECTED_SHA actual=$($sync.actual_sha)"}
+          "WADDLE_CANONICAL_REPO=$repo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "FLASH_GATE_EXACT_HEAD=PASS sha=$($sync.actual_sha) core=$version repo=$repo"
+
+      - name: Prepare Waddle local runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Push-Location $env:WADDLE_CANONICAL_REPO
+          try {
+            $env:WADDLE_NONINTERACTIVE='1'
+            & cmd.exe /d /c 'Waddle-Setup.cmd'
+            if($LASTEXITCODE -ne 0){throw "FLASH_GATE=FAIL setup_exit=$LASTEXITCODE"}
+          } finally {
+            Remove-Item Env:WADDLE_NONINTERACTIVE -ErrorAction SilentlyContinue
+            Pop-Location
+          }
+          Write-Host 'FLASH_GATE_SETUP=PASS'
+
+      - name: Prove Pepper Flash inside Chromium renderer
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Set-StrictMode -Version Latest
+          $repo=$env:WADDLE_CANONICAL_REPO
+          $electron=Join-Path $repo '.work\dependencies\node_modules\electron\dist\electron.exe'
+          $probe=Join-Path $repo 'scripts\flash-runtime-probe.js'
+          $state=Join-Path $repo '.work\state\flash-runtime-probe.json'
+          $runtimeLogs=Join-Path $repo '.work\logs\runtime'
+          New-Item -ItemType Directory -Force -Path $runtimeLogs | Out-Null
+          $stdout=Join-Path $runtimeLogs 'flash-runtime-probe.stdout.log'
+          $stderr=Join-Path $runtimeLogs 'flash-runtime-probe.stderr.log'
+          if(-not(Test-Path -LiteralPath $electron -PathType Leaf)){throw "FLASH_GATE=FAIL electron_missing=$electron"}
+          if(-not(Test-Path -LiteralPath $probe -PathType Leaf)){throw "FLASH_GATE=FAIL probe_missing=$probe"}
+          Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
+          $env:WADDLE_FLASH_PROBE_RESULT=$state
+          $arg='"'+$probe+'"'
+          $process=Start-Process -FilePath $electron -ArgumentList $arg -WorkingDirectory $repo -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+          if(-not $process.WaitForExit(30000)){
+            try{$process.Kill()}catch{}
+            throw "FLASH_GATE=FAIL probe_timeout stdout=$stdout stderr=$stderr"
+          }
+          $process.Refresh()
+          if(Test-Path -LiteralPath $stdout){Get-Content -LiteralPath $stdout | Write-Host}
+          if(Test-Path -LiteralPath $stderr){Get-Content -LiteralPath $stderr | Write-Host}
+          if($process.ExitCode -ne 0){throw "FLASH_GATE=FAIL probe_exit=$($process.ExitCode) state=$state stdout=$stdout stderr=$stderr"}
+          if(-not(Test-Path -LiteralPath $state -PathType Leaf)){throw "FLASH_GATE=FAIL state_missing=$state"}
+          $result=Get-Content -LiteralPath $state -Raw | ConvertFrom-Json
+          if([string]$result.status -ne 'PASS'){throw "FLASH_GATE=FAIL renderer_status=$($result.status) reason=$($result.reason)"}
+          if(-not [bool]$result.renderer.mimePresent){throw 'FLASH_GATE=FAIL flash_mime_absent'}
+          if(-not [bool]$result.renderer.mimeEnabledPlugin -and @($result.flash_plugins).Count -lt 1){throw 'FLASH_GATE=FAIL flash_plugin_not_exposed'}
+          Write-Host "FLASH_GATE=PASS electron=$($result.electron) chromium=$($result.chromium) plugin=$($result.plugin_path) version=$($result.plugin_version) mime_enabled=$($result.renderer.mimeEnabledPlugin) flash_plugins=$(@($result.flash_plugins).Count)"
