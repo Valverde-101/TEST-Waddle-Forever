@@ -28,6 +28,17 @@ if ($env:ANDROIDBUILD_ROOT) {
   }
 }
 
+# Dependency policy is loaded before the runtime policy. The dependency layer
+# still contains historical compatibility runtime functions, so loading it first
+# is deliberate: waddle-repo-runtime.ps1 below must be the authoritative final
+# definition of New-WaddleRuntimeSnapshot/Test-WaddleElectronRuntime.
+$repoDependencies = Join-Path $PSScriptRoot 'waddle-repo-dependencies.ps1'
+if (-not (Test-Path -LiteralPath $repoDependencies -PathType Leaf)) {
+  throw "WADDLE_REPO_DEPENDENCIES=FAIL missing=$repoDependencies"
+}
+. $repoDependencies
+Write-Host "WADDLE_REPO_DEPENDENCIES=PASS layout=repo_physical script=$repoDependencies"
+
 # Final runtime policy: execute Electron, compiled Waddle and Pepper Flash
 # directly from the repository. Nothing is copied to AndroidBuild\Runtime.
 $repoRuntime = Join-Path $PSScriptRoot 'waddle-repo-runtime.ps1'
@@ -35,18 +46,7 @@ if (-not (Test-Path -LiteralPath $repoRuntime -PathType Leaf)) {
   throw "WADDLE_RUNTIME_OVERRIDE=FAIL missing=$repoRuntime"
 }
 . $repoRuntime
-Write-Host "WADDLE_RUNTIME_OVERRIDE=PASS mode=repo_local_direct script=$repoRuntime"
-
-# Final dependency policy: keep exactly one persistent node_modules tree at the
-# repository root. This is sourced last intentionally so it replaces the
-# historical .work dependency implementation while preserving the rest of the
-# resilience logic.
-$repoDependencies = Join-Path $PSScriptRoot 'waddle-repo-dependencies.ps1'
-if (-not (Test-Path -LiteralPath $repoDependencies -PathType Leaf)) {
-  throw "WADDLE_REPO_DEPENDENCIES=FAIL missing=$repoDependencies"
-}
-. $repoDependencies
-Write-Host "WADDLE_REPO_DEPENDENCIES=PASS layout=repo_physical script=$repoDependencies"
+Write-Host "WADDLE_RUNTIME_OVERRIDE=PASS mode=repo_local_direct script=$repoRuntime authoritative=true"
 
 # Cross-machine lease policy is loaded after dependency helpers because it can
 # determine whether a dependency mutation is actually required. This protects
