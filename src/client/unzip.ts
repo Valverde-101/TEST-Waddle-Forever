@@ -3,40 +3,55 @@ import unzipper from 'unzipper';
 import { showProgress, ProgressCallback } from './views/progress/progress';
 
 function unzipFile(zipDir: string, outDir: string, progress: ProgressCallback, end: () => void, onError: (err: unknown) => void) {
-  // removes the zipped file
+  let settled = false;
+
   const unlink = () => {
-    fs.unlinkSync(zipDir);
+    try {
+      if (fs.existsSync(zipDir)) {
+        fs.unlinkSync(zipDir);
+      }
+    } catch (error) {
+      // Cleanup failure should not hide the original extraction result.
+      console.warn(`Could not remove temporary archive ${zipDir}:`, error);
+    }
   }
 
-  const handleError = (err: unknown) => {
+  const succeed = () => {
+    if (settled) {
+      return;
+    }
+    settled = true;
     unlink();
-    onError(err);
     end();
+  };
+
+  const handleError = (err: unknown) => {
+    if (settled) {
+      return;
+    }
+    settled = true;
+    unlink();
+    end();
+    onError(err);
   }
+
   try {
     const stream = fs.createReadStream(zipDir)
-  
     const unzipStream = unzipper.Extract({ path: outDir })
-    
     const totalBytes = fs.statSync(zipDir).size;
     let processedBytes = 0
-  
-  
-    unzipStream.on('close', () => {
-      unlink();
-      end();
-    })
-  
-    unzipStream.on('error', handleError)
-  
+
+    unzipStream.once('close', succeed)
+    unzipStream.once('error', handleError)
+
     stream.on('data', (chunk) => {
       processedBytes += chunk.length;
-      progress(processedBytes / totalBytes);
+      if (totalBytes > 0) {
+        progress(processedBytes / totalBytes);
+      }
     })
-  
-  
-  
-    stream.on('error', handleError);
+
+    stream.once('error', handleError);
     stream.pipe(unzipStream)
   } catch (error) {
     handleError(error);
