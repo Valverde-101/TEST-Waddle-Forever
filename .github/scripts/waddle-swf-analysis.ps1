@@ -29,7 +29,10 @@ function Get-RelativePath {
 function Get-PrintableText {
   param([Parameter(Mandatory)][string]$Path)
   $bytes = [IO.File]::ReadAllBytes($Path)
-  $text = [Text.Encoding]::Latin1.GetString($bytes)
+  # Encoding.Latin1 is not available on every .NET Framework build used by
+  # Windows PowerShell 5.1. ISO-8859-1 code page 28591 is byte-preserving for
+  # the printable-string scan and works on the self-hosted runner.
+  $text = [Text.Encoding]::GetEncoding(28591).GetString($bytes)
   return [regex]::Replace($text, '[^\x20-\x7E\r\n\t]', ' ')
 }
 
@@ -70,9 +73,11 @@ function Invoke-FFDecDump {
   )
   Remove-Item -LiteralPath $OutFile,$ErrFile -Force -ErrorAction SilentlyContinue
   $arg = if ($Kind -eq 'AS2') { '-dumpAS2' } else { '-dumpAS3' }
-  $proc = Start-Process -FilePath $FFDec -ArgumentList @('-cli',$arg,$Swf) -RedirectStandardOutput $OutFile -RedirectStandardError $ErrFile -PassThru -WindowStyle Hidden
+  $quotedSwf = '"' + $Swf.Replace('"','\"') + '"'
+  $proc = Start-Process -FilePath $FFDec -ArgumentList @('-cli',$arg,$quotedSwf) -RedirectStandardOutput $OutFile -RedirectStandardError $ErrFile -PassThru -WindowStyle Hidden
   if (-not $proc.WaitForExit($TimeoutSeconds * 1000)) {
     try { $proc.Kill() } catch {}
+    try { [void]$proc.WaitForExit(5000) } catch {}
     return [pscustomobject]@{ status='TIMEOUT'; exit=-1; output=$OutFile; error=$ErrFile }
   }
   $proc.Refresh()
@@ -115,6 +120,7 @@ foreach ($file in $swfFiles) {
 
 $deepCandidates = @($inventory | Sort-Object @{Expression={ if ([IO.Path]::GetFileName($_.path) -ieq 'boots.swf') {0} elseif (-not (Test-Path -LiteralPath (Join-Path $cacheRoot ($_.sha256 + '.json')))) {1} else {2} }}, path)
 $selected = @($deepCandidates | Select-Object -First $DeepBudget)
+$selectedHashes = @($selected | ForEach-Object { [string]$_.sha256 })
 $results = New-Object System.Collections.Generic.List[object]
 $allUrls = New-Object System.Collections.Generic.HashSet[string] ([StringComparer]::OrdinalIgnoreCase)
 $allProtocols = New-Object System.Collections.Generic.HashSet[string] ([StringComparer]::OrdinalIgnoreCase)
@@ -123,7 +129,7 @@ $missing = New-Object System.Collections.Generic.List[object]
 
 foreach ($item in $inventory) {
   $cachePath = Join-Path $cacheRoot ($item.sha256 + '.json')
-  $deep = $selected.sha256 -contains $item.sha256
+  $deep = $selectedHashes -contains $item.sha256
   $analysis = $null
   if ((-not $deep) -and (Test-Path -LiteralPath $cachePath -PathType Leaf)) {
     try { $analysis = Get-Content -LiteralPath $cachePath -Raw | ConvertFrom-Json } catch { $analysis = $null }
