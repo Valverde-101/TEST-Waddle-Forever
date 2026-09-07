@@ -98,31 +98,31 @@ function Assert-WaddleRuntimeHealthy {
     throw "WADDLE_RUNTIME_HEALTH=FAIL reason=running_state_missing path=$clientStatePath"
   }
 
-  $pid = [int]$state.pid
+  $clientPid = [int]$state.pid
   $stateSha = ([string]$state.source_sha).Trim().ToLowerInvariant()
   $expected = ([string]$ExpectedSha).Trim().ToLowerInvariant()
   if ([string]::IsNullOrWhiteSpace($stateSha) -or $stateSha -ne $expected) {
     Stop-WaddleRuntimeAfterHealthFailure
-    throw "WADDLE_RUNTIME_HEALTH=FAIL reason=state_sha_mismatch expected=$expected actual=$stateSha pid=$pid"
+    throw "WADDLE_RUNTIME_HEALTH=FAIL reason=state_sha_mismatch expected=$expected actual=$stateSha pid=$clientPid"
   }
 
   $stderr = [string]$state.stderr
   if ([string]::IsNullOrWhiteSpace($stderr)) {
     Stop-WaddleRuntimeAfterHealthFailure
-    throw "WADDLE_RUNTIME_HEALTH=FAIL reason=diagnostic_path_missing pid=$pid"
+    throw "WADDLE_RUNTIME_HEALTH=FAIL reason=diagnostic_path_missing pid=$clientPid"
   }
 
   $deadline = [DateTime]::UtcNow.AddSeconds(45)
   $lastEvent = 'none'
   do {
-    $process = Get-Process -Id $pid -ErrorAction SilentlyContinue
+    $process = Get-Process -Id $clientPid -ErrorAction SilentlyContinue
     if (-not $process) {
       $tail = if (Test-Path -LiteralPath $stderr -PathType Leaf) { (@(Get-Content -LiteralPath $stderr -Tail 8 -ErrorAction SilentlyContinue) -join ' | ') } else { 'diagnostic_file_missing' }
       Stop-WaddleRuntimeAfterHealthFailure
-      throw "WADDLE_RUNTIME_HEALTH=FAIL reason=process_exited_before_ready pid=$pid last_event=$lastEvent diagnostic=$stderr tail=$tail"
+      throw "WADDLE_RUNTIME_HEALTH=FAIL reason=process_exited_before_ready pid=$clientPid last_event=$lastEvent diagnostic=$stderr tail=$tail"
     }
 
-    $events = @(Get-WaddleRuntimeEvents -Path $stderr -ProcessId $pid)
+    $events = @(Get-WaddleRuntimeEvents -Path $stderr -ProcessId $clientPid)
     if ($events.Count -gt 0) {
       $lastEvent = [string]$events[$events.Count - 1].event
     }
@@ -131,24 +131,24 @@ function Assert-WaddleRuntimeHealthy {
     if ($failure) {
       $failureJson = $failure | ConvertTo-Json -Compress -Depth 8
       Stop-WaddleRuntimeAfterHealthFailure
-      throw "WADDLE_RUNTIME_HEALTH=FAIL reason=runtime_event pid=$pid diagnostic=$stderr event=$failureJson"
+      throw "WADDLE_RUNTIME_HEALTH=FAIL reason=runtime_event pid=$clientPid diagnostic=$stderr event=$failureJson"
     }
 
     $ready = @($events | Where-Object { [string]$_.event -eq 'main-window-ready' } | Select-Object -Last 1)
     if ($ready.Count -gt 0) {
       Start-Sleep -Seconds 2
-      $process = Get-Process -Id $pid -ErrorAction SilentlyContinue
+      $process = Get-Process -Id $clientPid -ErrorAction SilentlyContinue
       if (-not $process) {
         Stop-WaddleRuntimeAfterHealthFailure
-        throw "WADDLE_RUNTIME_HEALTH=FAIL reason=process_exited_after_ready pid=$pid diagnostic=$stderr"
+        throw "WADDLE_RUNTIME_HEALTH=FAIL reason=process_exited_after_ready pid=$clientPid diagnostic=$stderr"
       }
 
-      $events = @(Get-WaddleRuntimeEvents -Path $stderr -ProcessId $pid)
+      $events = @(Get-WaddleRuntimeEvents -Path $stderr -ProcessId $clientPid)
       $failure = Get-WaddleRuntimeFailure -Events $events
       if ($failure) {
         $failureJson = $failure | ConvertTo-Json -Compress -Depth 8
         Stop-WaddleRuntimeAfterHealthFailure
-        throw "WADDLE_RUNTIME_HEALTH=FAIL reason=runtime_event_after_ready pid=$pid diagnostic=$stderr event=$failureJson"
+        throw "WADDLE_RUNTIME_HEALTH=FAIL reason=runtime_event_after_ready pid=$clientPid diagnostic=$stderr event=$failureJson"
       }
 
       $readyEvent = @($events | Where-Object { [string]$_.event -eq 'main-window-ready' } | Select-Object -Last 1)[0]
@@ -156,10 +156,10 @@ function Assert-WaddleRuntimeHealthy {
       $url = if ($urlProperty) { [string]$urlProperty.Value } else { '' }
       if ([string]::IsNullOrWhiteSpace($url) -or $url -notmatch '^https?://') {
         Stop-WaddleRuntimeAfterHealthFailure
-        throw "WADDLE_RUNTIME_HEALTH=FAIL reason=main_window_url_invalid pid=$pid url=$url diagnostic=$stderr"
+        throw "WADDLE_RUNTIME_HEALTH=FAIL reason=main_window_url_invalid pid=$clientPid url=$url diagnostic=$stderr"
       }
 
-      Write-Host "WADDLE_RUNTIME_HEALTH=PASS pid=$pid sha=$expected event=main-window-ready url=$url diagnostic=$stderr"
+      Write-Host "WADDLE_RUNTIME_HEALTH=PASS pid=$clientPid sha=$expected event=main-window-ready url=$url diagnostic=$stderr"
       return
     }
 
@@ -168,7 +168,7 @@ function Assert-WaddleRuntimeHealthy {
 
   $tail = if (Test-Path -LiteralPath $stderr -PathType Leaf) { (@(Get-Content -LiteralPath $stderr -Tail 12 -ErrorAction SilentlyContinue) -join ' | ') } else { 'diagnostic_file_missing' }
   Stop-WaddleRuntimeAfterHealthFailure
-  throw "WADDLE_RUNTIME_HEALTH=FAIL reason=main_window_ready_timeout pid=$pid last_event=$lastEvent diagnostic=$stderr tail=$tail"
+  throw "WADDLE_RUNTIME_HEALTH=FAIL reason=main_window_ready_timeout pid=$clientPid last_event=$lastEvent diagnostic=$stderr tail=$tail"
 }
 
 try {
