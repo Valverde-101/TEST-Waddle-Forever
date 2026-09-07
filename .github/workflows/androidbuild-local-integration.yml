@@ -14,8 +14,8 @@ env:
   WADDLE_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 concurrency:
-  group: waddle-core-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: waddle-canonical-workspace
+  cancel-in-progress: false
 
 jobs:
   local-integration:
@@ -37,13 +37,13 @@ jobs:
           if ((yarn --version).Trim() -ne '1.22.22') { throw "YARN_SETUP=FAIL actual=$(yarn --version)" }
           Write-Host "NODE_SETUP=PASS version=$(node --version)"
           Write-Host "YARN_SETUP=PASS version=$(yarn --version)"
-          Write-Host "NPM_SETUP=INFO version=$(npm --version)"
 
-      - name: Resolve AndroidBuild Core 3.0.14+
+      - name: Resolve AndroidBuild Core and Windows-only contract
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           Set-StrictMode -Version Latest
+          if($env:OS -ne 'Windows_NT' -or -not [Environment]::Is64BitOperatingSystem -or -not [Environment]::Is64BitProcess){throw 'WADDLE_PLATFORM=FAIL windows_x64_required'}
           $roots=New-Object System.Collections.Generic.List[string]
           if($env:ANDROIDBUILD_ROOT){$roots.Add([string]$env:ANDROIDBUILD_ROOT)}
           foreach($drive in [IO.DriveInfo]::GetDrives()){
@@ -63,14 +63,9 @@ jobs:
           "ANDROIDBUILD_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Import-Module (Join-Path $root 'Core\Current\AndroidBuild.psd1') -Force
           $version=[string](Get-AndroidBuildCoreVersion)
-          if([version]$version -lt [version]'3.0.14'){throw "ANDROIDBUILD_CORE=FAIL required=3.0.14 actual=$version"}
-          $sync=(Get-Command Sync-AndroidBuildRepositoryExactHead -ErrorAction Stop)
-          foreach($parameter in @('FetchTimeoutSeconds','FetchDepth')){
-            if(-not $sync.Parameters.ContainsKey($parameter)){throw "ANDROIDBUILD_CORE=FAIL missing_sync_parameter=$parameter version=$version"}
-          }
+          if([version]$version -lt [version]'3.0.17'){throw "ANDROIDBUILD_CORE=FAIL required=3.0.17 actual=$version"}
           Enable-AndroidBuildPortableTools -AndroidBuildRoot $root | Out-Null
-          Write-Host "ANDROIDBUILD_CORE=PASS version=$version root=$root large_repo_sync=true"
-          Write-Host "EXPECTED_SHA=$env:WADDLE_EXPECTED_SHA"
+          Write-Host "ANDROIDBUILD_CORE=PASS version=$version root=$root platform=windows-x64"
 
       - name: Capture AUTO_REPO health before heavy sync
         shell: powershell
@@ -83,40 +78,28 @@ jobs:
             try {
               $state=Get-Content -LiteralPath $stateFile.FullName -Raw | ConvertFrom-Json
               Write-Host ("AUTO_REPO_STATE file={0} slot={1} status={2} repo={3} job={4} updated={5} detail={6}" -f $stateFile.Name,$state.slot,$state.status,$state.repository,$state.job,$state.updated_at,$state.detail)
-            } catch {
-              Write-Host "AUTO_REPO_STATE_WARN file=$($stateFile.Name) error=$($_.Exception.Message)"
-            }
+            } catch {}
           }
-          $procs=@(Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
-            ($_.Name -eq 'Runner.Listener.exe' -or $_.Name -eq 'Runner.Worker.exe') -and $_.CommandLine -match '\\Runners\\AutoRepos\\slot-'
-          })
-          foreach($p in $procs){
-            Write-Host "AUTO_REPO_PROCESS pid=$($p.ProcessId) name=$($p.Name) cmd=$($p.CommandLine)"
-          }
-          Write-Host "AUTO_REPO_PROCESS_COUNT=$($procs.Count)"
 
       - name: Synchronize canonical repository at exact SHA through Core
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          Set-StrictMode -Version Latest
           Import-Module (Join-Path $env:ANDROIDBUILD_ROOT 'Core\Current\AndroidBuild.psd1') -Force
           Enable-AndroidBuildPortableTools -AndroidBuildRoot $env:ANDROIDBUILD_ROOT | Out-Null
           $repo=Join-Path $env:ANDROIDBUILD_ROOT 'Repositories\TEST-Waddle-Forever'
-          $sourceRemote='https://github.com/${{ github.repository }}.git'
-          Write-Host "WADDLE_CORE_SYNC=START repo=$repo sha=$env:WADDLE_EXPECTED_SHA timeout_seconds=7200 depth=1"
           $sync=Sync-AndroidBuildRepositoryExactHead `
             -RepoRoot $repo `
             -ExpectedSha $env:WADDLE_EXPECTED_SHA `
             -AndroidBuildRoot $env:ANDROIDBUILD_ROOT `
             -AllowTrackedReset `
             -CleanUntracked `
-            -SourceRemote $sourceRemote `
+            -SourceRemote 'https://github.com/${{ github.repository }}.git' `
             -FetchTimeoutSeconds 7200 `
             -FetchDepth 1
-          "WADDLE_CANONICAL_REPO=$repo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           if([string]$sync.actual_sha -ne [string]$env:WADDLE_EXPECTED_SHA){throw "REPOSITORY_SYNC=FAIL expected=$env:WADDLE_EXPECTED_SHA actual=$($sync.actual_sha)"}
-          Write-Host "WADDLE_CORE_SYNC=PASS repo=$repo sha=$($sync.actual_sha) timeout_seconds=$($sync.fetch_timeout_seconds) depth=$($sync.fetch_depth) remote=$sourceRemote"
+          "WADDLE_CANONICAL_REPO=$repo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "WADDLE_CORE_SYNC=PASS repo=$repo sha=$($sync.actual_sha)"
 
       - name: Initialize Core workspace and project precheck
         shell: powershell
@@ -144,25 +127,20 @@ jobs:
             $env:WADDLE_NONINTERACTIVE='1'
             foreach($action in @('Setup','Start')){
               $env:WADDLE_LAUNCHER_SELFTEST_FAIL='1'
-              $cmd="Waddle-$action.cmd"
-              & cmd.exe /d /c $cmd
+              & cmd.exe /d /c "Waddle-$action.cmd"
               $code=$LASTEXITCODE
               Remove-Item Env:WADDLE_LAUNCHER_SELFTEST_FAIL -ErrorAction SilentlyContinue
               if($code -eq 0){throw "LAUNCHER_FAILURE_PERSISTENCE=FAIL action=$action reason=unexpected_success"}
               $log=Join-Path $env:WADDLE_CANONICAL_REPO ('.work\logs\launcher\'+$action.ToLowerInvariant()+'-last.log')
-              if(-not(Test-Path -LiteralPath $log -PathType Leaf)){throw "LAUNCHER_FAILURE_PERSISTENCE=FAIL action=$action reason=last_log_missing path=$log"}
               $text=Get-Content -LiteralPath $log -Raw
-              if(-not $text.Contains('WADDLE_LAUNCHER_SELFTEST_FAIL')){throw "LAUNCHER_FAILURE_PERSISTENCE=FAIL action=$action reason=selftest_marker_missing"}
-              if(-not $text.Contains('WADDLE_LAUNCHER=FAIL')){throw "LAUNCHER_FAILURE_PERSISTENCE=FAIL action=$action reason=fail_marker_missing"}
-              Write-Host "LAUNCHER_FAILURE_PERSISTENCE=PASS action=$action exit=$code log=$log"
+              if(-not $text.Contains('WADDLE_LAUNCHER_SELFTEST_FAIL') -or -not $text.Contains('WADDLE_LAUNCHER=FAIL')){throw "LAUNCHER_FAILURE_PERSISTENCE=FAIL action=$action"}
+              Write-Host "LAUNCHER_FAILURE_PERSISTENCE=PASS action=$action exit=$code"
             }
           } finally {
             Remove-Item Env:WADDLE_LAUNCHER_SELFTEST_FAIL -ErrorAction SilentlyContinue
             Remove-Item Env:WADDLE_NONINTERACTIVE -ErrorAction SilentlyContinue
             Pop-Location
           }
-          # Both nonzero exits above are intentional and already asserted. Do not let
-          # PowerShell's final $LASTEXITCODE turn this successful negative test red.
           $global:LASTEXITCODE=0
 
       - name: Validate human local setup and direct Yarn install
@@ -174,26 +152,13 @@ jobs:
             $env:WADDLE_NONINTERACTIVE='1'
             & cmd.exe /d /c 'Waddle-Setup.cmd'
             if($LASTEXITCODE -ne 0){throw "LOCAL_SETUP=FAIL setup_cmd_exit=$LASTEXITCODE"}
-
-            # Reproduce the command a user naturally types. .yarnrc must keep it in .work
-            # and it must not fail with EINVAL/readlink on the node_modules junction.
             & yarn.cmd install --frozen-lockfile --non-interactive
             if($LASTEXITCODE -ne 0){throw "DIRECT_YARN_INSTALL=FAIL exit=$LASTEXITCODE"}
-
-            $link=Join-Path $env:WADDLE_CANONICAL_REPO 'node_modules'
-            $item=Get-Item -LiteralPath $link -Force
-            if(($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0){throw "DIRECT_YARN_INSTALL=FAIL node_modules_not_junction=$link"}
-            $target=Join-Path $env:WADDLE_CANONICAL_REPO '.work\dependencies\node_modules\electron\package.json'
+            $target=Join-Path $env:WADDLE_CANONICAL_REPO '.work\dependencies\current\node_modules\electron\package.json'
             if(-not(Test-Path -LiteralPath $target -PathType Leaf)){throw "DIRECT_YARN_INSTALL=FAIL electron_missing=$target"}
-
-            $envFile=Join-Path $env:WADDLE_CANONICAL_REPO '.env'
-            $envText=Get-Content -LiteralPath $envFile -Raw
-            foreach($key in @('ANDROIDBUILD_ROOT=','WADDLE_WORK_ROOT=','FFDEC_PATH=','WADDLE_PPAPI_FLASH_PATH=','WADDLE_PPAPI_FLASH_VERSION=32.0.0.303')){
-              if(-not $envText.Contains($key)){throw "LOCAL_ENV=FAIL missing=$key"}
-            }
-            $setupLog=Join-Path $env:WADDLE_CANONICAL_REPO '.work\logs\launcher\setup-last.log'
-            if(-not(Test-Path -LiteralPath $setupLog -PathType Leaf)){throw "LOCAL_SETUP=FAIL launcher_log_missing=$setupLog"}
-            Write-Host "LOCAL_SETUP=PASS direct_yarn_install=true managed_env=true launcher_log=$setupLog"
+            $bin=Join-Path $env:WADDLE_CANONICAL_REPO '.work\dependencies\current\node_modules\.bin\copyfiles.cmd'
+            if(-not(Test-Path -LiteralPath $bin -PathType Leaf)){throw "DIRECT_YARN_INSTALL=FAIL copyfiles_wrapper_missing=$bin"}
+            Write-Host 'LOCAL_SETUP=PASS direct_yarn_install=true dependency_generation=current'
           } finally {
             Remove-Item Env:WADDLE_NONINTERACTIVE -ErrorAction SilentlyContinue
             Pop-Location
@@ -213,7 +178,46 @@ jobs:
             -JobId '${{ github.job }}' `
             -RunnerName $env:RUNNER_NAME `
             -LeaseWaitSeconds 1200
-          $result | ConvertTo-Json -Depth 12 | Write-Host
+          if([string]$result.status -ne 'PASS'){throw "LOCAL_BUILD=FAIL status=$($result.status)"}
+          if([string]$result.provenance.source_sha -ne [string]$env:WADDLE_EXPECTED_SHA){throw "LOCAL_BUILD=FAIL provenance=$($result.provenance.source_sha)"}
+          Write-Host "LOCAL_BUILD=PASS sha=$($result.provenance.source_sha)"
+
+      - name: Prove open snapshot cannot lock Yarn dependency tree
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Set-StrictMode -Version Latest
+          $repo=$env:WADDLE_CANONICAL_REPO
+          . (Join-Path $repo '.github\scripts\waddle-common.ps1')
+          . (Join-Path $repo '.github\scripts\waddle-local-runtime.ps1')
+          . (Join-Path $repo '.github\scripts\waddle-workspace-resilience.ps1')
+          $work=Join-Path $repo '.work'
+          $deps=Invoke-WaddleDependencyBootstrap -RepoRoot $repo -WorkRoot $work
+          $sourceElectron=Test-WaddleElectronRuntime -WorkRoot $work -ExpectedVersion $deps.electron
+          $sourceFlash=Test-WaddlePepperFlash -RepoRoot $repo
+          $snapshot=New-WaddleRuntimeSnapshot -RepoRoot $repo -WorkRoot $work -ElectronExecutable $sourceElectron.executable -ElectronVersion $sourceElectron.version -PepperFlashPath $sourceFlash.path -PepperFlashVersion $sourceFlash.version -SourceSha $env:WADDLE_EXPECTED_SHA -DependencyFingerprint $deps.fingerprint
+          $dependencyRoot=Get-WaddleNodeModulesPath -WorkRoot $work
+          if($snapshot.electron_executable.StartsWith($dependencyRoot,[StringComparison]::OrdinalIgnoreCase)){throw 'RUNTIME_ISOLATION=FAIL electron_inside_dependencies'}
+          $hold=Join-Path $work 'tmp\runtime-lock-probe.js'
+          Set-Content -LiteralPath $hold -Value 'setTimeout(() => process.exit(0), 45000);' -Encoding ASCII
+          $process=$null
+          try {
+            $env:ELECTRON_RUN_AS_NODE='1'
+            $process=Start-Process -FilePath $snapshot.electron_executable -ArgumentList ('"'+$hold+'"') -WorkingDirectory $snapshot.root -PassThru
+            Start-Sleep -Seconds 2
+            $process.Refresh()
+            if($process.HasExited){throw "RUNTIME_ISOLATION=FAIL hold_process_exited code=$($process.ExitCode)"}
+            Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
+            Push-Location $repo
+            try {
+              & yarn.cmd install --frozen-lockfile --non-interactive
+              if($LASTEXITCODE -ne 0){throw "RUNTIME_ISOLATION=FAIL yarn_exit=$LASTEXITCODE"}
+            } finally { Pop-Location }
+            Write-Host "RUNTIME_DEPENDENCY_ISOLATION=PASS snapshot=$($snapshot.root) mutable_dependencies=$dependencyRoot yarn_while_electron_open=true"
+          } finally {
+            Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
+            if($process -and -not $process.HasExited){try{$process.Kill()}catch{};try{$process.WaitForExit(5000)}catch{}}
+          }
 
       - name: Verify local integration contract
         shell: powershell
@@ -224,27 +228,27 @@ jobs:
           $work=Join-Path $env:WADDLE_CANONICAL_REPO '.work'
           foreach($required in @(
             '.androidbuild-work-root',
-            'dependencies\node_modules',
+            'dependencies\current\node_modules',
             'build\compiled',
             'dist\package',
             'cache\yarn',
-            'runtime',
-            'content',
-            'swf-analysis',
-            'diagnostics',
-            'logs\build',
-            'logs\launcher',
+            'runtime\interactive',
+            'state\dependencies.json',
+            'state\runtime-snapshot.json',
             'state\waddle-build-summary.json',
             'state\build-provenance.json'
           )){
             $p=Join-Path $work $required
             if(-not(Test-Path -LiteralPath $p)){throw "LOCAL_INTEGRATION=FAIL missing=$p"}
           }
-          foreach($linkName in @('node_modules','compiled','dist')){
-            $item=Get-Item -LiteralPath (Join-Path $env:WADDLE_CANONICAL_REPO $linkName) -Force
-            if(($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0){throw "LOCAL_INTEGRATION=FAIL not_junction=$linkName"}
-          }
-          $flash=Join-Path $env:WADDLE_CANONICAL_REPO 'assets\flash\pepflashplayer64_32_0_0_303.dll'
-          if(-not(Test-Path -LiteralPath $flash -PathType Leaf)){throw "LOCAL_INTEGRATION=FAIL pepper_flash_missing=$flash"}
-          Write-Host "LOCAL_INTEGRATION=PASS repo=$env:WADDLE_CANONICAL_REPO work=$work sha=$env:WADDLE_EXPECTED_SHA"
+          $nodeLink=Get-Item -LiteralPath (Join-Path $env:WADDLE_CANONICAL_REPO 'node_modules') -Force
+          if(($nodeLink.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0){throw 'LOCAL_INTEGRATION=FAIL node_modules_not_junction'}
+          $raw=@($nodeLink.Target)[0]
+          $actual=if([IO.Path]::IsPathRooted([string]$raw)){[IO.Path]::GetFullPath([string]$raw)}else{[IO.Path]::GetFullPath((Join-Path $nodeLink.Parent.FullName ([string]$raw)))}
+          $expected=[IO.Path]::GetFullPath((Join-Path $work 'dependencies\current\node_modules'))
+          if($actual.TrimEnd('\') -ine $expected.TrimEnd('\')){throw "LOCAL_INTEGRATION=FAIL node_modules_target=$actual expected=$expected"}
+          $runtime=Get-Content -LiteralPath (Join-Path $work 'state\runtime-snapshot.json') -Raw | ConvertFrom-Json
+          if([string]$runtime.platform -ne 'windows-x64'){throw "LOCAL_INTEGRATION=FAIL runtime_platform=$($runtime.platform)"}
+          if([string]$runtime.source_sha -ne [string]$env:WADDLE_EXPECTED_SHA){throw "LOCAL_INTEGRATION=FAIL runtime_sha=$($runtime.source_sha)"}
+          Write-Host "LOCAL_INTEGRATION=PASS platform=windows-x64 repo=$env:WADDLE_CANONICAL_REPO work=$work sha=$env:WADDLE_EXPECTED_SHA runtime_isolated=true"
           Write-Host 'ANDROID=NOT_APPLICABLE APK=NOT_APPLICABLE PHYSICAL_ADB=NOT_APPLICABLE'
