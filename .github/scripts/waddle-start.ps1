@@ -80,19 +80,52 @@ function Stop-WaddleLegacyWorkRuntimes {
   Write-Host "WADDLE_LEGACY_RUNTIME_CLEANUP=PASS killed=$killed work=$($workspace.work_root)"
 }
 
-function Stop-WaddleExternalManagedRuntimes {
-  $runtimePrefix = [IO.Path]::GetFullPath((Join-Path $runtimeHome 'Versions')).TrimEnd('\') + '\'
+function Stop-WaddleManagedRuntimes {
+  $repoElectron = [IO.Path]::GetFullPath((Join-Path $repo 'node_modules\electron\dist\electron.exe'))
+  $legacyExternal = [IO.Path]::GetFullPath((Join-Path $root 'Runtime\Waddle-Forever')).TrimEnd('\') + '\'
   $killed = 0
   foreach ($candidate in @(Get-CimInstance Win32_Process -Filter "Name='electron.exe'" -ErrorAction SilentlyContinue)) {
     $exe = [string]$candidate.ExecutablePath
     $cmd = [string]$candidate.CommandLine
     if ([string]::IsNullOrWhiteSpace($exe) -or [string]::IsNullOrWhiteSpace($cmd)) { continue }
     try { $full = [IO.Path]::GetFullPath($exe) } catch { continue }
-    if (-not $full.StartsWith($runtimePrefix,[StringComparison]::OrdinalIgnoreCase)) { continue }
-    if ($cmd -notmatch '[\\/]app[\\/]compiled[\\/]client[\\/]main\.js') { continue }
-    if (Stop-WaddleProcessTree -ProcessId ([int]$candidate.ProcessId) -Reason 'replace_external_managed_client') { $killed++ }
+    $repoDirect = $full -ieq $repoElectron
+    $legacyExternalRuntime = $full.StartsWith($legacyExternal,[StringComparison]::OrdinalIgnoreCase)
+    if (-not ($repoDirect -or $legacyExternalRuntime)) { continue }
+    if ($cmd -notmatch '[\\/]compiled[\\/]client[\\/]main\.js') { continue }
+    $reason = if ($repoDirect) { 'replace_repo_local_client' } else { 'remove_legacy_external_client' }
+    if (Stop-WaddleProcessTree -ProcessId ([int]$candidate.ProcessId) -Reason $reason) { $killed++ }
   }
-  Write-Host "WADDLE_EXTERNAL_CLIENT_CLEANUP=PASS killed=$killed runtime_home=$runtimeHome"
+  Write-Host "WADDLE_MANAGED_CLIENT_CLEANUP=PASS killed=$killed runtime_mode=repo_local_direct legacy_external_checked=$legacyExternal"
+}
+
+function Test-WaddleProcessExecutableIdentity {
+  param(
+    [Parameter(Mandatory)][string]$Actual,
+    [Parameter(Mandatory)][string]$Expected
+  )
+  try {
+    $actualFull = [IO.Path]::GetFullPath($Actual)
+    $expectedFull = [IO.Path]::GetFullPath($Expected)
+    if ($actualFull -ieq $expectedFull) { return $true }
+    if (Test-WaddleNetworkBackedPath -Path $Expected) {
+      $suffix = '\node_modules\electron\dist\electron.exe'
+      return $actualFull.EndsWith($suffix,[StringComparison]::OrdinalIgnoreCase) -and $expectedFull.EndsWith($suffix,[StringComparison]::OrdinalIgnoreCase)
+    }
+  } catch {}
+  return $false
+}
+
+function Test-WaddleProcessEntryIdentity {
+  param(
+    [Parameter(Mandatory)][string]$CommandLine,
+    [Parameter(Mandatory)][string]$Entry
+  )
+  if ($CommandLine -like ('*' + $Entry + '*')) { return $true }
+  if (Test-WaddleNetworkBackedPath -Path $Entry) {
+    return $CommandLine -match '[\\/]compiled[\\/]client[\\/]main\.js'
+  }
+  return $false
 }
 
 function Start-WaddleDetachedElectron {
@@ -104,21 +137,17 @@ function Start-WaddleDetachedElectron {
     [Parameter(Mandatory)][string]$Stderr
   )
 
-  # The Electron GUI process must be completely independent from the launcher.
-  # Windows PowerShell 5.1 can keep redirected Start-Process pipes alive until the
-  # child exits; a long-lived Electron client then prevents Waddle-Start.cmd and
-  # the self-hosted Actions step from returning even after WADDLE_START=PASS.
-  # Do not redirect OS stdio here. The child receives an exact diagnostics path
-  # through its inherited environment and writes structured runtime events there.
   Set-Content -LiteralPath $Stdout -Encoding UTF8 -Value 'WADDLE_RUNTIME_STDIO=DETACHED stream=stdout source=electron_application_logging'
   Set-Content -LiteralPath $Stderr -Encoding UTF8 -Value 'WADDLE_RUNTIME_STDIO=DETACHED stream=stderr source=electron_structured_diagnostics'
 
+  $networkBacked = Test-WaddleNetworkBackedPath -Path $Electron
+  $stabilitySeconds = if ($networkBacked) { 60 } else { 20 }
   $launchWatch = [Diagnostics.Stopwatch]::StartNew()
   $started = $null
   $previousDiagnosticLog = [Environment]::GetEnvironmentVariable('WADDLE_RUNTIME_DIAGNOSTIC_LOG','Process')
   try {
     [Environment]::SetEnvironmentVariable('WADDLE_RUNTIME_DIAGNOSTIC_LOG',$Stderr,'Process')
-    Write-Host "WADDLE_RUNTIME_DIAGNOSTIC_BINDING=PASS path=$Stderr mode=child_environment"
+    Write-Host "WADDLE_RUNTIME_DIAGNOSTIC_BINDING=PASS path=$Stderr mode=child_environment network_backed=$networkBacked"
     try {
       $started = Start-Process `
         -FilePath $Electron `
@@ -127,7 +156,7 @@ function Start-WaddleDetachedElectron {
         -PassThru `
         -ErrorAction Stop
     } catch {
-      throw "WADDLE_START=FAIL process_start executable=$Electron entry=$Entry error=$($_.Exception.Message)"
+      throw "WADDLE_START=FAIL process_start executable=$Electron entry=$Entry network_backed=$networkBacked error=$($_.Exception.Message)"
     }
   } finally {
     [Environment]::SetEnvironmentVariable('WADDLE_RUNTIME_DIAGNOSTIC_LOG',$previousDiagnosticLog,'Process')
@@ -137,7 +166,7 @@ function Start-WaddleDetachedElectron {
     throw "WADDLE_START=FAIL process_id_missing executable=$Electron entry=$Entry"
   }
 
-  $deadline = [DateTime]::UtcNow.AddSeconds(20)
+  $deadline = [DateTime]::UtcNow.AddSeconds($stabilitySeconds)
   $process = $null
   $cim = $null
   do {
@@ -152,8 +181,8 @@ function Start-WaddleDetachedElectron {
         $actualExe = [string]$cim.ExecutablePath
         $commandLine = [string]$cim.CommandLine
         if (-not [string]::IsNullOrWhiteSpace($actualExe) -and
-            [IO.Path]::GetFullPath($actualExe) -ieq [IO.Path]::GetFullPath($Electron) -and
-            $commandLine -like ('*' + $Entry + '*')) {
+            (Test-WaddleProcessExecutableIdentity -Actual $actualExe -Expected $Electron) -and
+            (Test-WaddleProcessEntryIdentity -CommandLine $commandLine -Entry $Entry)) {
           break
         }
       }
@@ -163,35 +192,33 @@ function Start-WaddleDetachedElectron {
   } while ([DateTime]::UtcNow -lt $deadline)
 
   if (-not $process -or $process.HasExited -or -not $cim) {
-    throw "WADDLE_START=FAIL process_not_stable process_id=$($started.Id) executable=$Electron entry=$Entry"
+    throw "WADDLE_START=FAIL process_not_stable process_id=$($started.Id) executable=$Electron entry=$Entry timeout_seconds=$stabilitySeconds network_backed=$networkBacked"
   }
 
   $actualExe = [string]$cim.ExecutablePath
   $commandLine = [string]$cim.CommandLine
-  if ([IO.Path]::GetFullPath($actualExe) -ine [IO.Path]::GetFullPath($Electron) -or $commandLine -notlike ('*' + $Entry + '*')) {
+  if (-not (Test-WaddleProcessExecutableIdentity -Actual $actualExe -Expected $Electron) -or -not (Test-WaddleProcessEntryIdentity -CommandLine $commandLine -Entry $Entry)) {
     try { Stop-WaddleProcessTree -ProcessId $started.Id -Reason 'unexpected_started_process' | Out-Null } catch {}
-    throw "WADDLE_START=FAIL process_identity process_id=$($started.Id) executable=$actualExe expected=$Electron command_line=$commandLine entry=$Entry"
+    throw "WADDLE_START=FAIL process_identity process_id=$($started.Id) executable=$actualExe expected=$Electron command_line=$commandLine entry=$Entry network_backed=$networkBacked"
   }
 
   Start-Sleep -Seconds 3
   $process.Refresh()
   if ($process.HasExited) {
-    throw "WADDLE_START=FAIL process_exited code=$($process.ExitCode)"
+    throw "WADDLE_START=FAIL process_exited code=$($process.ExitCode) network_backed=$networkBacked"
   }
 
   $launchWatch.Stop()
-  return [pscustomobject]@{ process=$process; return_ms=$launchWatch.ElapsedMilliseconds; stdio_mode='detached_no_runner_pipes' }
+  return [pscustomobject]@{ process=$process; return_ms=$launchWatch.ElapsedMilliseconds; stdio_mode='detached_no_runner_pipes'; network_backed=[bool]$networkBacked }
 }
 
-Write-Host "WADDLE_LAYOUT=PASS platform=windows-x64 launcher_root=$repo mutable_build_root=$($workspace.work_root) runtime_home=$runtimeHome runtime_execution_outside_work=true swf_analysis=.work\swf-analysis"
+Write-Host "WADDLE_LAYOUT=PASS platform=windows-x64 launcher_root=$repo mutable_build_root=$($workspace.work_root) runtime_home=$runtimeHome runtime_mode=repo_local_direct runtime_execution_outside_work=true runtime_copies=0 swf_analysis=.work\swf-analysis"
 
-# The canonical dependency tree may need to be installed when package inputs
-# change. Always stop every managed Waddle client before dependency bootstrap so
-# Yarn never mutates repo\node_modules while Electron is resolving modules from
-# that same physical tree. This is the single-tree no-lock invariant.
+# The one canonical repo\node_modules tree may only be changed while the client
+# is stopped. This prevents Electron file locks without maintaining a second copy.
 Stop-WaddleExistingClient
 Stop-WaddleLegacyWorkRuntimes
-Stop-WaddleExternalManagedRuntimes
+Stop-WaddleManagedRuntimes
 $dependencies = Invoke-WaddleDependencyBootstrap -RepoRoot $repo -WorkRoot $workspace.work_root
 Write-Host "WADDLE_DEPENDENCY_MUTATION_GATE=PASS clients_stopped_before_bootstrap=true mode=$($dependencies.mode) node_modules=$($dependencies.node_modules)"
 
@@ -241,8 +268,9 @@ foreach ($runtimePath in @($electron,$flashPath,$entry,$runtimeModules,$runtimeR
     throw "WADDLE_START=FAIL runtime_inside_work path=$runtimePath work=$($workspace.work_root)"
   }
 }
-if (-not (Test-Path -LiteralPath $entry -PathType Leaf)) { throw "WADDLE_START=FAIL external_entry_missing=$entry" }
-if (-not (Test-Path -LiteralPath $runtimeModules -PathType Container)) { throw "WADDLE_START=FAIL external_modules_missing=$runtimeModules" }
+if ($runtimeRoot.TrimEnd('\') -ine ([IO.Path]::GetFullPath($repo)).TrimEnd('\')) { throw "WADDLE_START=FAIL runtime_not_repo actual=$runtimeRoot expected=$repo" }
+if (-not (Test-Path -LiteralPath $entry -PathType Leaf)) { throw "WADDLE_START=FAIL repo_entry_missing=$entry" }
+if (-not (Test-Path -LiteralPath $runtimeModules -PathType Container)) { throw "WADDLE_START=FAIL repo_modules_missing=$runtimeModules" }
 if ([IO.Path]::GetFullPath($runtimeModules) -ne [IO.Path]::GetFullPath((Join-Path $repo 'node_modules'))) {
   throw "WADDLE_START=FAIL runtime_modules_not_canonical actual=$runtimeModules expected=$(Join-Path $repo 'node_modules')"
 }
@@ -261,7 +289,7 @@ Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_RUNTIME_NODE_MODULES' -Value $ru
 [Environment]::SetEnvironmentVariable('WADDLE_NODE_MODULES',$runtimeModules,'Process')
 [Environment]::SetEnvironmentVariable('NODE_PATH',$runtimeModules,'Process')
 
-Write-Host "WADDLE_RUNTIME_ISOLATION=PASS runtime=$runtimeRoot current=$($runtime.current_root) electron=$electron app_entry=$entry runtime_node_modules=$runtimeModules mutable_build_root=$($workspace.work_root) work_execution=false dependency_mutation_while_running=false"
+Write-Host "WADDLE_RUNTIME_DIRECT=PASS root=$runtimeRoot electron=$electron app_entry=$entry flash=$flashPath node_modules=$runtimeModules copies=0 network_backed=$($runtime.network_backed) mutable_build_root=$($workspace.work_root) work_execution=false dependency_mutation_while_running=false"
 
 $runtimeLogs = Join-Path $workspace.work_root 'logs\runtime'
 New-Item -ItemType Directory -Force -Path $runtimeLogs | Out-Null
@@ -276,7 +304,7 @@ try {
   $launch = Start-WaddleDetachedElectron -Electron $electron -Entry $entry -WorkingDirectory $repo -Stdout $stdout -Stderr $stderr
   $process = $launch.process
   $state = [ordered]@{
-    schema = 'waddle-client-state/v10'
+    schema = 'waddle-client-state/v11'
     status = 'RUNNING'
     platform = 'windows-x64'
     pid = $process.Id
@@ -290,7 +318,7 @@ try {
     stdio_mode = [string]$launch.stdio_mode
     managed_node_home = $managedNode.home
     managed_node_exe = $managedNode.node
-    runtime_mode = 'external_deployment'
+    runtime_mode = 'repo_local_direct'
     runtime_home = $runtimeHome
     runtime_root = $runtimeRoot
     runtime_current_root = $runtime.current_root
@@ -300,7 +328,8 @@ try {
     electron_source_executable = $sourceElectron.executable
     electron_executable = $electron
     electron_version = $sourceElectron.version
-    electron_launch_mode = 'external_runtime_start_process'
+    electron_launch_mode = 'repo_direct_start_process'
+    electron_network_backed = [bool]$launch.network_backed
     launcher_return_ms = [int64]$launch.return_ms
     ppapi_flash_source_path = $sourceFlash.path
     ppapi_flash_path = $flashPath
@@ -318,7 +347,7 @@ try {
   throw
 }
 
-Write-Host "WADDLE_START=PASS process_id=$($process.Id) sha=$sha platform=windows-x64 node=$($managedNode.node) electron=$($sourceElectron.version) launch_mode=external_runtime_start_process launcher_return_ms=$($launch.return_ms) runtime=$runtimeRoot work_execution=false dependencies=$($dependencies.mode) live_dependency_mutation=false stdio=$($launch.stdio_mode)"
+Write-Host "WADDLE_START=PASS process_id=$($process.Id) sha=$sha platform=windows-x64 node=$($managedNode.node) electron=$($sourceElectron.version) launch_mode=repo_direct_start_process launcher_return_ms=$($launch.return_ms) runtime=$runtimeRoot network_backed=$($launch.network_backed) work_execution=false dependencies=$($dependencies.mode) live_dependency_mutation=false stdio=$($launch.stdio_mode)"
 Write-Host "WADDLE_PPAPI_FLASH=PASS path=$flashPath version=$($runtime.ppapi_flash_version) source=$($sourceFlash.path)"
 Write-Host 'WADDLE_VISUAL_STUDIO=NOT_REQUIRED'
 Write-Host "WADDLE_RUNTIME_STDOUT=$stdout mode=marker_only"
