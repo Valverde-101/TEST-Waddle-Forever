@@ -13,14 +13,16 @@ permissions:
 env:
   WADDLE_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
+# All Waddle workflows materialize the same canonical repository and .work tree.
+# They must never install/build/launch against it concurrently.
 concurrency:
-  group: waddle-flash-runtime-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: waddle-canonical-workspace
+  cancel-in-progress: false
 
 jobs:
   flash-runtime:
     runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
-    timeout-minutes: 120
+    timeout-minutes: 180
 
     steps:
       - name: Resolve AndroidBuild Core and exact Waddle SHA
@@ -78,7 +80,25 @@ jobs:
           }
           Write-Host 'FLASH_GATE_SETUP=PASS'
 
-      - name: Prove real boots.swf instantiation inside Chromium
+      - name: Build exact Waddle source before production probe
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Import-Module (Join-Path $env:ANDROIDBUILD_ROOT 'Core\Current\AndroidBuild.psd1') -Force
+          $result=Invoke-AndroidBuildBuild `
+            -RepoRoot $env:WADDLE_CANONICAL_REPO `
+            -AndroidBuildRoot $env:ANDROIDBUILD_ROOT `
+            -ExpectedSha $env:WADDLE_EXPECTED_SHA `
+            -Repository '${{ github.repository }}' `
+            -RunId '${{ github.run_id }}' `
+            -JobId '${{ github.job }}-flash' `
+            -RunnerName $env:RUNNER_NAME `
+            -LeaseWaitSeconds 1200
+          if([string]$result.status -ne 'PASS'){throw "FLASH_GATE=FAIL build_status=$($result.status)"}
+          if([string]$result.provenance.source_sha -ne [string]$env:WADDLE_EXPECTED_SHA){throw "FLASH_GATE=FAIL provenance_sha=$($result.provenance.source_sha) expected=$env:WADDLE_EXPECTED_SHA"}
+          Write-Host "FLASH_GATE_BUILD=PASS sha=$($result.provenance.source_sha)"
+
+      - name: Prove production page and boots.swf inside Chromium
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
@@ -98,7 +118,7 @@ jobs:
           $env:WADDLE_FLASH_PROBE_RESULT=$state
           $arg='"'+$probe+'"'
           $process=Start-Process -FilePath $electron -ArgumentList $arg -WorkingDirectory $repo -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
-          if(-not $process.WaitForExit(30000)){
+          if(-not $process.WaitForExit(40000)){
             try{$process.Kill()}catch{}
             throw "FLASH_GATE=FAIL probe_timeout stdout=$stdout stderr=$stderr"
           }
@@ -110,18 +130,19 @@ jobs:
           }
           $result=Get-Content -LiteralPath $state -Raw | ConvertFrom-Json
           if([string]$result.status -ne 'PASS'){throw "FLASH_GATE=FAIL renderer_status=$($result.status) reason=$($result.reason)"}
+          if([int]$result.root_status -ne 200){throw "FLASH_GATE=FAIL root_status=$($result.root_status)"}
+          if([int]$result.boots_status -ne 200){throw "FLASH_GATE=FAIL boots_status=$($result.boots_status)"}
+          if([string]$result.boots_content_type -notmatch 'application/x-shockwave-flash'){throw "FLASH_GATE=FAIL boots_mime=$($result.boots_content_type)"}
+          if(-not [bool]$result.html_has_boots_object){throw 'FLASH_GATE=FAIL html_boots_object_missing'}
           if(-not [bool]$result.renderer.mimePresent){throw 'FLASH_GATE=FAIL flash_mime_absent'}
           if(-not [bool]$result.renderer.mimeEnabledPlugin){throw 'FLASH_GATE=FAIL flash_mime_plugin_disabled'}
           if(@($result.flash_plugins).Count -lt 1){throw 'FLASH_GATE=FAIL flash_plugin_not_exposed'}
-          if([int]$result.swf_requests -lt 1){throw 'FLASH_GATE=FAIL boots_swf_never_requested'}
+          if(-not [bool]$result.renderer.objectPresent){throw 'FLASH_GATE=FAIL production_flash_object_missing'}
           if([bool]$result.fallback_visible){throw 'FLASH_GATE=FAIL html_flash_fallback_visible'}
-          if(-not [bool]$result.swf_instantiated){throw 'FLASH_GATE=FAIL boots_swf_not_instantiated'}
-          # Electron is a GUI-subsystem executable and PowerShell can expose a blank
-          # ExitCode even after WaitForExit. The persisted renderer state is the
-          # authoritative cross-process result; do not turn a proven PASS red on a
-          # blank GUI ExitCode.
+          if(-not [bool]$result.scriptable_flash_object){throw 'FLASH_GATE=FAIL flash_object_not_scriptable'}
+          if(-not [bool]$result.production_instantiated){throw 'FLASH_GATE=FAIL production_flash_not_instantiated'}
           $exitText=[string]$process.ExitCode
           if(-not [string]::IsNullOrWhiteSpace($exitText) -and [int]$exitText -ne 0){
             throw "FLASH_GATE=FAIL probe_exit=$exitText state=$state"
           }
-          Write-Host "FLASH_GATE=PASS electron=$($result.electron) chromium=$($result.chromium) plugin=$($result.plugin_path) version=$($result.plugin_version) swf_requests=$($result.swf_requests) fallback_visible=$($result.fallback_visible) instantiated=$($result.swf_instantiated)"
+          Write-Host "FLASH_GATE=PASS electron=$($result.electron) chromium=$($result.chromium) plugin=$($result.plugin_path) root=$($result.root_status) boots=$($result.boots_status) mime=$($result.boots_content_type) fallback_visible=$($result.fallback_visible) instantiated=$($result.production_instantiated)"
