@@ -10,14 +10,15 @@ $ErrorActionPreference = 'Stop'
 $repo = Resolve-WaddleRepoRoot -Context @{}
 $work = Join-Path $repo '.work'
 $statePath = Join-Path $work 'state\waddle-client.json'
-$runtimeHome = $null
+$repoElectron = [IO.Path]::GetFullPath((Join-Path $repo 'node_modules\electron\dist\electron.exe'))
+$legacyExternal = $null
 if ($AndroidBuildRoot) {
-  $runtimeHome = [IO.Path]::GetFullPath((Join-Path $AndroidBuildRoot 'Runtime\Waddle-Forever'))
+  $legacyExternal = [IO.Path]::GetFullPath((Join-Path $AndroidBuildRoot 'Runtime\Waddle-Forever'))
 } else {
   try {
     $repoInfo = [IO.DirectoryInfo]$repo
     if ($repoInfo.Parent -and $repoInfo.Parent.Name -ieq 'Repositories' -and $repoInfo.Parent.Parent) {
-      $runtimeHome = [IO.Path]::GetFullPath((Join-Path $repoInfo.Parent.Parent.FullName 'Runtime\Waddle-Forever'))
+      $legacyExternal = [IO.Path]::GetFullPath((Join-Path $repoInfo.Parent.Parent.FullName 'Runtime\Waddle-Forever'))
     }
   } catch {}
 }
@@ -54,19 +55,21 @@ if (Test-Path -LiteralPath $statePath -PathType Leaf) {
   }
 }
 
-# Recovery scan: stop only Waddle Electron roots. This covers legacy .work
-# runtimes and external deployments even when the state file is stale/missing.
+# Recovery scan covers the current direct repo runtime, old .work runtimes and
+# the now-retired AndroidBuild\Runtime deployment in case a stale process was
+# left behind by an older build.
 $workPrefix = [IO.Path]::GetFullPath($work).TrimEnd('\') + '\'
-$runtimePrefix = if ($runtimeHome) { $runtimeHome.TrimEnd('\') + '\' } else { $null }
+$legacyPrefix = if ($legacyExternal) { $legacyExternal.TrimEnd('\') + '\' } else { $null }
 $recovered = 0
 foreach ($candidate in @(Get-CimInstance Win32_Process -Filter "Name='electron.exe'" -ErrorAction SilentlyContinue)) {
   $exe = [string]$candidate.ExecutablePath
   $cmd = [string]$candidate.CommandLine
   if ([string]::IsNullOrWhiteSpace($exe) -or [string]::IsNullOrWhiteSpace($cmd)) { continue }
   try { $full = [IO.Path]::GetFullPath($exe) } catch { continue }
+  $repoDirect = $full -ieq $repoElectron
   $insideWork = $full.StartsWith($workPrefix,[StringComparison]::OrdinalIgnoreCase)
-  $insideRuntime = $runtimePrefix -and $full.StartsWith($runtimePrefix,[StringComparison]::OrdinalIgnoreCase)
-  if (-not ($insideWork -or $insideRuntime)) { continue }
+  $insideLegacyExternal = $legacyPrefix -and $full.StartsWith($legacyPrefix,[StringComparison]::OrdinalIgnoreCase)
+  if (-not ($repoDirect -or $insideWork -or $insideLegacyExternal)) { continue }
   if ($cmd -notmatch '[\\/]compiled[\\/]client[\\/]main\.js') { continue }
   if (Stop-WaddleProcessTree -ProcessId ([int]$candidate.ProcessId) -Reason 'recovery_scan') { $recovered++ }
 }
@@ -77,4 +80,4 @@ if ($state) {
   $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
 }
 
-Write-Host "WADDLE_STOP=PASS state_process_id=$stateProcessId recovered=$recovered runtime_home=$runtimeHome core_not_required=true"
+Write-Host "WADDLE_STOP=PASS state_process_id=$stateProcessId recovered=$recovered runtime_home=$repo runtime_mode=repo_local_direct legacy_external_checked=$legacyExternal core_not_required=true"
