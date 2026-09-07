@@ -42,14 +42,17 @@ loadFlashPlugin(app);
 let mainWindow: BrowserWindow;
 
 /** An object to keep global variables in memory across windows */
-let globalSettings : GlobalSettings = {
+const globalSettings : GlobalSettings = {
   multiplayer: { type: 'local' }
 };
 
 const popups: Popups = new Map<string, BrowserWindow>();
 
 app.on('ready', async () => {
-  // a window needs to exist at least for windows, during the download process
+  // A real window must exist while first-run media/setup work is in progress.
+  // mainWindow is deliberately created only after services are ready, so every
+  // dialog in this phase must be parented to setupWindow rather than referencing
+  // mainWindow before it has been assigned.
   const setupWindow = new BrowserWindow({
     width: 200,
     height: 100,
@@ -86,7 +89,7 @@ app.on('ready', async () => {
   
   // only check if the clothing settings is false, otherwise it would have been downloaded already
   if (!settingsManager.settings.clothing && settingsManager.settings.answered_packages !== VERSION) {
-    const result = await dialog.showMessageBox(mainWindow, {
+    const result = await dialog.showMessageBox(setupWindow, {
       buttons: ['Download Clothing (~600 MB)', 'No Thanks'],
       title: 'Download package?',
       message: 'Would you like to download the clothing package? It includes all non essential clothing items from Club Penguin. If you say no, you can always download it later.',
@@ -102,7 +105,7 @@ app.on('ready', async () => {
   }
 
   if (!settingsManager.settings.faq_warning) {
-    const result = await dialog.showMessageBox(mainWindow, {
+    const result = await dialog.showMessageBox(setupWindow, {
       buttons: ['Take me to the FAQ', 'Understood'],
       title: 'Heads-Up!',
       message: `Welcome to Waddle Forever! If you know nothing about this client, you might be confused about some things:
@@ -111,12 +114,12 @@ app.on('ready', async () => {
 - You can choose the day in the timeline, use commands, and more through the menu
 
 These are the most important things, but there is a full list of questions in our FAQ. If you're ever lost, you can read it in our website.`,
-      cancelId: 2
+      cancelId: 1
     });
 
     if (result.response === 0 || result.response === 1) {
       if (result.response === 0) {
-        shell.openExternal(`${WEBSITE}/faq`);
+        void shell.openExternal(`${WEBSITE}/faq`);
       }
       settingsManager.updateSettings({ faq_warning: true });
     }
@@ -124,10 +127,10 @@ These are the most important things, but there is a full list of questions in ou
 
   const failedMods = startMods();
   if (failedMods.length > 0) {
-    await dialog.showMessageBox(mainWindow, {
+    await dialog.showMessageBox(setupWindow, {
       buttons: ['OK'],
       title: 'Error with Mods',
-      message: `The following mods could not be turned on. Please fix them and then try enabling them again:\n\n${failedMods.map(mod => `* ${mod}`).join('\n')}}`
+      message: `The following mods could not be turned on. Please fix them and then try enabling them again:\n\n${failedMods.map(mod => `* ${mod}`).join('\n')}`
     });
   }
 
@@ -135,7 +138,7 @@ These are the most important things, but there is a full list of questions in ou
     server = await startServices();
   } catch (error) {
     if (error instanceof Error && error.message.includes('EADDRINUSE')) {
-      const result = await dialog.showMessageBox(mainWindow, {
+      const result = await dialog.showMessageBox(setupWindow, {
         buttons: ['Boot Serverless', 'Check out error'],
         title: 'Server Error',
         message: `Another process is already using the designated ports. If you want, you can boot Waddle Forever without its server, but this is only useful if you have another Waddle Forever client running already, otherwise you may have to close the other process using the ports (check error).`,
@@ -144,7 +147,7 @@ These are the most important things, but there is a full list of questions in ou
       });
       
       if (result.response === 1) {
-        await showWarning(mainWindow, 'Error', error.message + '\n' + error.stack);
+        await showWarning(setupWindow, 'Error', error.message + '\n' + error.stack);
       }
     } else {
       throw error;
