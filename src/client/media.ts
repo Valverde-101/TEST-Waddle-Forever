@@ -10,17 +10,19 @@ import { unzip } from './unzip';
 import { logError, MEDIA_DIRECTORY, postJSON } from '@common/utils';
 
 /**
- * Downloads and extracts a media folder from the website
- * @param mediaName Name used for the folder and in the website
- * @param onSuccess Function for running if it succeeds
- * @param onFail Function for running if it fails
+ * Downloads and extracts a media folder from the website.
+ * @returns true only when the complete download, extraction and version marker succeeded.
  */
-export const downloadMediaFolder = async (mediaName: string, onSuccess: () => void, onFail: (err: unknown) => void) => {
+export const downloadMediaFolder = async (
+  mediaName: string,
+  onSuccess: () => void,
+  onFail: (err: unknown) => void
+): Promise<boolean> => {
   // in dev, the medias are always installed
   // can only test this in production builds
   if (electronIsDev) {
     onSuccess();
-    return;
+    return true;
   }
 
   // remove any existing .zip files that may be leftover if a download was cancelled
@@ -40,23 +42,25 @@ export const downloadMediaFolder = async (mediaName: string, onSuccess: () => vo
   // use date to avoid collision (unlink only deletes after the app is closed)
   const zipName = String(Date.now()) + '.zip';
   const zipDir = path.join(MEDIA_DIRECTORY, zipName);
-  // using the "media file name convention"
-  // the media/ is to access the proper API route
+  const folderDestination = path.join(MEDIA_DIRECTORY, mediaName);
+
   try {
     await download(`https://github.com/nhaar/Waddle-Forever/releases/download/v${VERSION}/${mediaName}.zip`, zipDir);
-    const folderDestination = path.join(MEDIA_DIRECTORY, mediaName);
-    try {
-      await unzip(zipDir, folderDestination);
-    } catch (error) {
-      logError('Error unzipping: ', error);
-      onFail(error);
-      return;
-    }
+    await unzip(zipDir, folderDestination);
     fs.writeFileSync(path.join(folderDestination, '.version'), VERSION);
     onSuccess();
-    
+    return true;
   } catch (error) {
-    onFail(error);    
+    logError(`Failed to install media folder ${mediaName}`, error);
+    try {
+      if (fs.existsSync(zipDir)) {
+        fs.unlinkSync(zipDir);
+      }
+    } catch (cleanupError) {
+      logError(`Failed to remove partial media archive ${zipDir}`, cleanupError);
+    }
+    onFail(error);
+    return false;
   }
 }
 
@@ -67,8 +71,8 @@ const checkMedia = async (mediaName: string): Promise<boolean> => {
   if (!fs.existsSync(TARGET_DIRECTORY)) {
     isUpToDate = false;
     try {
-      fs.mkdirSync(TARGET_DIRECTORY);
-    } catch (error) {
+      fs.mkdirSync(TARGET_DIRECTORY, { recursive: true });
+    } catch (_error) {
       throw new AdminError();
     }
   }
@@ -101,20 +105,29 @@ const checkMedia = async (mediaName: string): Promise<boolean> => {
     }
   }
 
-  let success = true;
   if (!isUpToDate) {
-    fs.rmdirSync(TARGET_DIRECTORY, { recursive: true })
-    await downloadMediaFolder(mediaName, () => {}, (err) => { throw err; });
+    fs.rmSync(TARGET_DIRECTORY, { recursive: true, force: true });
+    let failure: unknown;
+    const success = await downloadMediaFolder(mediaName, () => {}, (err) => {
+      failure = err;
+    });
+
+    if (!success) {
+      if (failure instanceof Error) {
+        throw failure;
+      }
+      throw new Error(`Could not install required media folder: ${mediaName}`);
+    }
   }
 
-  return success;
+  return true;
 }
 
 export class AdminError extends Error {
   constructor() {
     super('Could not create media directory');
   }
-};
+}
 
 /**
  * Initializes the media folders, downloading when needed to update things
@@ -128,8 +141,8 @@ export const startMedia = async (): Promise<void> => {
 
   if (!fs.existsSync(MEDIA_DIRECTORY)) {
     try {
-      fs.mkdirSync(MEDIA_DIRECTORY);
-    } catch (error) {
+      fs.mkdirSync(MEDIA_DIRECTORY, { recursive: true });
+    } catch (_error) {
       throw new AdminError();
     }
   }
