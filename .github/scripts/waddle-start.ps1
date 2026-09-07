@@ -30,8 +30,134 @@ Import-WaddleLocalEnv -Path $envPath
 $dependencies = Invoke-WaddleDependencyBootstrap -RepoRoot $repo -WorkRoot $workspace.work_root
 $sourceFlash = Test-WaddlePepperFlash -RepoRoot $repo
 $runtimeHome = Get-WaddleExternalRuntimeHome -AndroidBuildRoot $root
+$statePath = Join-Path $workspace.work_root 'state\waddle-client.json'
+
+function Stop-WaddleProcessTree {
+  param(
+    [Parameter(Mandatory)][int]$Pid,
+    [Parameter(Mandatory)][string]$Reason
+  )
+  if ($Pid -le 0) { return $false }
+  $proc = Get-Process -Id $Pid -ErrorAction SilentlyContinue
+  if (-not $proc) { return $false }
+  & taskkill.exe /PID $Pid /T /F | Out-Null
+  $code = $LASTEXITCODE
+  $global:LASTEXITCODE = 0
+  if ($code -ne 0 -and (Get-Process -Id $Pid -ErrorAction SilentlyContinue)) {
+    throw "WADDLE_PROCESS_CLEANUP=FAIL pid=$Pid reason=$Reason taskkill_exit=$code"
+  }
+  Write-Host "WADDLE_PROCESS_CLEANUP=PASS pid=$Pid reason=$Reason"
+  return $true
+}
+
+function Stop-WaddleExistingClient {
+  if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) { return }
+  try {
+    $prior = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+    $priorPid = [int]$prior.pid
+    if ($priorPid -gt 0 -and (Get-Process -Id $priorPid -ErrorAction SilentlyContinue)) {
+      Stop-WaddleProcessTree -Pid $priorPid -Reason 'replace_existing_client' | Out-Null
+    }
+    $prior.status = 'REPLACED'
+    $prior | Add-Member -NotePropertyName replaced_utc -NotePropertyValue ([DateTime]::UtcNow.ToString('o')) -Force
+    $prior | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
+  } catch {
+    Write-Host "WADDLE_EXISTING_CLIENT_CLEANUP=WARN error=$($_.Exception.Message)"
+  }
+}
+
+function Stop-WaddleLegacyWorkRuntimes {
+  $workPrefix = [IO.Path]::GetFullPath($workspace.work_root).TrimEnd('\') + '\'
+  $killed = 0
+  $candidates = @(Get-CimInstance Win32_Process -Filter "Name='electron.exe'" -ErrorAction SilentlyContinue)
+  foreach ($candidate in $candidates) {
+    $exe = [string]$candidate.ExecutablePath
+    if ([string]::IsNullOrWhiteSpace($exe)) { continue }
+    try { $full = [IO.Path]::GetFullPath($exe) } catch { continue }
+    if (-not $full.StartsWith($workPrefix,[StringComparison]::OrdinalIgnoreCase)) { continue }
+    if (Stop-WaddleProcessTree -Pid ([int]$candidate.ProcessId) -Reason 'legacy_runtime_inside_work') { $killed++ }
+  }
+  Write-Host "WADDLE_LEGACY_RUNTIME_CLEANUP=PASS killed=$killed work=$($workspace.work_root)"
+}
+
+function Start-WaddleDetachedElectron {
+  param(
+    [Parameter(Mandatory)][string]$Electron,
+    [Parameter(Mandatory)][string]$Entry,
+    [Parameter(Mandatory)][string]$WorkingDirectory,
+    [Parameter(Mandatory)][string]$Stdout,
+    [Parameter(Mandatory)][string]$Stderr
+  )
+
+  # A direct Start-Process with redirected streams can keep the parent PowerShell
+  # alive for the lifetime of Electron on Windows. Launch through cmd.exe START
+  # instead: START returns immediately, Electron keeps the desired environment,
+  # and its stdout/stderr are redirected at the shell boundary rather than by
+  # System.Diagnostics.Process stream readers.
+  $existing = @{}
+  foreach ($p in @(Get-CimInstance Win32_Process -Filter "Name='electron.exe'" -ErrorAction SilentlyContinue)) {
+    $exe = [string]$p.ExecutablePath
+    $cmd = [string]$p.CommandLine
+    if (-not [string]::IsNullOrWhiteSpace($exe)) {
+      try {
+        if ([IO.Path]::GetFullPath($exe) -ieq [IO.Path]::GetFullPath($Electron) -and $cmd -like ('*' + $Entry + '*')) {
+          $existing[[int]$p.ProcessId] = $true
+        }
+      } catch {}
+    }
+  }
+
+  $launch = 'start "" /b "' + $Electron.Replace('"','""') + '" "' + $Entry.Replace('"','""') + '" 1>>"' + $Stdout.Replace('"','""') + '" 2>>"' + $Stderr.Replace('"','""') + '"'
+  Push-Location $WorkingDirectory
+  try {
+    & cmd.exe /d /s /c $launch
+    $launchExit = $LASTEXITCODE
+  } finally {
+    Pop-Location
+  }
+  $global:LASTEXITCODE = 0
+  if ($launchExit -ne 0) {
+    throw "WADDLE_START=FAIL detached_launcher_exit=$launchExit executable=$Electron entry=$Entry"
+  }
+
+  $deadline = [DateTime]::UtcNow.AddSeconds(20)
+  $found = $null
+  do {
+    Start-Sleep -Milliseconds 250
+    $matches = @(Get-CimInstance Win32_Process -Filter "Name='electron.exe'" -ErrorAction SilentlyContinue | Where-Object {
+      $pid = [int]$_.ProcessId
+      if ($existing.ContainsKey($pid)) { return $false }
+      $exe = [string]$_.ExecutablePath
+      $cmd = [string]$_.CommandLine
+      if ([string]::IsNullOrWhiteSpace($exe)) { return $false }
+      try {
+        return ([IO.Path]::GetFullPath($exe) -ieq [IO.Path]::GetFullPath($Electron)) -and $cmd -like ('*' + $Entry + '*')
+      } catch { return $false }
+    } | Sort-Object CreationDate -Descending)
+    if ($matches.Count -gt 0) { $found = $matches[0]; break }
+  } while ([DateTime]::UtcNow -lt $deadline)
+
+  if (-not $found) {
+    $tail = if (Test-Path -LiteralPath $Stderr) { (Get-Content -LiteralPath $Stderr -Tail 40 -ErrorAction SilentlyContinue) -join ' | ' } else { '' }
+    throw "WADDLE_START=FAIL detached_process_not_found executable=$Electron entry=$Entry stderr=$tail"
+  }
+
+  $process = Get-Process -Id ([int]$found.ProcessId) -ErrorAction Stop
+  Start-Sleep -Seconds 3
+  $process.Refresh()
+  if ($process.HasExited) {
+    $tail = if (Test-Path -LiteralPath $Stderr) { (Get-Content -LiteralPath $Stderr -Tail 40 -ErrorAction SilentlyContinue) -join ' | ' } else { '' }
+    throw "WADDLE_START=FAIL process_exited code=$($process.ExitCode) stderr=$tail"
+  }
+  return $process
+}
 
 Write-Host "WADDLE_LAYOUT=PASS platform=windows-x64 launcher_root=$repo mutable_build_root=$($workspace.work_root) runtime_home=$runtimeHome runtime_execution_outside_work=true swf_analysis=.work\swf-analysis"
+
+# Stop one prior managed client and all pre-migration Electron trees whose
+# executable still lives under .work. This is intentionally project-scoped.
+Stop-WaddleExistingClient
+Stop-WaddleLegacyWorkRuntimes
 
 $gitState = $null
 try {
@@ -103,28 +229,17 @@ New-Item -ItemType Directory -Force -Path $runtimeLogs | Out-Null
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $stdout = Join-Path $runtimeLogs "client-$stamp.stdout.log"
 $stderr = Join-Path $runtimeLogs "client-$stamp.stderr.log"
-$statePath = Join-Path $workspace.work_root 'state\waddle-client.json'
 
 $env:NODE_ENV = 'dev'
 Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
-$entryArgument = '"' + $entry + '"'
 try {
-  # Keep the historical user-data/media working directory at the repository root,
-  # but execute all program binaries, compiled JS and runtime dependencies from
-  # the external deployed runtime.
-  $process = Start-Process -FilePath $electron -ArgumentList $entryArgument -WorkingDirectory $repo -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+  $process = Start-WaddleDetachedElectron -Electron $electron -Entry $entry -WorkingDirectory $repo -Stdout $stdout -Stderr $stderr
 } catch {
   throw "WADDLE_START=FAIL process_create executable=$electron entry=$entry error=$($_.Exception.Message)"
 }
-Start-Sleep -Seconds 3
-$process.Refresh()
-if ($process.HasExited) {
-  $tail = if (Test-Path -LiteralPath $stderr) { (Get-Content -LiteralPath $stderr -Tail 30 -ErrorAction SilentlyContinue) -join ' | ' } else { '' }
-  throw "WADDLE_START=FAIL process_exited code=$($process.ExitCode) stderr=$tail"
-}
 
 $state = [ordered]@{
-  schema = 'waddle-client-state/v6'
+  schema = 'waddle-client-state/v7'
   status = 'RUNNING'
   platform = 'windows-x64'
   pid = $process.Id
@@ -146,7 +261,7 @@ $state = [ordered]@{
   electron_source_executable = $sourceElectron.executable
   electron_executable = $electron
   electron_version = $sourceElectron.version
-  electron_launch_mode = 'external_runtime_direct_exe'
+  electron_launch_mode = 'external_runtime_detached_cmd_start'
   ppapi_flash_source_path = $sourceFlash.path
   ppapi_flash_path = $flashPath
   ppapi_flash_version = $runtime.ppapi_flash_version
@@ -157,7 +272,7 @@ $state = [ordered]@{
 }
 $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
 
-Write-Host "WADDLE_START=PASS pid=$($process.Id) sha=$sha platform=windows-x64 node=$($managedNode.node) electron=$($sourceElectron.version) launch_mode=external_runtime runtime=$runtimeRoot work_execution=false dependencies=$($dependencies.mode)"
+Write-Host "WADDLE_START=PASS pid=$($process.Id) sha=$sha platform=windows-x64 node=$($managedNode.node) electron=$($sourceElectron.version) launch_mode=external_runtime_detached_cmd_start runtime=$runtimeRoot work_execution=false dependencies=$($dependencies.mode)"
 Write-Host "WADDLE_PPAPI_FLASH=PASS path=$flashPath version=$($runtime.ppapi_flash_version) source=$($sourceFlash.path)"
 Write-Host 'WADDLE_VISUAL_STUDIO=NOT_REQUIRED'
 Write-Host "WADDLE_RUNTIME_STDOUT=$stdout"
