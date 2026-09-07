@@ -68,6 +68,76 @@ function Get-WaddleRuntimeFailure {
   return $null
 }
 
+function Write-WaddleEarlyLaunchEvidence {
+  $runtimeLogRoot = Join-Path $repo '.work\logs\runtime'
+  $latestDiagnostic = $null
+  if (Test-Path -LiteralPath $runtimeLogRoot -PathType Container) {
+    $latestDiagnostic = Get-ChildItem -LiteralPath $runtimeLogRoot -Filter 'client-*.stderr.log' -File -ErrorAction SilentlyContinue |
+      Sort-Object LastWriteTimeUtc -Descending |
+      Select-Object -First 1
+  }
+
+  if ($latestDiagnostic) {
+    Write-Host "WADDLE_EARLY_FAILURE_DIAGNOSTIC=FOUND path=$($latestDiagnostic.FullName) bytes=$($latestDiagnostic.Length) modified_utc=$($latestDiagnostic.LastWriteTimeUtc.ToString('o'))"
+    Write-Host '----- EARLY ELECTRON DIAGNOSTIC BEGIN -----'
+    @(Get-Content -LiteralPath $latestDiagnostic.FullName -Tail 40 -ErrorAction SilentlyContinue) | Write-Host
+    Write-Host '----- EARLY ELECTRON DIAGNOSTIC END -----'
+  } else {
+    Write-Host "WADDLE_EARLY_FAILURE_DIAGNOSTIC=MISSING root=$runtimeLogRoot"
+  }
+
+  $sourceDiagnostics = Join-Path $repo 'compiled\client\runtime-diagnostics.js'
+  $sourceMain = Join-Path $repo 'compiled\client\main.js'
+  $snapshotPath = Join-Path $repo '.work\state\runtime-snapshot.json'
+  $runtimeMain = $null
+  $runtimeDiagnostics = $null
+  $snapshotSha = ''
+
+  if (Test-Path -LiteralPath $snapshotPath -PathType Leaf) {
+    try {
+      $snapshot = Get-Content -LiteralPath $snapshotPath -Raw | ConvertFrom-Json -ErrorAction Stop
+      $snapshotSha = [string]$snapshot.source_sha
+      $runtimeMain = [string]$snapshot.app_entry
+      if (-not [string]::IsNullOrWhiteSpace($runtimeMain)) {
+        $runtimeDiagnostics = Join-Path (Split-Path -Parent $runtimeMain) 'runtime-diagnostics.js'
+      }
+    } catch {
+      Write-Host "WADDLE_RUNTIME_CODE_EVIDENCE=WARN reason=snapshot_invalid path=$snapshotPath error=$($_.Exception.Message)"
+    }
+  }
+
+  $paths = @(
+    [pscustomobject]@{ label='source_main'; path=$sourceMain; marker='runtime-diagnostics' },
+    [pscustomobject]@{ label='source_diagnostics'; path=$sourceDiagnostics; marker='main-process-boot' },
+    [pscustomobject]@{ label='runtime_main'; path=$runtimeMain; marker='runtime-diagnostics' },
+    [pscustomobject]@{ label='runtime_diagnostics'; path=$runtimeDiagnostics; marker='main-process-boot' }
+  )
+
+  foreach ($item in $paths) {
+    $path = [string]$item.path
+    if ([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path -LiteralPath $path -PathType Leaf)) {
+      Write-Host "WADDLE_RUNTIME_CODE_EVIDENCE=FAIL label=$($item.label) reason=file_missing path=$path snapshot_sha=$snapshotSha"
+      continue
+    }
+    $hash = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+    $length = (Get-Item -LiteralPath $path).Length
+    $markerPresent = $false
+    try { $markerPresent = (Get-Content -LiteralPath $path -Raw -ErrorAction Stop) -match [regex]::Escape([string]$item.marker) } catch {}
+    Write-Host "WADDLE_RUNTIME_CODE_EVIDENCE=INFO label=$($item.label) sha256=$hash bytes=$length marker=$($item.marker) marker_present=$markerPresent path=$path snapshot_sha=$snapshotSha"
+  }
+
+  if ($runtimeMain -and (Test-Path -LiteralPath $runtimeMain -PathType Leaf) -and (Test-Path -LiteralPath $sourceMain -PathType Leaf)) {
+    $sourceMainHash = (Get-FileHash -LiteralPath $sourceMain -Algorithm SHA256).Hash
+    $runtimeMainHash = (Get-FileHash -LiteralPath $runtimeMain -Algorithm SHA256).Hash
+    Write-Host "WADDLE_RUNTIME_MAIN_HASH_MATCH=$($sourceMainHash -eq $runtimeMainHash) source=$sourceMainHash runtime=$runtimeMainHash"
+  }
+  if ($runtimeDiagnostics -and (Test-Path -LiteralPath $runtimeDiagnostics -PathType Leaf) -and (Test-Path -LiteralPath $sourceDiagnostics -PathType Leaf)) {
+    $sourceDiagHash = (Get-FileHash -LiteralPath $sourceDiagnostics -Algorithm SHA256).Hash
+    $runtimeDiagHash = (Get-FileHash -LiteralPath $runtimeDiagnostics -Algorithm SHA256).Hash
+    Write-Host "WADDLE_RUNTIME_DIAGNOSTICS_HASH_MATCH=$($sourceDiagHash -eq $runtimeDiagHash) source=$sourceDiagHash runtime=$runtimeDiagHash"
+  }
+}
+
 function Stop-WaddleRuntimeAfterHealthFailure {
   try {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $launcher -Action stop | Out-Host
@@ -218,7 +288,10 @@ if ($reuse) {
 }
 $exit = $LASTEXITCODE
 $global:LASTEXITCODE = 0
-if ($exit -ne 0) { exit $exit }
+if ($exit -ne 0) {
+  Write-WaddleEarlyLaunchEvidence
+  exit $exit
+}
 
 try {
   Assert-WaddleRuntimeHealthy -ExpectedSha $currentSha
@@ -228,5 +301,6 @@ try {
   $failureStack = [string]$_.ScriptStackTrace
   $failureStack = $failureStack -replace '\r?\n',' | '
   Write-Host "WADDLE_RUNTIME_HEALTH_GATE=FAIL error=$failureMessage stack=$failureStack"
+  Write-WaddleEarlyLaunchEvidence
   exit 1
 }
