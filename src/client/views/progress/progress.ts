@@ -56,14 +56,30 @@ export type ProgressCallback = (progress: number) => void
 export async function showProgress(message: string, task: (progress: ProgressCallback, end: () => void) => Promise<boolean>): Promise<boolean> {
   const progressWin = createProgressBarWindow(message)
   let lastUpdate = Date.now();
-  return await task((progress: number) => {
-    const cur = Date.now();
-    if (cur > lastUpdate + 1000) {
-      lastUpdate = cur
-      setProgress(progress, progressWin)
+  let ended = false;
+
+  const end = () => {
+    if (ended) {
+      return;
     }
-  }, () => {
-    // destroy, not close, otherwise we'll trigger the popup in the 'close' event
-    progressWin.destroy()
-  })
+    ended = true;
+    // destroy, not close, otherwise we'll trigger the confirmation popup.
+    if (!progressWin.isDestroyed()) {
+      progressWin.destroy();
+    }
+  };
+
+  try {
+    return await task((progress: number) => {
+      const cur = Date.now();
+      if (cur > lastUpdate + 1000) {
+        lastUpdate = cur
+        setProgress(progress, progressWin)
+      }
+    }, end)
+  } finally {
+    // A failed HTTP request, file-system error or unzip exception must never
+    // strand the progress window and block the first-run flow.
+    end();
+  }
 }
