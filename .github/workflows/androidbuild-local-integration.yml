@@ -113,12 +113,15 @@ jobs:
           $clientState=Get-Content -LiteralPath $clientStatePath -Raw | ConvertFrom-Json
           $ffdec=[string]$clientState.ffdec_path
           if([string]::IsNullOrWhiteSpace($ffdec) -or -not(Test-Path -LiteralPath $ffdec -PathType Leaf)){throw "WADDLE_SWF_ANALYSIS=FAIL certified_ffdec_missing=$ffdec"}
+          # Keep the PR gate bounded. The analyzer is hash-cached and therefore
+          # advances deep coverage across runs rather than rescanning the whole
+          # archive on every source commit. boots.swf remains first priority.
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $analyzer `
             -RepoRoot $repo `
             -WorkRoot (Join-Path $repo '.work') `
             -FFDecPath $ffdec `
-            -DeepBudget 8 `
-            -FFDecTimeoutSeconds 12
+            -DeepBudget 2 `
+            -FFDecTimeoutSeconds 8
           if($LASTEXITCODE -ne 0){throw "WADDLE_SWF_ANALYSIS=FAIL exit=$LASTEXITCODE"}
           $summary=Join-Path $repo '.work\swf-analysis\summary.json'
           if(-not(Test-Path -LiteralPath $summary -PathType Leaf)){throw "WADDLE_SWF_ANALYSIS=FAIL summary_missing=$summary"}
