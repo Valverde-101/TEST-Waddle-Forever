@@ -145,7 +145,9 @@ export class SettingsManager {
         if (fs.existsSync(temporaryPath)) {
           fs.unlinkSync(temporaryPath);
         }
-      } catch {}
+      } catch (cleanupError) {
+        console.warn(`Could not remove temporary settings file ${temporaryPath}:`, cleanupError);
+      }
       throw error;
     }
 
