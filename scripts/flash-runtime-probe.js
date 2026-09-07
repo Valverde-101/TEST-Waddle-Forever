@@ -6,7 +6,14 @@ const path = require('path');
 const { app, BrowserWindow } = require('electron');
 
 const repoRoot = path.resolve(__dirname, '..');
+process.chdir(repoRoot);
+process.env.NODE_ENV = 'dev';
+
 const envPath = path.join(repoRoot, '.env');
+const settingsPath = path.join(repoRoot, 'settings.json');
+const resultPath = process.env.WADDLE_FLASH_PROBE_RESULT
+  ? path.resolve(process.env.WADDLE_FLASH_PROBE_RESULT)
+  : path.join(repoRoot, '.work', 'state', 'flash-runtime-probe.json');
 
 function importDotEnv(file) {
   if (!fs.existsSync(file)) return;
@@ -32,10 +39,8 @@ const pluginPath = path.resolve(
   process.env.WADDLE_PPAPI_FLASH_PATH || path.join(repoRoot, 'assets', 'flash', defaultPlugin)
 );
 const pluginVersion = (process.env.WADDLE_PPAPI_FLASH_VERSION || '32.0.0.303').trim();
-const bootsPath = path.join(repoRoot, 'media', 'default', 'tool', 'boots.swf');
-const resultPath = process.env.WADDLE_FLASH_PROBE_RESULT
-  ? path.resolve(process.env.WADDLE_FLASH_PROBE_RESULT)
-  : path.join(repoRoot, '.work', 'state', 'flash-runtime-probe.json');
+const compiledRoot = path.join(repoRoot, 'compiled');
+const settingsBackup = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath) : null;
 
 let server = null;
 let finished = false;
@@ -43,6 +48,16 @@ let finished = false;
 function persist(payload) {
   fs.mkdirSync(path.dirname(resultPath), { recursive: true });
   fs.writeFileSync(resultPath, JSON.stringify(payload, null, 2));
+}
+
+function restoreSettings() {
+  try {
+    if (settingsBackup === null) {
+      fs.rmSync(settingsPath, { force: true });
+    } else {
+      fs.writeFileSync(settingsPath, settingsBackup);
+    }
+  } catch (_) {}
 }
 
 function stopServer() {
@@ -56,6 +71,7 @@ function finish(code, payload) {
   if (finished) return;
   finished = true;
   stopServer();
+  restoreSettings();
   persist(payload);
   const marker = payload.status === 'PASS' ? 'PASS' : 'FAIL';
   const reason = payload.reason ? ` reason=${payload.reason}` : '';
@@ -66,7 +82,7 @@ function finish(code, payload) {
 
 function basePayload(status, reason, extra = {}) {
   return {
-    schema: 'waddle-flash-runtime-probe/v2',
+    schema: 'waddle-flash-runtime-probe/v3',
     status,
     reason,
     electron: process.versions.electron || null,
@@ -76,42 +92,51 @@ function basePayload(status, reason, extra = {}) {
     platform: process.platform,
     plugin_path: pluginPath,
     plugin_version: pluginVersion,
-    boots_path: bootsPath,
     ...extra,
   };
+}
+
+function fetchBuffer(url) {
+  return new Promise((resolve, reject) => {
+    const req = http.get(url, response => {
+      const chunks = [];
+      response.on('data', chunk => chunks.push(Buffer.from(chunk)));
+      response.on('end', () => resolve({
+        statusCode: response.statusCode || 0,
+        headers: response.headers,
+        body: Buffer.concat(chunks),
+      }));
+    });
+    req.on('error', reject);
+    req.setTimeout(10000, () => req.destroy(new Error(`HTTP timeout: ${url}`)));
+  });
 }
 
 if (process.platform !== 'win32') {
   finish(0, basePayload('PASS', 'not_windows'));
 }
-
 if (!fs.existsSync(pluginPath)) {
   finish(41, basePayload('FAIL', 'plugin_missing'));
 }
-if (!fs.existsSync(bootsPath)) {
-  finish(41, basePayload('FAIL', 'boots_swf_missing'));
+if (!fs.existsSync(path.join(compiledRoot, 'server', 'file-server', 'index.js'))) {
+  finish(41, basePayload('FAIL', 'compiled_fileserver_missing'));
 }
 
 const pluginStat = fs.statSync(pluginPath);
-const boots = fs.readFileSync(bootsPath);
-const swfSignature = boots.slice(0, 3).toString('ascii');
 if (!pluginStat.isFile() || pluginStat.size < 1024 * 1024) {
   finish(41, basePayload('FAIL', 'plugin_invalid_file', { plugin_size: pluginStat.size }));
 }
-if (!['FWS', 'CWS', 'ZWS'].includes(swfSignature)) {
-  finish(41, basePayload('FAIL', 'boots_invalid_swf', { swf_signature: swfSignature, boots_size: boots.length }));
-}
 
-// Chromium must receive the PPAPI switches before ready. This test then goes
-// further than navigator.plugins: it serves Waddle's real boots.swf over HTTP,
-// embeds it exactly as the production page does, and verifies that the renderer
-// requests the SWF while the HTML fallback remains hidden.
+// Pepper Flash must be configured before Electron is ready. The rest of this
+// probe deliberately exercises Waddle's real FileServer and real timeline page,
+// not a synthetic HTML fixture, so a PASS means the same / -> /boots.swf chain
+// used by the desktop client can actually instantiate Flash.
 app.commandLine.appendSwitch('ppapi-flash-path', pluginPath);
 app.commandLine.appendSwitch('ppapi-flash-version', pluginVersion);
 
 const timeout = setTimeout(() => {
   finish(43, basePayload('FAIL', 'timeout'));
-}, 25000);
+}, 30000);
 
 const appReady = app.whenReady().then(async () => {
   const configuredPath = app.commandLine.getSwitchValue('ppapi-flash-path');
@@ -125,30 +150,44 @@ const appReady = app.whenReady().then(async () => {
     return;
   }
 
-  let swfRequests = 0;
-  let htmlRequests = 0;
-  server = http.createServer((req, res) => {
-    if (req.url === '/boots.swf') {
-      swfRequests += 1;
-      res.writeHead(200, {
-        'Content-Type': 'application/x-shockwave-flash',
-        'Content-Length': boots.length,
-        'Cache-Control': 'no-store',
-      });
-      res.end(boots);
-      return;
-    }
+  // Force a deterministic default timeline while preserving any existing local
+  // settings bytes and restoring them before this process exits.
+  fs.writeFileSync(settingsPath, JSON.stringify({
+    version: '2010-10-25',
+    fps30: false,
+    minified_website: false,
+    faq_warning: true,
+    clothing: false,
+    answered_packages: 'probe',
+  }));
 
-    htmlRequests += 1;
-    const html = '<!doctype html><html><body style="margin:0"><object id="flash-probe" type="application/x-shockwave-flash" data="/boots.swf" width="320" height="240"><div id="fallback">FLASH_FALLBACK_VISIBLE</div></object></body></html>';
-    res.writeHead(200, {
-      'Content-Type': 'text/html; charset=utf-8',
-      'Content-Length': Buffer.byteLength(html),
-      'Cache-Control': 'no-store',
+  const express = require('express');
+  const settingsModule = require(path.join(compiledRoot, 'server', 'settings.js'));
+  const settingsManager = settingsModule.default || settingsModule;
+  const { GameData } = require(path.join(compiledRoot, 'server', 'timelines', 'game-data.js'));
+  const { FileServer } = require(path.join(compiledRoot, 'server', 'file-server', 'index.js'));
+
+  const gameData = new GameData(settingsManager);
+  const fileServer = new FileServer(gameData, settingsManager);
+  const expressApp = express();
+  const observedResponses = [];
+  expressApp.use((req, res, next) => {
+    const started = Date.now();
+    res.on('finish', () => {
+      if (req.path === '/' || req.path === '/boots.swf') {
+        observedResponses.push({
+          path: req.path,
+          status: res.statusCode,
+          contentType: String(res.getHeader('content-type') || ''),
+          durationMs: Date.now() - started,
+        });
+      }
     });
-    res.end(html);
+    next();
   });
+  expressApp.use(fileServer.getExpressRouter());
 
+  server = http.createServer(expressApp);
   await new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(0, '127.0.0.1', resolve);
@@ -159,11 +198,44 @@ const appReady = app.whenReady().then(async () => {
     finish(41, basePayload('FAIL', 'probe_server_port_missing'));
     return;
   }
+  const baseUrl = `http://127.0.0.1:${port}`;
+
+  const rootResponse = await fetchBuffer(`${baseUrl}/`);
+  const bootsResponse = await fetchBuffer(`${baseUrl}/boots.swf`);
+  const rootHtml = rootResponse.body.toString('utf8');
+  const swfSignature = bootsResponse.body.slice(0, 3).toString('ascii');
+  const bootsContentType = String(bootsResponse.headers['content-type'] || '');
+  const htmlHasBootsObject = /<object[^>]+application\/x-shockwave-flash[^>]+data=["']\/boots\.swf["']/i.test(rootHtml)
+    || /<object[^>]+data=["']\/boots\.swf["'][^>]+application\/x-shockwave-flash/i.test(rootHtml);
+
+  if (rootResponse.statusCode !== 200) {
+    finish(42, basePayload('FAIL', 'production_root_http_status', { status: rootResponse.statusCode }));
+    return;
+  }
+  if (bootsResponse.statusCode !== 200) {
+    finish(42, basePayload('FAIL', 'production_boots_http_status', { status: bootsResponse.statusCode }));
+    return;
+  }
+  if (!/application\/x-shockwave-flash/i.test(bootsContentType)) {
+    finish(42, basePayload('FAIL', 'production_boots_mime_invalid', { content_type: bootsContentType }));
+    return;
+  }
+  if (!['FWS', 'CWS', 'ZWS'].includes(swfSignature)) {
+    finish(42, basePayload('FAIL', 'production_boots_invalid_swf', {
+      swf_signature: swfSignature,
+      boots_size: bootsResponse.body.length,
+    }));
+    return;
+  }
+  if (!htmlHasBootsObject) {
+    finish(42, basePayload('FAIL', 'production_html_boots_object_missing'));
+    return;
+  }
 
   const win = new BrowserWindow({
     show: false,
-    width: 320,
-    height: 240,
+    width: 1280,
+    height: 720,
     webPreferences: {
       plugins: true,
       nodeIntegration: false,
@@ -171,8 +243,15 @@ const appReady = app.whenReady().then(async () => {
     },
   });
 
-  await win.loadURL(`http://127.0.0.1:${port}/`);
-  await new Promise(resolve => setTimeout(resolve, 1500));
+  let loadFailure = null;
+  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    if (isMainFrame) {
+      loadFailure = { errorCode, errorDescription, validatedURL };
+    }
+  });
+
+  await win.loadURL(`${baseUrl}/`);
+  await new Promise(resolve => setTimeout(resolve, 2000));
 
   const renderer = await win.webContents.executeJavaScript(`(() => {
     const plugins = Array.from(navigator.plugins || []).map(p => ({
@@ -182,19 +261,24 @@ const appReady = app.whenReady().then(async () => {
       mimeTypes: Array.from(p).map(m => m.type),
     }));
     const mime = navigator.mimeTypes && navigator.mimeTypes['application/x-shockwave-flash'];
-    const object = document.getElementById('flash-probe');
-    const fallback = document.getElementById('fallback');
+    const object = document.getElementById('game') || document.querySelector('object[type="application/x-shockwave-flash"]');
+    const fallback = document.getElementById('noflash') || (object && object.querySelector ? object.querySelector('img, a, div') : null);
     const fallbackStyle = fallback ? getComputedStyle(fallback) : null;
     const fallbackRects = fallback ? fallback.getClientRects().length : -1;
     const methods = ['PercentLoaded', 'GetVariable', 'SetVariable'].filter(name => object && typeof object[name] === 'function');
     return {
+      href: location.href,
+      title: document.title,
+      readyState: document.readyState,
       userAgent: navigator.userAgent,
       plugins,
       mimePresent: !!mime,
       mimeEnabledPlugin: !!(mime && mime.enabledPlugin),
       mimePluginName: mime && mime.enabledPlugin ? mime.enabledPlugin.name : null,
+      objectPresent: !!object,
       objectType: object ? object.type : null,
       objectData: object ? object.data : null,
+      fallbackPresent: !!fallback,
       fallbackRects,
       fallbackDisplay: fallbackStyle ? fallbackStyle.display : null,
       fallbackVisibility: fallbackStyle ? fallbackStyle.visibility : null,
@@ -206,31 +290,47 @@ const appReady = app.whenReady().then(async () => {
     const text = `${plugin.name} ${plugin.filename} ${plugin.description} ${plugin.mimeTypes.join(' ')}`;
     return /flash|shockwave/i.test(text) || plugin.mimeTypes.includes('application/x-shockwave-flash');
   });
-  const fallbackVisible = renderer.fallbackRects > 0 && renderer.fallbackDisplay !== 'none' && renderer.fallbackVisibility !== 'hidden';
+  const fallbackVisible = renderer.fallbackPresent
+    && renderer.fallbackRects > 0
+    && renderer.fallbackDisplay !== 'none'
+    && renderer.fallbackVisibility !== 'hidden';
   const flashAvailable = renderer.mimeEnabledPlugin && flashPlugins.length > 0;
-  const swfInstantiated = flashAvailable && swfRequests > 0 && !fallbackVisible;
+  const scriptable = renderer.scriptableMethods.length > 0;
+  const productionPass = !loadFailure
+    && flashAvailable
+    && renderer.objectPresent
+    && !fallbackVisible
+    && scriptable;
 
   const payload = basePayload(
-    swfInstantiated ? 'PASS' : 'FAIL',
-    swfInstantiated ? null : 'swf_not_instantiated',
+    productionPass ? 'PASS' : 'FAIL',
+    productionPass ? null : 'production_page_flash_not_instantiated',
     {
       plugin_size: pluginStat.size,
-      boots_size: boots.length,
-      swf_signature: swfSignature,
       switch_path: configuredPath,
       switch_version: configuredVersion,
-      html_requests: htmlRequests,
-      swf_requests: swfRequests,
+      production_url: `${baseUrl}/`,
+      root_status: rootResponse.statusCode,
+      root_content_type: String(rootResponse.headers['content-type'] || ''),
+      root_size: rootResponse.body.length,
+      html_has_boots_object: htmlHasBootsObject,
+      boots_status: bootsResponse.statusCode,
+      boots_content_type: bootsContentType,
+      boots_size: bootsResponse.body.length,
+      swf_signature: swfSignature,
+      observed_responses: observedResponses,
       renderer,
       flash_plugins: flashPlugins,
       fallback_visible: fallbackVisible,
-      swf_instantiated: swfInstantiated,
+      scriptable_flash_object: scriptable,
+      load_failure: loadFailure,
+      production_instantiated: productionPass,
     }
   );
 
   clearTimeout(timeout);
   win.destroy();
-  finish(swfInstantiated ? 0 : 42, payload);
+  finish(productionPass ? 0 : 42, payload);
 }).catch(error => {
   clearTimeout(timeout);
   finish(44, basePayload('FAIL', 'probe_exception', {
