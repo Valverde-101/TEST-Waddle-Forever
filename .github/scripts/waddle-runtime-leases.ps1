@@ -34,7 +34,7 @@ function Get-WaddleActiveRuntimeLeases {
   New-Item -ItemType Directory -Force -Path $root | Out-Null
   $now = [DateTime]::UtcNow
   $localMachine = ([string]$env:COMPUTERNAME).Trim()
-  $active = New-Object System.Collections.Generic.List[object]
+  $active = @()
 
   foreach ($dir in @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue)) {
     $ownerPath = Join-Path $dir.FullName 'owner.json'
@@ -57,7 +57,7 @@ function Get-WaddleActiveRuntimeLeases {
     if (-not [string]::IsNullOrWhiteSpace($machine) -and $machine -ieq $localMachine -and $processId -gt 0) {
       $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
       if ($process) {
-        $active.Add([pscustomobject]@{ path=$dir.FullName; machine=$machine; pid=$processId; age_seconds=0; owner=$owner })
+        $active += [pscustomobject]@{ path=$dir.FullName; machine=$machine; pid=$processId; age_seconds=0; owner=$owner }
         continue
       }
       Remove-WaddleRuntimeLeaseDirectory -Path $dir.FullName -Reason 'local_process_missing' | Out-Null
@@ -77,14 +77,14 @@ function Get-WaddleActiveRuntimeLeases {
 
     $age = if ($stamp) { [Math]::Max(0,[int](($now - $stamp).TotalSeconds)) } else { [int]::MaxValue }
     if ($age -le $StaleSeconds) {
-      $active.Add([pscustomobject]@{ path=$dir.FullName; machine=$machine; pid=$processId; age_seconds=$age; owner=$owner })
+      $active += [pscustomobject]@{ path=$dir.FullName; machine=$machine; pid=$processId; age_seconds=$age; owner=$owner }
       continue
     }
 
     Remove-WaddleRuntimeLeaseDirectory -Path $dir.FullName -Reason "stale_heartbeat_${age}s" | Out-Null
   }
 
-  return @($active)
+  return $active
 }
 
 function Assert-WaddleRuntimeMutationAllowed {
@@ -98,7 +98,7 @@ function Assert-WaddleRuntimeMutationAllowed {
   if ($active.Count -gt 0) {
     $owners = @($active | ForEach-Object {
       $machine = if ([string]::IsNullOrWhiteSpace([string]$_.machine)) { 'unknown' } else { [string]$_.machine }
-      "$machine:$($_.pid):$($_.age_seconds)s"
+      "${machine}:$($_.pid):$($_.age_seconds)s"
     }) -join ','
     throw "WADDLE_RUNTIME_MUTATION=BLOCKED reason=$Reason active_leases=$($active.Count) owners=$owners lease_root=$(Get-WaddleRuntimeLeaseRoot -RepoRoot $RepoRoot)"
   }
@@ -127,4 +127,27 @@ function Test-WaddleDependencyMutationRequired {
   } catch {
     return $true
   }
+}
+
+# waddle-repo-dependencies.ps1 is sourced immediately before this file. Capture
+# its implementation, then wrap it so Start can remain read-only/multi-client
+# when dependencies are valid while still blocking a real install cross-machine.
+$script:WaddleDependencyBootstrapWithoutRuntimeLease = (Get-Command Invoke-WaddleDependencyBootstrap -CommandType Function -ErrorAction Stop).ScriptBlock
+
+function Invoke-WaddleDependencyBootstrap {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory)][string]$RepoRoot,
+    [Parameter(Mandatory)][string]$WorkRoot
+  )
+
+  $mutationRequired = Test-WaddleDependencyMutationRequired -RepoRoot $RepoRoot -WorkRoot $WorkRoot
+  if ($mutationRequired) {
+    Assert-WaddleRuntimeMutationAllowed -RepoRoot $RepoRoot -Reason 'dependency_install_or_repair'
+  } else {
+    $activeCount = @(Get-WaddleActiveRuntimeLeases -RepoRoot $RepoRoot).Count
+    Write-Host "WADDLE_DEPENDENCY_MUTATION_CHECK=PASS required=false active_runtime_leases=$activeCount mode=read_only_reuse"
+  }
+
+  & $script:WaddleDependencyBootstrapWithoutRuntimeLease -RepoRoot $RepoRoot -WorkRoot $WorkRoot
 }
