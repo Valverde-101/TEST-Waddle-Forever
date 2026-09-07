@@ -9,9 +9,44 @@ function Get-WaddleExternalRuntimeHome {
 
 function Get-WaddleExternalRuntimeCurrentTarget {
   param([Parameter(Mandatory)][string]$RuntimeHome)
+
   $current = Join-Path $RuntimeHome 'Current'
-  if (-not (Test-Path -LiteralPath $current)) { return $null }
-  try { return Get-WaddleJunctionTarget -Path $current } catch { return $null }
+  if (Test-Path -LiteralPath $current) {
+    try {
+      $target = Get-WaddleJunctionTarget -Path $current
+      if ($target) { return [IO.Path]::GetFullPath([string]$target) }
+    } catch {}
+  }
+
+  $pointer = Join-Path $RuntimeHome 'current.json'
+  if (Test-Path -LiteralPath $pointer -PathType Leaf) {
+    try {
+      $state = Get-Content -LiteralPath $pointer -Raw | ConvertFrom-Json
+      $target = [string]$state.version_root
+      if (-not [string]::IsNullOrWhiteSpace($target) -and (Test-Path -LiteralPath $target -PathType Container)) {
+        return [IO.Path]::GetFullPath($target)
+      }
+    } catch {}
+  }
+  return $null
+}
+
+function Write-WaddleExternalRuntimeCurrentPointer {
+  param(
+    [Parameter(Mandatory)][string]$RuntimeHome,
+    [Parameter(Mandatory)][string]$VersionRoot,
+    [Parameter(Mandatory)][string]$Mode
+  )
+  New-Item -ItemType Directory -Force -Path $RuntimeHome | Out-Null
+  $pointer = Join-Path $RuntimeHome 'current.json'
+  [ordered]@{
+    schema='waddle-runtime-current/v1'
+    status='PASS'
+    version_root=[IO.Path]::GetFullPath($VersionRoot)
+    mode=$Mode
+    updated_utc=[DateTime]::UtcNow.ToString('o')
+  } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $pointer -Encoding UTF8
+  return $pointer
 }
 
 function Test-WaddleExternalRuntimeDeployment {
@@ -72,14 +107,32 @@ function Set-WaddleExternalRuntimeCurrent {
     [Parameter(Mandatory)][string]$VersionRoot
   )
 
+  $target = [IO.Path]::GetFullPath($VersionRoot)
   $current = Join-Path $RuntimeHome 'Current'
-  Ensure-WaddleJunction -LinkPath $current -TargetPath $VersionRoot
-  $actual = Get-WaddleJunctionTarget -Path $current
-  if (-not $actual -or $actual.TrimEnd('\') -ine ([IO.Path]::GetFullPath($VersionRoot)).TrimEnd('\')) {
-    throw "WADDLE_RUNTIME_CURRENT=FAIL actual=$actual expected=$VersionRoot"
+  $linkError = $null
+  try {
+    Ensure-WaddleJunction -LinkPath $current -TargetPath $target
+    $actual = Get-WaddleJunctionTarget -Path $current
+    if (-not $actual -or $actual.TrimEnd('\') -ine $target.TrimEnd('\')) {
+      throw "post_create_target_mismatch actual=$actual expected=$target"
+    }
+    Write-WaddleExternalRuntimeCurrentPointer -RuntimeHome $RuntimeHome -VersionRoot $target -Mode 'junction' | Out-Null
+    Write-Host "WADDLE_RUNTIME_CURRENT=PASS path=$current target=$actual mode=junction pointer=$(Join-Path $RuntimeHome 'current.json')"
+    return $current
+  } catch {
+    $linkError = $_.Exception.Message
   }
-  Write-Host "WADDLE_RUNTIME_CURRENT=PASS path=$current target=$actual"
-  return $current
+
+  # The runtime executes from Versions/<id>, never through Current. If SMB or a
+  # non-local filesystem refuses a junction, preserve the canonical selection in
+  # current.json and return the immutable version root rather than failing launch.
+  $pointer = Write-WaddleExternalRuntimeCurrentPointer -RuntimeHome $RuntimeHome -VersionRoot $target -Mode 'json_fallback'
+  $resolved = Get-WaddleExternalRuntimeCurrentTarget -RuntimeHome $RuntimeHome
+  if (-not $resolved -or $resolved.TrimEnd('\') -ine $target.TrimEnd('\')) {
+    throw "WADDLE_RUNTIME_CURRENT=FAIL fallback_pointer=$pointer actual=$resolved expected=$target junction_error=$linkError"
+  }
+  Write-Host "WADDLE_RUNTIME_CURRENT=PASS path=$pointer target=$target mode=json_fallback junction_error=$linkError"
+  return $target
 }
 
 function Write-WaddleExternalRuntimeState {
@@ -94,13 +147,14 @@ function Write-WaddleExternalRuntimeState {
   New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
   $statePath = Join-Path $stateDir 'runtime-snapshot.json'
   [ordered]@{
-    schema='waddle-runtime-deployment/v2'
+    schema='waddle-runtime-deployment/v3'
     status='PASS'
     platform='windows-x64'
     runtime_mode='external_deployment'
     runtime_home=[string]$Validation.manifest.runtime_home
     version_root=[string]$Validation.root
     current_root=$CurrentRoot
+    current_target=Get-WaddleExternalRuntimeCurrentTarget -RuntimeHome ([string]$Validation.manifest.runtime_home)
     source_sha=[string]$Validation.manifest.source_sha
     dependency_fingerprint=[string]$Validation.manifest.dependency_fingerprint
     electron_version=[string]$Validation.manifest.electron_version
@@ -225,15 +279,15 @@ function New-WaddleRuntimeSnapshot {
     Copy-Item -LiteralPath (Join-Path $RepoRoot 'package.json') -Destination (Join-Path $stagingApp 'package.json') -Force
     Copy-Item -LiteralPath (Join-Path $RepoRoot 'yarn.lock') -Destination (Join-Path $stagingApp 'yarn.lock') -Force
 
-    $yarn = Get-Command yarn.cmd -ErrorAction Stop
+    $yarnPath = if ($env:WADDLE_YARN_CMD -and (Test-Path -LiteralPath $env:WADDLE_YARN_CMD -PathType Leaf)) { [string]$env:WADDLE_YARN_CMD } else { (Get-Command yarn.cmd -ErrorAction Stop).Source }
     $cache = Join-Path $WorkRoot 'cache\yarn'
     Push-Location $RepoRoot
     try {
-      & $yarn.Source install --production --frozen-lockfile --non-interactive --modules-folder $stagingModules --cache-folder $cache | Out-Host
+      & $yarnPath install --production --frozen-lockfile --non-interactive --modules-folder $stagingModules --cache-folder $cache | Out-Host
       $runtimeInstallExit = $LASTEXITCODE
     } finally { Pop-Location }
     $global:LASTEXITCODE = 0
-    if ($runtimeInstallExit -ne 0) { throw "WADDLE_RUNTIME_DEPLOY=FAIL runtime_yarn_exit=$runtimeInstallExit" }
+    if ($runtimeInstallExit -ne 0) { throw "WADDLE_RUNTIME_DEPLOY=FAIL runtime_yarn_exit=$runtimeInstallExit yarn=$yarnPath" }
 
     $stagingExe = Join-Path $stagingElectron 'electron.exe'
     $stagingIcu = Join-Path $stagingElectron 'icudtl.dat'
@@ -246,7 +300,7 @@ function New-WaddleRuntimeSnapshot {
     $package = Get-Content -LiteralPath (Join-Path $RepoRoot 'package.json') -Raw | ConvertFrom-Json
     foreach ($prop in $package.dependencies.PSObject.Properties) {
       $depManifest = Join-Path (Join-Path $stagingModules ($prop.Name -replace '/','\')) 'package.json'
-      if (-not (Test-Path -LiteralPath $depManifest -PathType Leaf)) { throw "WADDLE_RUNTIME_DEPLOY=FAIL runtime_dependency_missing=$($prop.Name)" }
+      if (-not (Test-Path -LiteralPath $depManifest -PathType Leaf)) { throw "WADDLE_RUNTIME_DEPLOY=FAIL runtime_dependency_missing:$($prop.Name)" }
     }
 
     $electronHash = (Get-FileHash -LiteralPath $ElectronExecutable -Algorithm SHA256).Hash
@@ -264,7 +318,7 @@ function New-WaddleRuntimeSnapshot {
     $finalEntry = Join-Path $finalAppRoot 'compiled\client\main.js'
     $finalModules = Join-Path $finalAppRoot 'node_modules'
     [ordered]@{
-      schema='waddle-runtime-deployment/v2'
+      schema='waddle-runtime-deployment/v3'
       status='PASS'
       platform='windows-x64'
       runtime_mode='external_deployment'

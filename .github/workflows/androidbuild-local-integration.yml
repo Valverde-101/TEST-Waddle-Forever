@@ -13,12 +13,12 @@ permissions:
 env:
   WADDLE_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
-# One certification run owns the canonical Waddle workspace. Newer queued runs
-# for the same PR/ref supersede older queued runs, while an in-progress run is
-# allowed to finish and preserve its evidence.
+# One automatic certification owns the canonical workspace. A newer SHA for the
+# same PR/ref supersedes an obsolete run; all functional gates live inside this
+# single job, so no sibling validation can be cancelled accidentally.
 concurrency:
   group: waddle-certification-${{ github.event.pull_request.number || github.ref_name }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   certify:
@@ -66,6 +66,23 @@ jobs:
           if([string]$sync.actual_sha -ne [string]$env:WADDLE_EXPECTED_SHA){throw "WADDLE_CERT=FAIL exact_head expected=$env:WADDLE_EXPECTED_SHA actual=$($sync.actual_sha)"}
           "WADDLE_CANONICAL_REPO=$repo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "WADDLE_CERT_SYNC=PASS repo=$repo sha=$($sync.actual_sha) core=$version"
+
+      - name: Sanitize inherited Waddle clients before Yarn
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Push-Location $env:WADDLE_CANONICAL_REPO
+          try {
+            $env:WADDLE_NONINTERACTIVE='1'
+            & cmd.exe /d /c 'Waddle-Stop.cmd'
+            $code=$LASTEXITCODE
+            $global:LASTEXITCODE=0
+            if($code -ne 0){throw "WADDLE_CERT=FAIL preclean_stop_exit=$code"}
+          } finally {
+            Remove-Item Env:WADDLE_NONINTERACTIVE -ErrorAction SilentlyContinue
+            Pop-Location
+          }
+          Write-Host 'WADDLE_CERT_PRECLEAN=PASS'
 
       - name: Run complete Waddle certification
         shell: powershell
