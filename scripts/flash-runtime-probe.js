@@ -96,7 +96,7 @@ function finish(code, payload) {
 
 function basePayload(status, reason, extra = {}) {
   return {
-    schema: 'waddle-flash-runtime-probe/v5-repo-deps',
+    schema: 'waddle-flash-runtime-probe/v4',
     status,
     reason,
     electron: process.versions.electron || null,
@@ -179,8 +179,6 @@ const appReady = app.whenReady().then(async () => {
     return;
   }
 
-  // Force a deterministic default timeline while preserving any existing local
-  // settings bytes and restoring them before this process exits.
   fs.writeFileSync(settingsPath, JSON.stringify({
     version: '2010-10-25',
     fps30: false,
