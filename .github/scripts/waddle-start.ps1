@@ -108,22 +108,29 @@ function Start-WaddleDetachedElectron {
   # Windows PowerShell 5.1 can keep redirected Start-Process pipes alive until the
   # child exits; a long-lived Electron client then prevents Waddle-Start.cmd and
   # the self-hosted Actions step from returning even after WADDLE_START=PASS.
-  # Do not redirect OS stdio here. Waddle/Electron keep their own application
-  # logging, while these marker files document the intentional detached mode.
+  # Do not redirect OS stdio here. The child receives an exact diagnostics path
+  # through its inherited environment and writes structured runtime events there.
   Set-Content -LiteralPath $Stdout -Encoding UTF8 -Value 'WADDLE_RUNTIME_STDIO=DETACHED stream=stdout source=electron_application_logging'
-  Set-Content -LiteralPath $Stderr -Encoding UTF8 -Value 'WADDLE_RUNTIME_STDIO=DETACHED stream=stderr source=electron_application_logging'
+  Set-Content -LiteralPath $Stderr -Encoding UTF8 -Value 'WADDLE_RUNTIME_STDIO=DETACHED stream=stderr source=electron_structured_diagnostics'
 
   $launchWatch = [Diagnostics.Stopwatch]::StartNew()
   $started = $null
+  $previousDiagnosticLog = [Environment]::GetEnvironmentVariable('WADDLE_RUNTIME_DIAGNOSTIC_LOG','Process')
   try {
-    $started = Start-Process `
-      -FilePath $Electron `
-      -ArgumentList @($Entry) `
-      -WorkingDirectory $WorkingDirectory `
-      -PassThru `
-      -ErrorAction Stop
-  } catch {
-    throw "WADDLE_START=FAIL process_start executable=$Electron entry=$Entry error=$($_.Exception.Message)"
+    [Environment]::SetEnvironmentVariable('WADDLE_RUNTIME_DIAGNOSTIC_LOG',$Stderr,'Process')
+    Write-Host "WADDLE_RUNTIME_DIAGNOSTIC_BINDING=PASS path=$Stderr mode=child_environment"
+    try {
+      $started = Start-Process `
+        -FilePath $Electron `
+        -ArgumentList @($Entry) `
+        -WorkingDirectory $WorkingDirectory `
+        -PassThru `
+        -ErrorAction Stop
+    } catch {
+      throw "WADDLE_START=FAIL process_start executable=$Electron entry=$Entry error=$($_.Exception.Message)"
+    }
+  } finally {
+    [Environment]::SetEnvironmentVariable('WADDLE_RUNTIME_DIAGNOSTIC_LOG',$previousDiagnosticLog,'Process')
   }
 
   if (-not $started -or $started.Id -le 0) {
@@ -315,4 +322,4 @@ Write-Host "WADDLE_START=PASS process_id=$($process.Id) sha=$sha platform=window
 Write-Host "WADDLE_PPAPI_FLASH=PASS path=$flashPath version=$($runtime.ppapi_flash_version) source=$($sourceFlash.path)"
 Write-Host 'WADDLE_VISUAL_STUDIO=NOT_REQUIRED'
 Write-Host "WADDLE_RUNTIME_STDOUT=$stdout mode=marker_only"
-Write-Host "WADDLE_RUNTIME_STDERR=$stderr mode=marker_only"
+Write-Host "WADDLE_RUNTIME_STDERR=$stderr mode=structured_runtime_events"
