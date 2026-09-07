@@ -7,6 +7,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'waddle-common.ps1')
 . (Join-Path $PSScriptRoot 'waddle-managed-node.ps1')
 . (Join-Path $PSScriptRoot 'waddle-workspace-resilience.ps1')
+. (Join-Path $PSScriptRoot 'waddle-git.ps1')
 
 $ctx = Get-WaddleContext -ContextPath $ContextPath
 $repo = Resolve-WaddleRepoRoot -Context $ctx
@@ -16,6 +17,32 @@ Import-WaddleCore -AndroidBuildRoot $androidBuildRoot
 $managedNode = Enable-WaddleManagedNodeToolchain -AndroidBuildRoot $androidBuildRoot
 $workspace = Initialize-WaddleWorkspace -RepoRoot $repo -AndroidBuildRoot $androidBuildRoot
 $toolchain = Test-WaddleToolchain -AndroidBuildRoot $androidBuildRoot
+
+# Regression for the mapped-drive failure reproduced by the interactive launcher.
+# Git exposes this test switch specifically to simulate a different owner; require
+# the Waddle adapter to recover with process-scoped safe.directory and exact HEAD.
+if ($env:GITHUB_ACTIONS -eq 'true' -and $ctx.ContainsKey('expected_sha') -and $ctx.expected_sha) {
+  $savedDifferentOwner = $env:GIT_TEST_ASSUME_DIFFERENT_OWNER
+  $gitOwnershipState = $null
+  try {
+    $env:GIT_TEST_ASSUME_DIFFERENT_OWNER = '1'
+    $gitOwnershipState = Get-WaddleRepositoryHead -RepoRoot $repo -AndroidBuildRoot $androidBuildRoot
+    if ([string]$gitOwnershipState.sha -ne [string]$ctx.expected_sha) {
+      throw "WADDLE_GIT_OWNERSHIP_REGRESSION=FAIL expected=$($ctx.expected_sha) actual=$($gitOwnershipState.sha)"
+    }
+    if ([string]$gitOwnershipState.ownership_mode -ne 'process_scoped') {
+      throw "WADDLE_GIT_OWNERSHIP_REGRESSION=FAIL recovery_not_exercised mode=$($gitOwnershipState.ownership_mode)"
+    }
+    Write-Host "WADDLE_GIT_OWNERSHIP_REGRESSION=PASS sha=$($gitOwnershipState.sha) mode=$($gitOwnershipState.ownership_mode)"
+  } finally {
+    Restore-WaddleGitSafeDirectoryScope -State $gitOwnershipState
+    if ($null -eq $savedDifferentOwner) {
+      Remove-Item Env:GIT_TEST_ASSUME_DIFFERENT_OWNER -ErrorAction SilentlyContinue
+    } else {
+      $env:GIT_TEST_ASSUME_DIFFERENT_OWNER = $savedDifferentOwner
+    }
+  }
+}
 
 # Regression test for the real desktop failure: a machine may expose Node 24 first
 # in PATH while Waddle requires Node 20.19.0. When a foreign system Node exists,
