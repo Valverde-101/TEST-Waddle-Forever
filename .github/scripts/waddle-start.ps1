@@ -104,11 +104,15 @@ function Start-WaddleDetachedElectron {
     [Parameter(Mandatory)][string]$Stderr
   )
 
-  # Launch the real Electron executable directly. cmd.exe `start /b` keeps its
-  # console/redirection chain attached to the self-hosted Actions PowerShell and
-  # can therefore wait for Electron indefinitely even though Electron is alive.
-  # Start-Process creates the process and returns its PID immediately while still
-  # letting us redirect logs and validate the exact executable/entry point.
+  # The Electron GUI process must be completely independent from the launcher.
+  # Windows PowerShell 5.1 can keep redirected Start-Process pipes alive until the
+  # child exits; a long-lived Electron client then prevents Waddle-Start.cmd and
+  # the self-hosted Actions step from returning even after WADDLE_START=PASS.
+  # Do not redirect OS stdio here. Waddle/Electron keep their own application
+  # logging, while these marker files document the intentional detached mode.
+  Set-Content -LiteralPath $Stdout -Encoding UTF8 -Value 'WADDLE_RUNTIME_STDIO=DETACHED stream=stdout source=electron_application_logging'
+  Set-Content -LiteralPath $Stderr -Encoding UTF8 -Value 'WADDLE_RUNTIME_STDIO=DETACHED stream=stderr source=electron_application_logging'
+
   $launchWatch = [Diagnostics.Stopwatch]::StartNew()
   $started = $null
   try {
@@ -116,8 +120,6 @@ function Start-WaddleDetachedElectron {
       -FilePath $Electron `
       -ArgumentList @($Entry) `
       -WorkingDirectory $WorkingDirectory `
-      -RedirectStandardOutput $Stdout `
-      -RedirectStandardError $Stderr `
       -PassThru `
       -ErrorAction Stop
   } catch {
@@ -154,8 +156,7 @@ function Start-WaddleDetachedElectron {
   } while ([DateTime]::UtcNow -lt $deadline)
 
   if (-not $process -or $process.HasExited -or -not $cim) {
-    $tail = if (Test-Path -LiteralPath $Stderr) { (Get-Content -LiteralPath $Stderr -Tail 40 -ErrorAction SilentlyContinue) -join ' | ' } else { '' }
-    throw "WADDLE_START=FAIL process_not_stable process_id=$($started.Id) executable=$Electron entry=$Entry stderr=$tail"
+    throw "WADDLE_START=FAIL process_not_stable process_id=$($started.Id) executable=$Electron entry=$Entry"
   }
 
   $actualExe = [string]$cim.ExecutablePath
@@ -168,12 +169,11 @@ function Start-WaddleDetachedElectron {
   Start-Sleep -Seconds 3
   $process.Refresh()
   if ($process.HasExited) {
-    $tail = if (Test-Path -LiteralPath $Stderr) { (Get-Content -LiteralPath $Stderr -Tail 40 -ErrorAction SilentlyContinue) -join ' | ' } else { '' }
-    throw "WADDLE_START=FAIL process_exited code=$($process.ExitCode) stderr=$tail"
+    throw "WADDLE_START=FAIL process_exited code=$($process.ExitCode)"
   }
 
   $launchWatch.Stop()
-  return [pscustomobject]@{ process=$process; return_ms=$launchWatch.ElapsedMilliseconds }
+  return [pscustomobject]@{ process=$process; return_ms=$launchWatch.ElapsedMilliseconds; stdio_mode='detached_no_runner_pipes' }
 }
 
 Write-Host "WADDLE_LAYOUT=PASS platform=windows-x64 launcher_root=$repo mutable_build_root=$($workspace.work_root) runtime_home=$runtimeHome runtime_execution_outside_work=true swf_analysis=.work\swf-analysis"
@@ -280,6 +280,7 @@ try {
     dependency_fingerprint = $dependencies.fingerprint
     dependency_mode = $dependencies.mode
     dependency_mutation_while_running = $false
+    stdio_mode = [string]$launch.stdio_mode
     managed_node_home = $managedNode.home
     managed_node_exe = $managedNode.node
     runtime_mode = 'external_deployment'
@@ -310,8 +311,8 @@ try {
   throw
 }
 
-Write-Host "WADDLE_START=PASS process_id=$($process.Id) sha=$sha platform=windows-x64 node=$($managedNode.node) electron=$($sourceElectron.version) launch_mode=external_runtime_start_process launcher_return_ms=$($launch.return_ms) runtime=$runtimeRoot work_execution=false dependencies=$($dependencies.mode) live_dependency_mutation=false"
+Write-Host "WADDLE_START=PASS process_id=$($process.Id) sha=$sha platform=windows-x64 node=$($managedNode.node) electron=$($sourceElectron.version) launch_mode=external_runtime_start_process launcher_return_ms=$($launch.return_ms) runtime=$runtimeRoot work_execution=false dependencies=$($dependencies.mode) live_dependency_mutation=false stdio=$($launch.stdio_mode)"
 Write-Host "WADDLE_PPAPI_FLASH=PASS path=$flashPath version=$($runtime.ppapi_flash_version) source=$($sourceFlash.path)"
 Write-Host 'WADDLE_VISUAL_STUDIO=NOT_REQUIRED'
-Write-Host "WADDLE_RUNTIME_STDOUT=$stdout"
-Write-Host "WADDLE_RUNTIME_STDERR=$stderr"
+Write-Host "WADDLE_RUNTIME_STDOUT=$stdout mode=marker_only"
+Write-Host "WADDLE_RUNTIME_STDERR=$stderr mode=marker_only"
