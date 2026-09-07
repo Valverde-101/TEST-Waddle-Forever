@@ -10,6 +10,7 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'waddle-managed-node.ps1')
 . (Join-Path $PSScriptRoot 'waddle-local-runtime.ps1')
 . (Join-Path $PSScriptRoot 'waddle-workspace-resilience.ps1')
+. (Join-Path $PSScriptRoot 'waddle-git.ps1')
 
 $ctx = @{}
 if ($AndroidBuildRoot) { $ctx.androidbuild_root = $AndroidBuildRoot }
@@ -28,20 +29,33 @@ Import-WaddleLocalEnv -Path $envPath
 $dependencies = Invoke-WaddleDependencyBootstrap -RepoRoot $repo -WorkRoot $workspace.work_root
 Test-WaddlePepperFlash -RepoRoot $repo | Out-Null
 
-$git = Get-AndroidBuildGitPath $root
-$sha = (& $git -C $repo rev-parse HEAD).Trim()
-if (-not $sha) { throw 'WADDLE_START=FAIL head_unresolved' }
+# The launcher lives in the repository root. Heavy/generated state remains under
+# .work by design and is surfaced back at the root through junctions. This keeps
+# exact-source syncs clean while the root launcher still sees node_modules,
+# compiled and dist as normal project paths.
+Write-Host "WADDLE_LAYOUT=PASS launcher_root=$repo mutable_root=$($workspace.work_root) node_modules=repo_junction swf_analysis=.work\swf-analysis"
 
-if (-not $SkipBuild) {
-  Invoke-AndroidBuildBuild `
-    -RepoRoot $repo `
-    -AndroidBuildRoot $root `
-    -ExpectedSha $sha `
-    -Repository 'Valverde-101/TEST-Waddle-Forever' `
-    -RunId ("manual-" + (Get-Date -Format 'yyyyMMddHHmmss')) `
-    -JobId 'interactive-start' `
-    -RunnerName $env:COMPUTERNAME `
-    -LeaseWaitSeconds 1200 | Out-Host
+$gitState = $null
+try {
+  $gitState = Get-WaddleRepositoryHead -RepoRoot $repo -AndroidBuildRoot $root
+  $sha = [string]$gitState.sha
+  if ([string]::IsNullOrWhiteSpace($sha)) { throw 'WADDLE_START=FAIL head_unresolved' }
+
+  if (-not $SkipBuild) {
+    Invoke-AndroidBuildBuild `
+      -RepoRoot $repo `
+      -AndroidBuildRoot $root `
+      -ExpectedSha $sha `
+      -Repository 'Valverde-101/TEST-Waddle-Forever' `
+      -RunId ("manual-" + (Get-Date -Format 'yyyyMMddHHmmss')) `
+      -JobId 'interactive-start' `
+      -RunnerName $env:COMPUTERNAME `
+      -LeaseWaitSeconds 1200 | Out-Host
+  }
+} finally {
+  # Ownership trust is process-scoped only. Never leave a global safe.directory
+  # exception behind on the user's Git installation.
+  Restore-WaddleGitSafeDirectoryScope -State $gitState
 }
 
 $entry = Join-Path $repo 'compiled\client\main.js'
