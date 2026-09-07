@@ -26,8 +26,6 @@ const getLatestLauncherStderr = (): string | undefined => {
       return undefined;
     }
 
-    // The launcher creates the marker immediately before Electron starts.
-    // Avoid ever attaching a new process to an old diagnostic log.
     if (Date.now() - latest.mtime > 120_000) {
       return undefined;
     }
@@ -83,6 +81,7 @@ export const writeRuntimeDiagnostic = (event: string, detail: Record<string, unk
 type RuntimeLease = {
   id: string;
   directory: string;
+  ownerPath: string;
   heartbeat: string;
   timer: NodeJS.Timeout;
 };
@@ -96,11 +95,22 @@ const releaseRuntimeLease = () => {
 
   try {
     clearInterval(runtimeLease.timer);
-    fs.rmSync(runtimeLease.directory, { recursive: true, force: true });
-  } catch {
-    // A force-killed process cannot clean its lease either. PowerShell removes
-    // same-host dead-PID leases immediately and remote leases after heartbeat
-    // expiry, so cleanup here is intentionally best effort.
+    for (const file of [runtimeLease.heartbeat, runtimeLease.ownerPath]) {
+      try {
+        if (fs.existsSync(file)) {
+          fs.unlinkSync(file);
+        }
+      } catch {
+        // The stale-lease cleaner handles any file that SMB could not remove
+        // during process shutdown.
+      }
+    }
+    try {
+      fs.rmdirSync(runtimeLease.directory);
+    } catch {
+      // Same-host dead-PID cleanup removes this immediately on the next write;
+      // remote clients fall back to heartbeat expiry.
+    }
   } finally {
     runtimeLease = undefined;
   }
@@ -146,16 +156,13 @@ const acquireRuntimeLease = () => {
         error: serializeError(error)
       }, false);
       if (consecutiveFailures >= 3) {
-        // Continuing without a shared heartbeat would allow another machine to
-        // treat this client as stale and mutate node_modules/compiled underneath
-        // it. Fail closed instead of risking corruption.
         process.exit(1);
       }
     }
   }, 5000);
   timer.unref();
 
-  runtimeLease = { id, directory, heartbeat, timer };
+  runtimeLease = { id, directory, ownerPath, heartbeat, timer };
   process.once('exit', releaseRuntimeLease);
 
   appendRuntimeDiagnostic('runtime-lease-acquired', {
@@ -174,10 +181,6 @@ export const installRuntimeDiagnostics = () => {
     return diagnosticPath;
   }
 
-  // When the managed launcher supplied an exact file, failure to write the very
-  // first event is a launch failure, not something to hide. This makes the
-  // health contract deterministic while retaining best-effort logging for raw
-  // developer launches that do not provide WADDLE_RUNTIME_DIAGNOSTIC_LOG.
   appendRuntimeDiagnostic('main-process-boot', {
     electron: process.versions.electron ?? null,
     chromium: process.versions.chrome ?? null,
@@ -201,8 +204,6 @@ export const installRuntimeDiagnostics = () => {
 
   process.on('uncaughtException', error => {
     writeRuntimeDiagnostic('uncaught-exception', serializeError(error));
-    // Continuing after an uncaught exception can leave the embedded server and
-    // Flash runtime in a corrupt state. Preserve evidence and fail explicitly.
     process.exit(1);
   });
 
@@ -210,9 +211,6 @@ export const installRuntimeDiagnostics = () => {
   return diagnosticPath;
 };
 
-// main.ts imports this module before every project dependency. Initializing at
-// module evaluation time ensures we can observe failures or stalls that happen
-// while later CommonJS imports are being evaluated, before main.ts body runs.
 export const runtimeDiagnosticPath = installRuntimeDiagnostics();
 
 export const instrumentRuntimeWindow = (window: BrowserWindow, label: string) => {
