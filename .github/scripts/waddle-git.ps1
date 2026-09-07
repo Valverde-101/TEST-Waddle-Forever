@@ -8,11 +8,22 @@ function Invoke-WaddleGitHeadProbe {
     [Parameter(Mandatory)][string]$RepoRoot
   )
 
+  # Windows PowerShell 5.1 promotes native stderr to NativeCommandError when the
+  # caller uses ErrorActionPreference=Stop. A Git ownership rejection is an
+  # expected diagnostic probe here, so capture its combined stream and classify
+  # by LASTEXITCODE instead of letting PowerShell terminate before recovery.
   $lines = New-Object System.Collections.Generic.List[string]
-  & $GitPath -C $RepoRoot rev-parse HEAD 2>&1 | ForEach-Object {
-    $lines.Add([string]$_)
+  $savedErrorActionPreference = $ErrorActionPreference
+  $exitCode = 1
+  try {
+    $ErrorActionPreference = 'Continue'
+    & $GitPath -C $RepoRoot rev-parse HEAD 2>&1 | ForEach-Object {
+      $lines.Add([string]$_)
+    }
+    $exitCode = $LASTEXITCODE
+  } finally {
+    $ErrorActionPreference = $savedErrorActionPreference
   }
-  $exitCode = $LASTEXITCODE
   $text = ($lines -join "`n").Trim()
 
   [pscustomobject]@{
