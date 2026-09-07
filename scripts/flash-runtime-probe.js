@@ -82,7 +82,7 @@ app.commandLine.appendSwitch('ppapi-flash-version', pluginVersion);
 
 const timeout = setTimeout(() => fail('timeout'), 20000);
 
-a ppReady = app.whenReady().then(async () => {
+const appReady = app.whenReady().then(async () => {
   const configuredPath = app.commandLine.getSwitchValue('ppapi-flash-path');
   const configuredVersion = app.commandLine.getSwitchValue('ppapi-flash-version');
   if (path.resolve(configuredPath) !== pluginPath) {
@@ -170,4 +170,4 @@ a ppReady = app.whenReady().then(async () => {
   fail('probe_exception', { error: error && error.stack ? error.stack : String(error) });
 });
 
-void a ppReady;
+void appReady;
