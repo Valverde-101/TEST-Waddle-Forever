@@ -14,8 +14,9 @@ env:
   WADDLE_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
 # One automatic certification owns the canonical workspace. A newer SHA for the
-# same PR/ref supersedes an obsolete run; all functional gates live inside this
-# single job, so no sibling validation can be cancelled accidentally.
+# same PR/ref supersedes an obsolete run. The 15-minute outer watchdog prevents
+# any unexpected Windows child-process regression from monopolizing a self-hosted
+# runner; inner Setup/Flash/Stop gates have tighter phase-specific timeouts.
 concurrency:
   group: waddle-certification-${{ github.event.pull_request.number || github.ref_name }}
   cancel-in-progress: true
@@ -23,7 +24,7 @@ concurrency:
 jobs:
   certify:
     runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
-    timeout-minutes: 300
+    timeout-minutes: 15
 
     steps:
       - name: Resolve AndroidBuild Core and synchronize exact Waddle SHA
@@ -67,7 +68,7 @@ jobs:
           "WADDLE_CANONICAL_REPO=$repo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "WADDLE_CERT_SYNC=PASS repo=$repo sha=$($sync.actual_sha) core=$version"
 
-      - name: Sanitize inherited Waddle clients before Yarn
+      - name: Sanitize inherited Waddle clients before dependency setup
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
@@ -113,8 +114,12 @@ jobs:
             'state\waddle-client.json',
             'state\waddle-build-summary.json',
             'state\runtime-snapshot.json',
+            'logs\certification\setup.stdout.log',
+            'logs\certification\setup.stderr.log',
             'logs\certification\flash-runtime-probe.stdout.log',
             'logs\certification\flash-runtime-probe.stderr.log',
+            'logs\certification\stop.stdout.log',
+            'logs\certification\stop.stderr.log',
             'logs\launcher\setup-last.log',
             'logs\launcher\start-last.log',
             'logs\launcher\stop-last.log'
