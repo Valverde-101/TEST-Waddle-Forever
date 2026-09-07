@@ -47,3 +47,13 @@ if (-not (Test-Path -LiteralPath $repoDependencies -PathType Leaf)) {
 }
 . $repoDependencies
 Write-Host "WADDLE_REPO_DEPENDENCIES=PASS layout=repo_physical script=$repoDependencies"
+
+# Cross-machine lease policy is loaded after dependency helpers because it can
+# determine whether a dependency mutation is actually required. This protects
+# the shared repo on SMB without preventing multiple read-only clients.
+$runtimeLeases = Join-Path $PSScriptRoot 'waddle-runtime-leases.ps1'
+if (-not (Test-Path -LiteralPath $runtimeLeases -PathType Leaf)) {
+  throw "WADDLE_RUNTIME_LEASES=FAIL missing=$runtimeLeases"
+}
+. $runtimeLeases
+Write-Host "WADDLE_RUNTIME_LEASES=PASS mode=cross_machine_multi_client script=$runtimeLeases"
