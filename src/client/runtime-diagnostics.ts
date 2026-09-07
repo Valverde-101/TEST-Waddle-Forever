@@ -1,8 +1,9 @@
 import fs from 'fs';
 import path from 'path';
-import { BrowserWindow } from 'electron';
+import type { BrowserWindow } from 'electron';
 
 const runtimeLogDirectory = path.join(process.cwd(), '.work', 'logs', 'runtime');
+const explicitDiagnosticPath = process.env.WADDLE_RUNTIME_DIAGNOSTIC_LOG?.trim();
 
 const getLatestLauncherStderr = (): string | undefined => {
   try {
@@ -35,7 +36,7 @@ const getLatestLauncherStderr = (): string | undefined => {
   }
 };
 
-const diagnosticPath = process.env.WADDLE_RUNTIME_DIAGNOSTIC_LOG
+const diagnosticPath = explicitDiagnosticPath
   || getLatestLauncherStderr()
   || path.join(runtimeLogDirectory, 'application-errors.log');
 
@@ -51,7 +52,11 @@ const serializeError = (value: unknown) => {
   return { value: String(value) };
 };
 
-export const writeRuntimeDiagnostic = (event: string, detail: Record<string, unknown> = {}) => {
+const appendRuntimeDiagnostic = (
+  event: string,
+  detail: Record<string, unknown>,
+  strict: boolean
+) => {
   try {
     fs.mkdirSync(path.dirname(diagnosticPath), { recursive: true });
     fs.appendFileSync(diagnosticPath, `${JSON.stringify({
@@ -61,18 +66,36 @@ export const writeRuntimeDiagnostic = (event: string, detail: Record<string, unk
       pid: process.pid,
       ...detail
     })}\n`, 'utf8');
-  } catch {
-    // Diagnostics must never create a second failure while reporting the first.
+  } catch (error) {
+    if (strict) {
+      const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      throw new Error(`WADDLE_RUNTIME_DIAGNOSTIC_WRITE=FAIL path=${diagnosticPath} error=${message}`);
+    }
   }
 };
 
+export const writeRuntimeDiagnostic = (event: string, detail: Record<string, unknown> = {}) => {
+  appendRuntimeDiagnostic(event, detail, false);
+};
+
+let diagnosticsInstalled = false;
+
 export const installRuntimeDiagnostics = () => {
-  writeRuntimeDiagnostic('main-process-boot', {
+  if (diagnosticsInstalled) {
+    return diagnosticPath;
+  }
+
+  // When the managed launcher supplied an exact file, failure to write the very
+  // first event is a launch failure, not something to hide. This makes the
+  // health contract deterministic while retaining best-effort logging for raw
+  // developer launches that do not provide WADDLE_RUNTIME_DIAGNOSTIC_LOG.
+  appendRuntimeDiagnostic('main-process-boot', {
     electron: process.versions.electron ?? null,
     chromium: process.versions.chrome ?? null,
     node: process.versions.node,
-    cwd: process.cwd()
-  });
+    cwd: process.cwd(),
+    explicitPath: Boolean(explicitDiagnosticPath)
+  }, Boolean(explicitDiagnosticPath));
 
   process.on('unhandledRejection', reason => {
     writeRuntimeDiagnostic('unhandled-rejection', serializeError(reason));
@@ -85,8 +108,14 @@ export const installRuntimeDiagnostics = () => {
     process.exit(1);
   });
 
+  diagnosticsInstalled = true;
   return diagnosticPath;
 };
+
+// main.ts imports this module before every project dependency. Initializing at
+// module evaluation time ensures we can observe failures or stalls that happen
+// while later CommonJS imports are being evaluated, before main.ts body runs.
+export const runtimeDiagnosticPath = installRuntimeDiagnostics();
 
 export const instrumentRuntimeWindow = (window: BrowserWindow, label: string) => {
   writeRuntimeDiagnostic('window-created', { label });
