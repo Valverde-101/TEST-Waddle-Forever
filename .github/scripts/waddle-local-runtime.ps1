@@ -93,6 +93,100 @@ function Install-WaddleDependencies {
   }
 }
 
+function Test-WaddleElectronRuntime {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory)][string]$WorkRoot,
+    [Parameter(Mandatory)][string]$ExpectedVersion,
+    [int]$ProbeTimeoutMilliseconds = 10000
+  )
+
+  $modules = [IO.Path]::GetFullPath((Join-Path $WorkRoot 'dependencies\node_modules'))
+  $manifestPath = Join-Path $modules 'electron\package.json'
+  $electronExe = [IO.Path]::GetFullPath((Join-Path $modules 'electron\dist\electron.exe'))
+
+  if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+    throw "WADDLE_ELECTRON_RUNTIME=FAIL manifest_missing=$manifestPath"
+  }
+  $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+  $manifestVersion = [string]$manifest.version
+  if ([string]::IsNullOrWhiteSpace($manifestVersion)) {
+    throw "WADDLE_ELECTRON_RUNTIME=FAIL manifest_version_empty=$manifestPath"
+  }
+  if ($manifestVersion -ne $ExpectedVersion) {
+    throw "WADDLE_ELECTRON_RUNTIME=FAIL manifest_version_mismatch expected=$ExpectedVersion actual=$manifestVersion manifest=$manifestPath"
+  }
+  if (-not $manifestVersion.StartsWith('10.')) {
+    throw "WADDLE_ELECTRON_RUNTIME=FAIL legacy_contract expected_major=10 actual=$manifestVersion"
+  }
+  if (-not (Test-Path -LiteralPath $electronExe -PathType Leaf)) {
+    throw "WADDLE_ELECTRON_RUNTIME=FAIL executable_missing=$electronExe"
+  }
+
+  $item = Get-Item -LiteralPath $electronExe -Force
+  if ($item.Length -lt 1048576) {
+    throw "WADDLE_ELECTRON_RUNTIME=FAIL suspicious_size=$($item.Length) executable=$electronExe"
+  }
+
+  # Verify the executable is actually a PE image, without reading the entire
+  # Electron binary into memory.
+  $stream = [IO.File]::Open($electronExe,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::ReadWrite)
+  try {
+    $mz0 = $stream.ReadByte()
+    $mz1 = $stream.ReadByte()
+  } finally {
+    $stream.Dispose()
+  }
+  if ($mz0 -ne 0x4D -or $mz1 -ne 0x5A) {
+    throw "WADDLE_ELECTRON_RUNTIME=FAIL invalid_pe_signature executable=$electronExe"
+  }
+
+  # Do not use `electron.exe --version` as a health gate: Electron 10 is a GUI
+  # subsystem executable and service-hosted PowerShell does not reliably receive
+  # its stdout. Instead run the exact packaged executable directly in
+  # ELECTRON_RUN_AS_NODE mode and require a clean process exit. This validates
+  # Windows process creation from the mapped repository without cmd.exe or the
+  # node_modules\.bin\electron.cmd shim.
+  $previousRunAsNode = [Environment]::GetEnvironmentVariable('ELECTRON_RUN_AS_NODE','Process')
+  $probe = $null
+  try {
+    [Environment]::SetEnvironmentVariable('ELECTRON_RUN_AS_NODE','1','Process')
+    $probe = Start-Process -FilePath $electronExe -ArgumentList @('-e','process.exit(0)') -WorkingDirectory (Split-Path -Parent $electronExe) -PassThru
+    if (-not $probe.WaitForExit($ProbeTimeoutMilliseconds)) {
+      try { $probe.Kill() } catch {}
+      throw "WADDLE_ELECTRON_RUNTIME=FAIL probe_timeout_ms=$ProbeTimeoutMilliseconds executable=$electronExe"
+    }
+    $probe.Refresh()
+    if ($probe.ExitCode -ne 0) {
+      throw "WADDLE_ELECTRON_RUNTIME=FAIL probe_exit=$($probe.ExitCode) executable=$electronExe mode=run_as_node"
+    }
+  } catch {
+    if ($_.Exception.Message -like 'WADDLE_ELECTRON_RUNTIME=FAIL*') { throw }
+    throw "WADDLE_ELECTRON_RUNTIME=FAIL process_start executable=$electronExe error=$($_.Exception.Message)"
+  } finally {
+    if ($null -eq $previousRunAsNode) {
+      Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
+    } else {
+      [Environment]::SetEnvironmentVariable('ELECTRON_RUN_AS_NODE',$previousRunAsNode,'Process')
+    }
+    if ($probe) { $probe.Dispose() }
+  }
+
+  $productVersion = [string]$item.VersionInfo.ProductVersion
+  $fileVersion = [string]$item.VersionInfo.FileVersion
+  Write-Host "WADDLE_ELECTRON_RUNTIME=PASS version=$manifestVersion executable=$electronExe size=$($item.Length) pe=MZ direct_process_probe=PASS launch_mode=direct_exe product_version=$productVersion file_version=$fileVersion"
+  [pscustomobject]@{
+    status = 'PASS'
+    version = $manifestVersion
+    executable = $electronExe
+    size = [int64]$item.Length
+    product_version = $productVersion
+    file_version = $fileVersion
+    launch_mode = 'direct_exe'
+    direct_process_probe = 'PASS'
+  }
+}
+
 function Get-WaddlePepperFlashPath {
   param([Parameter(Mandatory)][string]$RepoRoot)
 

@@ -30,9 +30,7 @@ $dependencies = Invoke-WaddleDependencyBootstrap -RepoRoot $repo -WorkRoot $work
 Test-WaddlePepperFlash -RepoRoot $repo | Out-Null
 
 # The launcher lives in the repository root. Heavy/generated state remains under
-# .work by design and is surfaced back at the root through junctions. This keeps
-# exact-source syncs clean while the root launcher still sees node_modules,
-# compiled and dist as normal project paths.
+# .work by design and is surfaced back at the root through junctions.
 Write-Host "WADDLE_LAYOUT=PASS launcher_root=$repo mutable_root=$($workspace.work_root) node_modules=repo_junction swf_analysis=.work\swf-analysis"
 
 $gitState = $null
@@ -53,15 +51,19 @@ try {
       -LeaseWaitSeconds 1200 | Out-Host
   }
 } finally {
-  # Ownership trust is process-scoped only. Never leave a global safe.directory
-  # exception behind on the user's Git installation.
   Restore-WaddleGitSafeDirectoryScope -State $gitState
 }
 
 $entry = Join-Path $repo 'compiled\client\main.js'
-$electron = Join-Path $workspace.work_root 'dependencies\node_modules\.bin\electron.cmd'
 if (-not (Test-Path -LiteralPath $entry -PathType Leaf)) { throw "WADDLE_START=FAIL compiled_entry_missing=$entry" }
-if (-not (Test-Path -LiteralPath $electron -PathType Leaf)) { throw "WADDLE_START=FAIL electron_missing=$electron run=Waddle-Setup.cmd" }
+
+# Validate the packaged runtime itself and its direct Windows process-creation
+# path. This deliberately avoids `.bin\electron.cmd`, `cmd.exe /s /c`, and their
+# mapped-drive quoting/canonicalization behavior.
+$electronRuntime = Test-WaddleElectronRuntime -WorkRoot $workspace.work_root -ExpectedVersion $dependencies.electron
+$electron = $electronRuntime.executable
+Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_ELECTRON_EXE' -Value $electron
+[Environment]::SetEnvironmentVariable('WADDLE_ELECTRON_EXE',$electron,'Process')
 
 $flash = Test-WaddlePepperFlash -RepoRoot $repo
 $runtimeLogs = Join-Path $workspace.work_root 'logs\runtime'
@@ -72,8 +74,15 @@ $stderr = Join-Path $runtimeLogs "client-$stamp.stderr.log"
 $statePath = Join-Path $workspace.work_root 'state\waddle-client.json'
 
 $env:NODE_ENV = 'dev'
-$command = "`"$electron`" `"$entry`""
-$process = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d','/s','/c',$command) -WorkingDirectory $repo -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+# A stale host variable would turn the desktop app back into Node mode. Never
+# inherit it into the real Waddle client process.
+Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
+$entryArgument = '"' + $entry + '"'
+try {
+  $process = Start-Process -FilePath $electron -ArgumentList $entryArgument -WorkingDirectory $repo -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+} catch {
+  throw "WADDLE_START=FAIL process_create executable=$electron entry=$entry error=$($_.Exception.Message)"
+}
 Start-Sleep -Seconds 3
 $process.Refresh()
 if ($process.HasExited) {
@@ -82,7 +91,7 @@ if ($process.HasExited) {
 }
 
 $state = [ordered]@{
-  schema = 'waddle-client-state/v3'
+  schema = 'waddle-client-state/v4'
   status = 'RUNNING'
   pid = $process.Id
   source_sha = $sha
@@ -90,7 +99,10 @@ $state = [ordered]@{
   work_root = $workspace.work_root
   managed_node_home = $managedNode.home
   managed_node_exe = $managedNode.node
-  electron = $electron
+  electron_executable = $electron
+  electron_version = $electronRuntime.version
+  electron_launch_mode = 'direct_exe'
+  electron_direct_process_probe = $electronRuntime.direct_process_probe
   dependency_mode = $dependencies.mode
   ppapi_flash_path = $flash.path
   ppapi_flash_version = $flash.version
@@ -101,7 +113,7 @@ $state = [ordered]@{
 }
 $state | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $statePath -Encoding UTF8
 
-Write-Host "WADDLE_START=PASS pid=$($process.Id) sha=$sha node=$($managedNode.node) dependencies=$($dependencies.mode)"
+Write-Host "WADDLE_START=PASS pid=$($process.Id) sha=$sha node=$($managedNode.node) electron=$($electronRuntime.version) launch_mode=direct_exe dependencies=$($dependencies.mode)"
 Write-Host "WADDLE_PPAPI_FLASH=PASS path=$($flash.path) version=$($flash.version)"
 Write-Host 'WADDLE_VISUAL_STUDIO=NOT_REQUIRED'
 Write-Host "WADDLE_RUNTIME_STDOUT=$stdout"

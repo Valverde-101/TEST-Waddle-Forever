@@ -26,13 +26,17 @@ Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_YARN_CMD' -Value $managedNode.ya
 Import-WaddleLocalEnv -Path $envPath
 $dependencies = Invoke-WaddleDependencyBootstrap -RepoRoot $repo -WorkRoot $workspace.work_root
 $flash = Test-WaddlePepperFlash -RepoRoot $repo
+$electronRuntime = Test-WaddleElectronRuntime -WorkRoot $workspace.work_root -ExpectedVersion $dependencies.electron
+Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_ELECTRON_EXE' -Value $electronRuntime.executable
+[Environment]::SetEnvironmentVariable('WADDLE_ELECTRON_EXE',$electronRuntime.executable,'Process')
 
 Write-Host "WADDLE_BOOTSTRAP=PASS repo=$repo work=$($workspace.work_root)"
 Write-Host "WADDLE_NODE=$($toolchain.node)"
 Write-Host "WADDLE_NODE_HOME=$($managedNode.home)"
 Write-Host "WADDLE_YARN=$($toolchain.yarn)"
 Write-Host "WADDLE_FFDEC=$($toolchain.ffdec)"
-Write-Host "WADDLE_ELECTRON=$($dependencies.electron)"
+Write-Host "WADDLE_ELECTRON=$($electronRuntime.version)"
+Write-Host "WADDLE_ELECTRON_EXE=$($electronRuntime.executable)"
 Write-Host "WADDLE_DEPENDENCY_MODE=$($dependencies.mode)"
 Write-Host "WADDLE_FLASH=$($flash.path)"
 Write-Host 'WADDLE_VISUAL_STUDIO=NOT_REQUIRED'
