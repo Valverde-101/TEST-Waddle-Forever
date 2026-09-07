@@ -74,7 +74,7 @@ export default class PuffleLaunchGameSet extends DataSet {
 
     let level = 0;
     while (level < 36) {
-      let block = [];
+      const block = [];
       for (let i = 0; i < 16 && level < 36; i++) {
         block.push(turboStatuses[level] ?? false);
         level++;
