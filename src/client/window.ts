@@ -14,8 +14,8 @@ export const toggleFullScreen = (store: Store, mainWindow: BrowserWindow) => {
   mainWindow.setFullScreen(fullScreen);
 };
 
-export const loadMain = (window: BrowserWindow, settings: GlobalSettings, serverSettings: SettingsManager) => {
-  window.loadURL(getSiteUrl(settings, serverSettings));
+export const loadMain = async (window: BrowserWindow, settings: GlobalSettings, serverSettings: SettingsManager): Promise<void> => {
+  await window.loadURL(getSiteUrl(settings, serverSettings));
 }
 
 interface FiveIconByPlatforms {
@@ -58,10 +58,14 @@ const createWindow = async (store: Store, clientSettings: GlobalSettings, server
   
   mainWindow.setMenu(null);
   mainWindow.maximize();
-  
-  checkUpdates(mainWindow, serverSettings);
 
-  loadMain(mainWindow, clientSettings, serverSettings);
+  // Update discovery is advisory. Network/API cleanup errors must never become
+  // an unhandled rejection that destabilizes an otherwise fully offline boot.
+  void checkUpdates(mainWindow, serverSettings).catch(error => {
+    console.warn('Update check failed:', error);
+  });
+
+  await loadMain(mainWindow, clientSettings, serverSettings);
 
   // Only the exact Waddle server origin is allowed to navigate inside the
   // privileged Electron window. The previous substring check required a URL to
