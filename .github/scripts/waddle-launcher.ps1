@@ -44,6 +44,14 @@ function Write-WaddleLauncherLine {
   Write-Host $Text -ForegroundColor $Color
 }
 
+$operationLock = $null
+function Close-WaddleLauncherOperationLock {
+  if ($null -ne $script:operationLock) {
+    try { $script:operationLock.Dispose() } catch {}
+    $script:operationLock = $null
+  }
+}
+
 if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
   $message = "WADDLE_LAUNCHER=FAIL action=$Action reason=target_missing path=$target"
   Set-Content -LiteralPath $runLog -Value $message -Encoding UTF8
@@ -62,6 +70,37 @@ Set-Content -LiteralPath $runLog -Value @(
 Write-Host "WADDLE_LAUNCHER=START action=$Action repo=$repo"
 Write-Host "WADDLE_LAUNCHER_LOG=$runLog"
 Write-Host "WADDLE_SKIP_BUILD=$([bool]$SkipBuild)"
+
+# Setup and Start both mutate the same compiled/dependency/runtime state. A second
+# launch must never race the first one: the old behavior produced short partial
+# logs that looked like unexplained crashes when users retried while an operation
+# was still running. FileShare.None gives us a process-scoped lock that Windows
+# releases automatically even if the owning console is terminated.
+if ($Action -ne 'stop') {
+  $stateDir = Join-Path $repo '.work\state'
+  New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
+  $operationLockPath = Join-Path $stateDir 'launcher-operation.lock'
+  try {
+    $operationLock = [IO.File]::Open(
+      $operationLockPath,
+      [IO.FileMode]::OpenOrCreate,
+      [IO.FileAccess]::ReadWrite,
+      [IO.FileShare]::None
+    )
+    $operationLock.SetLength(0)
+    $lockText = "pid=$PID action=$Action started_utc=$([DateTime]::UtcNow.ToString('o'))"
+    $lockBytes = [Text.Encoding]::UTF8.GetBytes($lockText)
+    $operationLock.Write($lockBytes,0,$lockBytes.Length)
+    $operationLock.Flush()
+    Write-WaddleLauncherLine -Text "WADDLE_OPERATION_LOCK=PASS action=$Action pid=$PID path=$operationLockPath" -Color DarkGreen
+  } catch {
+    $message = "WADDLE_LAUNCHER=BUSY action=$Action reason=setup_or_start_already_running lock=$operationLockPath"
+    Write-WaddleLauncherLine -Text $message -Color Yellow
+    try { Copy-Item -LiteralPath $runLog -Destination $lastLog -Force } catch {}
+    Write-Host 'Close the other Waddle Setup/Start window or let it finish before retrying.' -ForegroundColor Yellow
+    exit 2
+  }
+}
 
 $exitCode = 0
 $failureMessage = $null
@@ -109,6 +148,8 @@ try {
 } catch {
   Write-Host "WADDLE_LAUNCHER_LOG_COPY_WARN action=$Action error=$($_.Exception.Message)" -ForegroundColor Yellow
 }
+
+Close-WaddleLauncherOperationLock
 
 if ($exitCode -ne 0) {
   Write-Host ''
