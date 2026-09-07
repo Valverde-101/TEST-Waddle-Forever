@@ -2,7 +2,7 @@
 setlocal EnableExtensions
 cd /d "%~dp0"
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".github\scripts\waddle-launcher.ps1" -Action start
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".github\scripts\waddle-smart-start.ps1"
 set "WADDLE_EXIT=%ERRORLEVEL%"
 if "%WADDLE_EXIT%"=="0" exit /b 0
 
