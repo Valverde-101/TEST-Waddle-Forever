@@ -105,65 +105,74 @@ function Start-WaddleDetachedElectron {
     [Parameter(Mandatory)][string]$Stderr
   )
 
-  $existing = @{}
-  foreach ($candidate in @(Get-CimInstance Win32_Process -Filter "Name='electron.exe'" -ErrorAction SilentlyContinue)) {
-    $exe = [string]$candidate.ExecutablePath
-    $cmd = [string]$candidate.CommandLine
-    if ([string]::IsNullOrWhiteSpace($exe)) { continue }
-    try {
-      if ([IO.Path]::GetFullPath($exe) -ieq [IO.Path]::GetFullPath($Electron) -and $cmd -like ('*' + $Entry + '*')) {
-        $existing[[int]$candidate.ProcessId] = $true
-      }
-    } catch {}
+  # Launch the real Electron executable directly. cmd.exe `start /b` keeps its
+  # console/redirection chain attached to the self-hosted Actions PowerShell and
+  # can therefore wait for Electron indefinitely even though Electron is alive.
+  # Start-Process creates the process and returns its PID immediately while still
+  # letting us redirect logs and validate the exact executable/entry point.
+  $launchWatch = [Diagnostics.Stopwatch]::StartNew()
+  $started = $null
+  try {
+    $started = Start-Process `
+      -FilePath $Electron `
+      -ArgumentList @($Entry) `
+      -WorkingDirectory $WorkingDirectory `
+      -RedirectStandardOutput $Stdout `
+      -RedirectStandardError $Stderr `
+      -PassThru `
+      -ErrorAction Stop
+  } catch {
+    throw "WADDLE_START=FAIL process_start executable=$Electron entry=$Entry error=$($_.Exception.Message)"
   }
 
-  $escapedElectron = $Electron.Replace('"','""')
-  $escapedEntry = $Entry.Replace('"','""')
-  $escapedStdout = $Stdout.Replace('"','""')
-  $escapedStderr = $Stderr.Replace('"','""')
-  $launch = 'start "" /b "' + $escapedElectron + '" "' + $escapedEntry + '" 1>>"' + $escapedStdout + '" 2>>"' + $escapedStderr + '"'
-  $launchWatch = [Diagnostics.Stopwatch]::StartNew()
-  Push-Location $WorkingDirectory
-  try {
-    & cmd.exe /d /s /c $launch
-    $launchExit = $LASTEXITCODE
-  } finally {
-    Pop-Location
-  }
-  $global:LASTEXITCODE = 0
-  if ($launchExit -ne 0) {
-    throw "WADDLE_START=FAIL detached_launcher_exit=$launchExit executable=$Electron entry=$Entry"
+  if (-not $started -or $started.Id -le 0) {
+    throw "WADDLE_START=FAIL process_id_missing executable=$Electron entry=$Entry"
   }
 
   $deadline = [DateTime]::UtcNow.AddSeconds(20)
-  $found = $null
+  $process = $null
+  $cim = $null
   do {
     Start-Sleep -Milliseconds 250
-    $matches = @(Get-CimInstance Win32_Process -Filter "Name='electron.exe'" -ErrorAction SilentlyContinue | Where-Object {
-      $candidateProcessId = [int]$_.ProcessId
-      if ($existing.ContainsKey($candidateProcessId)) { return $false }
-      $exe = [string]$_.ExecutablePath
-      $cmd = [string]$_.CommandLine
-      if ([string]::IsNullOrWhiteSpace($exe)) { return $false }
-      try {
-        return ([IO.Path]::GetFullPath($exe) -ieq [IO.Path]::GetFullPath($Electron)) -and $cmd -like ('*' + $Entry + '*')
-      } catch { return $false }
-    } | Sort-Object CreationDate -Descending)
-    if ($matches.Count -gt 0) { $found = $matches[0]; break }
+    $process = Get-Process -Id $started.Id -ErrorAction SilentlyContinue
+    if (-not $process) { break }
+    try {
+      $process.Refresh()
+      if ($process.HasExited) { break }
+      $cim = Get-CimInstance Win32_Process -Filter "ProcessId=$($started.Id)" -ErrorAction SilentlyContinue
+      if ($cim) {
+        $actualExe = [string]$cim.ExecutablePath
+        $commandLine = [string]$cim.CommandLine
+        if (-not [string]::IsNullOrWhiteSpace($actualExe) -and
+            [IO.Path]::GetFullPath($actualExe) -ieq [IO.Path]::GetFullPath($Electron) -and
+            $commandLine -like ('*' + $Entry + '*')) {
+          break
+        }
+      }
+    } catch {
+      $cim = $null
+    }
   } while ([DateTime]::UtcNow -lt $deadline)
 
-  if (-not $found) {
+  if (-not $process -or $process.HasExited -or -not $cim) {
     $tail = if (Test-Path -LiteralPath $Stderr) { (Get-Content -LiteralPath $Stderr -Tail 40 -ErrorAction SilentlyContinue) -join ' | ' } else { '' }
-    throw "WADDLE_START=FAIL detached_process_not_found executable=$Electron entry=$Entry stderr=$tail"
+    throw "WADDLE_START=FAIL process_not_stable process_id=$($started.Id) executable=$Electron entry=$Entry stderr=$tail"
   }
 
-  $process = Get-Process -Id ([int]$found.ProcessId) -ErrorAction Stop
+  $actualExe = [string]$cim.ExecutablePath
+  $commandLine = [string]$cim.CommandLine
+  if ([IO.Path]::GetFullPath($actualExe) -ine [IO.Path]::GetFullPath($Electron) -or $commandLine -notlike ('*' + $Entry + '*')) {
+    try { Stop-WaddleProcessTree -ProcessId $started.Id -Reason 'unexpected_started_process' | Out-Null } catch {}
+    throw "WADDLE_START=FAIL process_identity process_id=$($started.Id) executable=$actualExe expected=$Electron command_line=$commandLine entry=$Entry"
+  }
+
   Start-Sleep -Seconds 3
   $process.Refresh()
   if ($process.HasExited) {
     $tail = if (Test-Path -LiteralPath $Stderr) { (Get-Content -LiteralPath $Stderr -Tail 40 -ErrorAction SilentlyContinue) -join ' | ' } else { '' }
     throw "WADDLE_START=FAIL process_exited code=$($process.ExitCode) stderr=$tail"
   }
+
   $launchWatch.Stop()
   return [pscustomobject]@{ process=$process; return_ms=$launchWatch.ElapsedMilliseconds }
 }
@@ -255,7 +264,7 @@ try {
   $launch = Start-WaddleDetachedElectron -Electron $electron -Entry $entry -WorkingDirectory $repo -Stdout $stdout -Stderr $stderr
   $process = $launch.process
   $state = [ordered]@{
-    schema = 'waddle-client-state/v8'
+    schema = 'waddle-client-state/v9'
     status = 'RUNNING'
     platform = 'windows-x64'
     pid = $process.Id
@@ -277,7 +286,7 @@ try {
     electron_source_executable = $sourceElectron.executable
     electron_executable = $electron
     electron_version = $sourceElectron.version
-    electron_launch_mode = 'external_runtime_detached_cmd_start'
+    electron_launch_mode = 'external_runtime_start_process'
     launcher_return_ms = [int64]$launch.return_ms
     ppapi_flash_source_path = $sourceFlash.path
     ppapi_flash_path = $flashPath
@@ -295,7 +304,7 @@ try {
   throw
 }
 
-Write-Host "WADDLE_START=PASS process_id=$($process.Id) sha=$sha platform=windows-x64 node=$($managedNode.node) electron=$($sourceElectron.version) launch_mode=external_runtime_detached_cmd_start launcher_return_ms=$($launch.return_ms) runtime=$runtimeRoot work_execution=false dependencies=$($dependencies.mode)"
+Write-Host "WADDLE_START=PASS process_id=$($process.Id) sha=$sha platform=windows-x64 node=$($managedNode.node) electron=$($sourceElectron.version) launch_mode=external_runtime_start_process launcher_return_ms=$($launch.return_ms) runtime=$runtimeRoot work_execution=false dependencies=$($dependencies.mode)"
 Write-Host "WADDLE_PPAPI_FLASH=PASS path=$flashPath version=$($runtime.ppapi_flash_version) source=$($sourceFlash.path)"
 Write-Host 'WADDLE_VISUAL_STUDIO=NOT_REQUIRED'
 Write-Host "WADDLE_RUNTIME_STDOUT=$stdout"
