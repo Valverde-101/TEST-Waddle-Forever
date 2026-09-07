@@ -1,3 +1,4 @@
+import { instrumentRuntimeWindow, runtimeDiagnosticPath, writeRuntimeDiagnostic } from './runtime-diagnostics';
 import '@common/runtime-node-path';
 import path from 'path'
 
@@ -18,13 +19,11 @@ import { Popups } from './popups';
 import { WEBSITE } from '@common/website';
 import { WorldServer } from '@server/socket-server/world-server';
 import { startMods, startServices } from '@server/boot';
-import { installRuntimeDiagnostics, instrumentRuntimeWindow, writeRuntimeDiagnostic } from './runtime-diagnostics';
 
 log.initialize();
 
 console.log = log.log;
 
-const runtimeDiagnosticPath = installRuntimeDiagnostics();
 writeRuntimeDiagnostic('diagnostics-ready', { path: runtimeDiagnosticPath });
 
 const store = createStore();
@@ -234,7 +233,7 @@ app.on('window-all-closed', async () => {
 
 app.on('activate', async () => {
   // On macOS it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
+  // dock icon is clicked and there are no windows open.
   if (BrowserWindow.getAllWindows().length === 0) {
     mainWindow = await createWindow(store, globalSettings, settingsManager);
     instrumentRuntimeWindow(mainWindow, 'main-reactivated');
