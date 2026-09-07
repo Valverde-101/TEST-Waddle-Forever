@@ -53,6 +53,16 @@ function Get-ReferenceData {
   [pscustomobject]@{ urls=@($urls | Sort-Object); swf_refs=@($swfs | Sort-Object); protocols=@($protocols | Sort-Object) }
 }
 
+function Test-CurrentCacheItem {
+  param([object]$Item)
+  if ($null -eq $Item) { return $false }
+  $schemaProperty = $Item.PSObject.Properties['schema']
+  $statusProperty = $Item.PSObject.Properties['status']
+  if ($null -eq $schemaProperty -or $null -eq $statusProperty) { return $false }
+  if ([string]$schemaProperty.Value -ne 'waddle-swf-analysis-item/v2') { return $false }
+  return [string]$statusProperty.Value -eq 'ANALYZED'
+}
+
 function Invoke-FFDecDump {
   param(
     [Parameter(Mandatory)][string]$FFDec,
@@ -72,7 +82,7 @@ function Invoke-FFDecDump {
     return [pscustomobject]@{ status='TIMEOUT'; exit=-1; output=$OutFile; error=$ErrFile }
   }
   $proc.Refresh()
-  [pscustomobject]@{ status=$(if ($proc.ExitCode -eq 0) {'PASS'} else {'FAIL'}); exit=[int]$proc.ExitCode; output=$OutFile; error=$ErrFile }
+  return [pscustomobject]@{ status=$(if ($proc.ExitCode -eq 0) {'PASS'} else {'FAIL'}); exit=[int]$proc.ExitCode; output=$OutFile; error=$ErrFile }
 }
 
 if (-not $FFDecPath) {
@@ -109,13 +119,23 @@ $allUrls = New-Object 'System.Collections.Generic.HashSet[string]' -ArgumentList
 $allProtocols = New-Object 'System.Collections.Generic.HashSet[string]' -ArgumentList ([StringComparer]::OrdinalIgnoreCase)
 $edges = New-Object System.Collections.Generic.List[object]
 $missing = New-Object System.Collections.Generic.List[object]
+$staleCacheCount = 0
 
 foreach ($item in $inventory) {
   $cachePath = Join-Path $cacheRoot ($item.sha256 + '.json')
   $deep = $selectedHashes -contains $item.sha256
   $analysis = $null
   if (Test-Path -LiteralPath $cachePath -PathType Leaf) {
-    try { $analysis = Get-Content -LiteralPath $cachePath -Raw | ConvertFrom-Json } catch { $analysis = $null }
+    try {
+      $candidate = Get-Content -LiteralPath $cachePath -Raw | ConvertFrom-Json
+      if (Test-CurrentCacheItem -Item $candidate) {
+        $analysis = $candidate
+      } else {
+        $staleCacheCount++
+      }
+    } catch {
+      $staleCacheCount++
+    }
   }
 
   if ($deep) {
@@ -126,8 +146,13 @@ foreach ($item in $inventory) {
     foreach ($kind in @('AS2','AS3')) {
       $prefix = Join-Path $dumpRoot ($item.sha256 + '.' + $kind.ToLowerInvariant())
       $run = Invoke-FFDecDump -FFDec $FFDecPath -Kind $kind -Swf $full -OutFile ($prefix + '.txt') -ErrFile ($prefix + '.stderr.txt') -TimeoutSeconds $FFDecTimeoutSeconds
-      $ffdecRuns += [pscustomobject]@{ kind=$kind; status=$run.status; exit=$run.exit }
-      if (Test-Path -LiteralPath $run.output -PathType Leaf) { try { $parts.Add((Get-Content -LiteralPath $run.output -Raw -ErrorAction Stop)) } catch {} }
+      if ($null -eq $run -or $null -eq $run.PSObject.Properties['status'] -or $null -eq $run.PSObject.Properties['exit']) {
+        throw "WADDLE_SWF_ANALYSIS=FAIL ffdec_result_contract kind=$kind swf=$($item.path)"
+      }
+      $ffdecRuns += [pscustomobject]@{ kind=$kind; status=[string]$run.status; exit=[int]$run.exit }
+      if ($null -ne $run.PSObject.Properties['output'] -and (Test-Path -LiteralPath ([string]$run.output) -PathType Leaf)) {
+        try { $parts.Add((Get-Content -LiteralPath ([string]$run.output) -Raw -ErrorAction Stop)) } catch {}
+      }
     }
     $refs = Get-ReferenceData -Text ($parts -join "`n")
     $analysis = [pscustomobject]@{
@@ -173,7 +198,7 @@ $coverage = @($results | Where-Object { [string]$_.status -eq 'ANALYZED' }).Coun
 $summary = [ordered]@{
   schema='waddle-swf-analysis/v2'; status='PASS'; repository_root=$RepoRoot; ffdec=$FFDecPath; source_mutation=$false
   swf_count=$inventory.Count; deep_budget=$DeepBudget; deep_selected=$selected.Count; analyzed_count=$coverage
-  pending_count=($inventory.Count-$coverage); dependency_edges=$edges.Count; unresolved_literal_refs=$missing.Count
+  pending_count=($inventory.Count-$coverage); stale_cache_ignored=$staleCacheCount; dependency_edges=$edges.Count; unresolved_literal_refs=$missing.Count
   url_count=$allUrls.Count; protocols=@($allProtocols | Sort-Object); runtime_trace_available=[bool]$runtimeTrace.available
   generated_utc=[DateTime]::UtcNow.ToString('o')
 }
@@ -185,4 +210,4 @@ $edges | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $analysis
 $missing | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $analysisRoot 'missing-swfs.json') -Encoding UTF8
 $runtimeTrace | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $analysisRoot 'runtime-trace.json') -Encoding UTF8
 $summary | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $analysisRoot 'summary.json') -Encoding UTF8
-Write-Host "WADDLE_SWF_ANALYSIS=PASS swfs=$($inventory.Count) analyzed=$coverage pending=$($inventory.Count-$coverage) selected=$($selected.Count) edges=$($edges.Count) missing=$($missing.Count) urls=$($allUrls.Count) runtime_trace=$($runtimeTrace.available) source_mutation=false root=$analysisRoot"
+Write-Host "WADDLE_SWF_ANALYSIS=PASS swfs=$($inventory.Count) analyzed=$coverage pending=$($inventory.Count-$coverage) stale_cache=$staleCacheCount selected=$($selected.Count) edges=$($edges.Count) missing=$($missing.Count) urls=$($allUrls.Count) runtime_trace=$($runtimeTrace.available) source_mutation=false root=$analysisRoot"
