@@ -31,6 +31,11 @@ Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_RUNTIME_HOME' -Value $runtimeHom
 Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_RUNTIME_NODE_MODULES' -Value (Join-Path $repo 'node_modules')
 Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_RUNTIME_MODE' -Value 'repo_local_direct'
 Import-WaddleLocalEnv -Path $envPath
+
+# Setup may install dependencies and always refreshes generated package metadata.
+# On a shared SMB repo both are writes visible to every machine, so block them
+# while any Electron runtime lease is alive anywhere on the share.
+Assert-WaddleRuntimeMutationAllowed -RepoRoot $repo -Reason 'setup_dependencies_and_generated_content'
 $dependencies = Invoke-WaddleDependencyBootstrap -RepoRoot $repo -WorkRoot $workspace.work_root
 $flash = Test-WaddlePepperFlash -RepoRoot $repo
 $electronSource = Test-WaddleElectronRuntime -WorkRoot $workspace.work_root -ExpectedVersion $dependencies.electron
@@ -69,7 +74,7 @@ if (-not (Test-Path -LiteralPath $packageInfo -PathType Leaf)) {
 }
 Write-Host "WADDLE_PACKAGE_INDEX=PASS script=build-packages duration_ms=$($sw.ElapsedMilliseconds) path=$packageInfo"
 
-Write-Host "WADDLE_BOOTSTRAP=PASS platform=windows-x64 repo=$repo work=$($workspace.work_root) runtime_home=$runtimeHome runtime_mode=repo_local_direct runtime_copies=0"
+Write-Host "WADDLE_BOOTSTRAP=PASS platform=windows-x64 repo=$repo work=$($workspace.work_root) runtime_home=$runtimeHome runtime_mode=repo_local_direct runtime_copies=0 mutation_guard=cross_machine"
 Write-Host "WADDLE_NODE=$($toolchain.node)"
 Write-Host "WADDLE_NODE_HOME=$($managedNode.home)"
 Write-Host "WADDLE_YARN=$($toolchain.yarn)"
