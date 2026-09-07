@@ -17,6 +17,7 @@ $WorkRoot = [IO.Path]::GetFullPath($WorkRoot)
 $analysisRoot = Join-Path $WorkRoot 'swf-analysis'
 $cacheRoot = Join-Path $analysisRoot 'cache'
 $dumpRoot = Join-Path $analysisRoot 'ffdec'
+$hashIndexPath = Join-Path $analysisRoot 'hash-index.json'
 New-Item -ItemType Directory -Force -Path $analysisRoot,$cacheRoot,$dumpRoot | Out-Null
 
 function Get-RelativePath {
@@ -93,27 +94,70 @@ if (-not $FFDecPath) {
 if (-not $FFDecPath -or -not (Test-Path -LiteralPath $FFDecPath -PathType Leaf)) { throw "WADDLE_SWF_ANALYSIS=FAIL ffdec_missing path=$FFDecPath" }
 $FFDecPath = [IO.Path]::GetFullPath($FFDecPath)
 
+# Hashing tens of thousands of archive paths on every source-only commit was
+# unnecessarily expensive. Reuse a SHA-256 only when path, size and exact UTC
+# mtime are unchanged; any mismatch falls back to a real content hash.
+$previousHashIndex = @{}
+if (Test-Path -LiteralPath $hashIndexPath -PathType Leaf) {
+  try {
+    foreach ($entry in @((Get-Content -LiteralPath $hashIndexPath -Raw | ConvertFrom-Json))) {
+      if ($null -eq $entry) { continue }
+      $pathProperty = $entry.PSObject.Properties['path']
+      $hashProperty = $entry.PSObject.Properties['sha256']
+      $sizeProperty = $entry.PSObject.Properties['size']
+      $mtimeProperty = $entry.PSObject.Properties['modified_utc']
+      if ($null -eq $pathProperty -or $null -eq $hashProperty -or $null -eq $sizeProperty -or $null -eq $mtimeProperty) { continue }
+      $hashText = [string]$hashProperty.Value
+      if ($hashText -notmatch '^[0-9a-fA-F]{64}$') { continue }
+      $previousHashIndex[[string]$pathProperty.Value.ToLowerInvariant()] = $entry
+    }
+  } catch {
+    $previousHashIndex = @{}
+  }
+}
+
 $scanRoots = @((Join-Path $RepoRoot 'media'),(Join-Path $RepoRoot 'assets')) | Where-Object { Test-Path -LiteralPath $_ -PathType Container }
 $swfFiles = @($scanRoots | ForEach-Object { Get-ChildItem -LiteralPath $_ -Filter '*.swf' -File -Recurse -ErrorAction SilentlyContinue } | Sort-Object FullName -Unique)
 $inventory = New-Object System.Collections.Generic.List[object]
+$newHashIndex = New-Object System.Collections.Generic.List[object]
 $byLeaf = @{}
 $byRelative = @{}
 $byHash = @{}
+$hashCacheReused = 0
+$hashRecomputed = 0
 
 foreach ($file in $swfFiles) {
   $relative = Get-RelativePath -Base $RepoRoot -Path $file.FullName
-  $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-  $item = [pscustomobject]@{ path=$relative; sha256=$hash; size=[int64]$file.Length; modified_utc=$file.LastWriteTimeUtc.ToString('o') }
+  $relativeKey = $relative.ToLowerInvariant()
+  $modifiedUtc = $file.LastWriteTimeUtc.ToString('o')
+  $hash = $null
+
+  if ($previousHashIndex.ContainsKey($relativeKey)) {
+    $prior = $previousHashIndex[$relativeKey]
+    if ([int64]$prior.size -eq [int64]$file.Length -and [string]$prior.modified_utc -eq $modifiedUtc) {
+      $hash = ([string]$prior.sha256).ToLowerInvariant()
+      $hashCacheReused++
+    }
+  }
+
+  if (-not $hash) {
+    $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    $hashRecomputed++
+  }
+
+  $item = [pscustomobject]@{ path=$relative; sha256=$hash; size=[int64]$file.Length; modified_utc=$modifiedUtc }
   $inventory.Add($item)
+  $newHashIndex.Add($item)
 
   $leaf = $file.Name.ToLowerInvariant()
   if (-not $byLeaf.ContainsKey($leaf)) { $byLeaf[$leaf] = New-Object System.Collections.Generic.List[string] }
   $byLeaf[$leaf].Add($relative)
-  $byRelative[$relative.ToLowerInvariant()] = $relative
+  $byRelative[$relativeKey] = $relative
 
   if (-not $byHash.ContainsKey($hash)) { $byHash[$hash] = New-Object System.Collections.Generic.List[object] }
   $byHash[$hash].Add($item)
 }
+$newHashIndex | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $hashIndexPath -Encoding UTF8
 
 # Analyze each unique SWF byte sequence once. Large archives commonly contain
 # identical SWFs at many timeline paths; selecting by path caused the same SHA
@@ -282,7 +326,7 @@ $analyzedUnique = $analysisByHash.Count
 $analyzedPaths = @($results | Where-Object { [string]$_.status -eq 'ANALYZED' }).Count
 $uniqueCount = $uniqueGroups.Count
 $summary = [ordered]@{
-  schema='waddle-swf-analysis/v3'
+  schema='waddle-swf-analysis/v4'
   status='PASS'
   repository_root=$RepoRoot
   ffdec=$FFDecPath
@@ -290,6 +334,8 @@ $summary = [ordered]@{
   swf_path_count=$inventory.Count
   unique_hash_count=$uniqueCount
   duplicate_path_count=($inventory.Count-$uniqueCount)
+  hash_cache_reused=$hashCacheReused
+  hash_recomputed=$hashRecomputed
   deep_budget_unique_hashes=$DeepBudget
   deep_selected_unique_hashes=$selectedGroups.Count
   analyzed_unique_hash_count=$analyzedUnique
@@ -312,4 +358,4 @@ $edges | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $analysis
 $missing | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $analysisRoot 'missing-swfs.json') -Encoding UTF8
 $runtimeTrace | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $analysisRoot 'runtime-trace.json') -Encoding UTF8
 $summary | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $analysisRoot 'summary.json') -Encoding UTF8
-Write-Host "WADDLE_SWF_ANALYSIS=PASS paths=$($inventory.Count) unique=$uniqueCount duplicates=$($inventory.Count-$uniqueCount) analyzed_unique=$analyzedUnique pending_unique=$($uniqueCount-$analyzedUnique) analyzed_paths=$analyzedPaths selected_unique=$($selectedGroups.Count) stale_cache=$staleCacheCount edges=$($edges.Count) missing=$($missing.Count) urls=$($allUrls.Count) runtime_trace=$($runtimeTrace.available) source_mutation=false root=$analysisRoot"
+Write-Host "WADDLE_SWF_ANALYSIS=PASS paths=$($inventory.Count) unique=$uniqueCount duplicates=$($inventory.Count-$uniqueCount) hash_reused=$hashCacheReused hash_recomputed=$hashRecomputed analyzed_unique=$analyzedUnique pending_unique=$($uniqueCount-$analyzedUnique) analyzed_paths=$analyzedPaths selected_unique=$($selectedGroups.Count) stale_cache=$staleCacheCount edges=$($edges.Count) missing=$($missing.Count) urls=$($allUrls.Count) runtime_trace=$($runtimeTrace.available) source_mutation=false root=$analysisRoot"
