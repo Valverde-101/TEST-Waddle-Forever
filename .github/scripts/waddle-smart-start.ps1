@@ -34,7 +34,7 @@ function Get-WaddleRuntimeEvents {
     [Parameter(Mandatory)][int]$ProcessId
   )
 
-  $events = New-Object System.Collections.Generic.List[object]
+  $events = @()
   if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return @() }
 
   foreach ($line in @(Get-Content -LiteralPath $Path -ErrorAction SilentlyContinue)) {
@@ -46,16 +46,16 @@ function Get-WaddleRuntimeEvents {
       $eventProperty = $item.PSObject.Properties['event']
       if (-not $pidProperty -or -not $eventProperty) { continue }
       if ([int]$pidProperty.Value -ne $ProcessId) { continue }
-      $events.Add($item)
+      $events += $item
     } catch {}
   }
-  return @($events)
+  return $events
 }
 
 function Get-WaddleRuntimeFailure {
-  param([Parameter(Mandatory)][object[]]$Events)
+  param($Events)
 
-  foreach ($event in $Events) {
+  foreach ($event in @($Events)) {
     $name = [string]$event.event
     if ($name -eq 'uncaught-exception' -or $name -eq 'unhandled-rejection' -or $name -eq 'render-process-gone' -or $name -eq 'window-unresponsive') {
       return $event
@@ -224,6 +224,9 @@ try {
   Assert-WaddleRuntimeHealthy -ExpectedSha $currentSha
   exit 0
 } catch {
-  Write-Error $_.Exception.Message
+  $failureMessage = [string]$_.Exception.Message
+  $failureStack = [string]$_.ScriptStackTrace
+  $failureStack = $failureStack -replace '\r?\n',' | '
+  Write-Host "WADDLE_RUNTIME_HEALTH_GATE=FAIL error=$failureMessage stack=$failureStack"
   exit 1
 }
