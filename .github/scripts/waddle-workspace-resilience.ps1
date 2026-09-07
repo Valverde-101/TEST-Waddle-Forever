@@ -7,10 +7,10 @@ if (-not (Test-Path -LiteralPath $core -PathType Leaf)) {
 }
 . $core
 
-# Runtime deployment can be invoked from a fresh GitHub Actions PowerShell step,
+# Runtime launch can be invoked from a fresh GitHub Actions PowerShell step,
 # where PATH changes made by Waddle-Setup.cmd do not survive. Resolve the pinned
-# Windows toolchain from AndroidBuild itself so runtime publication never depends
-# on ambient/global Node or Yarn.
+# Windows toolchain from AndroidBuild itself so launch never depends on ambient
+# or globally installed Node/Yarn.
 if ($env:ANDROIDBUILD_ROOT) {
   $managedNodeHome = [IO.Path]::GetFullPath((Join-Path $env:ANDROIDBUILD_ROOT 'Tools\Node\20.19.0\x64'))
   $managedNode = Join-Path $managedNodeHome 'node.exe'
@@ -28,17 +28,19 @@ if ($env:ANDROIDBUILD_ROOT) {
   }
 }
 
-$externalRuntime = Join-Path $PSScriptRoot 'waddle-external-runtime.ps1'
-if (-not (Test-Path -LiteralPath $externalRuntime -PathType Leaf)) {
-  throw "WADDLE_RUNTIME_OVERRIDE=FAIL missing=$externalRuntime"
+# Final runtime policy: execute Electron, compiled Waddle and Pepper Flash
+# directly from the repository. Nothing is copied to AndroidBuild\Runtime.
+$repoRuntime = Join-Path $PSScriptRoot 'waddle-repo-runtime.ps1'
+if (-not (Test-Path -LiteralPath $repoRuntime -PathType Leaf)) {
+  throw "WADDLE_RUNTIME_OVERRIDE=FAIL missing=$repoRuntime"
 }
-. $externalRuntime
-Write-Host "WADDLE_RUNTIME_OVERRIDE=PASS mode=external_deployment script=$externalRuntime"
+. $repoRuntime
+Write-Host "WADDLE_RUNTIME_OVERRIDE=PASS mode=repo_local_direct script=$repoRuntime"
 
-# Final policy layer: keep exactly one persistent node_modules tree at the
-# repository root and make the external runtime consume it via NODE_PATH. This
-# is sourced last intentionally so it replaces the historical .work dependency
-# implementation without duplicating the rest of the resilience/runtime logic.
+# Final dependency policy: keep exactly one persistent node_modules tree at the
+# repository root. This is sourced last intentionally so it replaces the
+# historical .work dependency implementation while preserving the rest of the
+# resilience logic.
 $repoDependencies = Join-Path $PSScriptRoot 'waddle-repo-dependencies.ps1'
 if (-not (Test-Path -LiteralPath $repoDependencies -PathType Leaf)) {
   throw "WADDLE_REPO_DEPENDENCIES=FAIL missing=$repoDependencies"
