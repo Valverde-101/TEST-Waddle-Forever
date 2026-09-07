@@ -198,7 +198,8 @@ try {
     node_path=$env:NODE_PATH
     dependency_fingerprint=$dependencies.fingerprint
     dependency_mode=$dependencies.mode
-    runtime_mode='external_deployment'
+    runtime_mode='repo_local_direct'
+    runtime_copies=0
     visual_studio='NOT_REQUIRED'
     optional_register_scheme='NOT_EXECUTED_WHEN_DEPENDENCY_FINGERPRINT_VALID'
     build_typescript='7.0.2'
