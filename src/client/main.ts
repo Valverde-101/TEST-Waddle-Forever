@@ -27,6 +27,7 @@ console.log = log.log;
 writeRuntimeDiagnostic('diagnostics-ready', { path: runtimeDiagnosticPath });
 
 const store = createStore();
+const nonInteractive = process.env.WADDLE_NONINTERACTIVE === '1';
 
 if (process.platform === 'linux') {
   app.commandLine.appendSwitch('no-sandbox');
@@ -48,7 +49,10 @@ const globalSettings : GlobalSettings = {
 const popups: Popups = new Map<string, BrowserWindow>();
 
 app.on('ready', async () => {
-  writeRuntimeDiagnostic('electron-ready');
+  writeRuntimeDiagnostic('electron-ready', {
+    nonInteractive,
+    electronIsDev
+  });
 
   // A real window must exist while first-run media/setup work is in progress.
   // mainWindow is deliberately created only after services are ready, so every
@@ -62,15 +66,23 @@ app.on('ready', async () => {
   });
   instrumentRuntimeWindow(setupWindow, 'setup');
   await setupWindow.loadFile(path.join(__dirname, 'views/setup.html'));
+  writeRuntimeDiagnostic('setup-window-ready', { nonInteractive });
 
   try {
     // this will throw an error if installing for all users and not running as
     // an administrator
+    writeRuntimeDiagnostic('media-start-begin', { electronIsDev });
     await startMedia();
+    writeRuntimeDiagnostic('media-start-complete', { electronIsDev });
   } catch (error) {
     writeRuntimeDiagnostic('media-start-failed', {
       error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
     });
+
+    if (nonInteractive) {
+      app.quit();
+      return;
+    }
 
     if (error instanceof AdminError) {
       await dialog.showMessageBox(setupWindow, {
@@ -95,76 +107,96 @@ app.on('ready', async () => {
   
   // only check if the clothing settings is false, otherwise it would have been downloaded already
   if (!settingsManager.settings.clothing && settingsManager.settings.answered_packages !== VERSION) {
-    const result = await dialog.showMessageBox(setupWindow, {
-      buttons: ['Download Clothing (~600 MB)', 'No Thanks'],
-      title: 'Download package?',
-      message: 'Would you like to download the clothing package? It includes all non essential clothing items from Club Penguin. If you say no, you can always download it later.',
-      defaultId: 0,
-      cancelId: 1
-    });
-
-    if (result.response === 0) {
-      let clothingError: unknown;
-      const installed = await downloadMediaFolder('clothing', () => {
-        settingsManager.updateSettings({ clothing: true });
-      }, error => {
-        clothingError = error;
+    if (nonInteractive) {
+      settingsManager.updateSettings({ answered_packages: VERSION });
+      writeRuntimeDiagnostic('first-run-clothing-skipped', {
+        reason: 'noninteractive',
+        version: VERSION
+      });
+    } else {
+      const result = await dialog.showMessageBox(setupWindow, {
+        buttons: ['Download Clothing (~600 MB)', 'No Thanks'],
+        title: 'Download package?',
+        message: 'Would you like to download the clothing package? It includes all non essential clothing items from Club Penguin. If you say no, you can always download it later.',
+        defaultId: 0,
+        cancelId: 1
       });
 
-      if (installed) {
-        settingsManager.updateSettings({ answered_packages: VERSION });
-      } else {
-        const detail = clothingError instanceof Error ? clothingError.message : String(clothingError ?? 'Unknown error');
-        writeRuntimeDiagnostic('optional-clothing-download-failed', { detail });
-        await dialog.showMessageBox(setupWindow, {
-          buttons: ['OK'],
-          title: 'Clothing Download Failed',
-          message: `The optional clothing package could not be installed. Waddle Forever will continue without it and offer the download again next time.\n\n${detail}`
+      if (result.response === 0) {
+        let clothingError: unknown;
+        const installed = await downloadMediaFolder('clothing', () => {
+          settingsManager.updateSettings({ clothing: true });
+        }, error => {
+          clothingError = error;
         });
+
+        if (installed) {
+          settingsManager.updateSettings({ answered_packages: VERSION });
+        } else {
+          const detail = clothingError instanceof Error ? clothingError.message : String(clothingError ?? 'Unknown error');
+          writeRuntimeDiagnostic('optional-clothing-download-failed', { detail });
+          await dialog.showMessageBox(setupWindow, {
+            buttons: ['OK'],
+            title: 'Clothing Download Failed',
+            message: `The optional clothing package could not be installed. Waddle Forever will continue without it and offer the download again next time.\n\n${detail}`
+          });
+        }
+      } else {
+        settingsManager.updateSettings({ answered_packages: VERSION });
       }
-    } else {
-      settingsManager.updateSettings({ answered_packages: VERSION });
     }
   }
 
   if (!settingsManager.settings.faq_warning) {
-    const result = await dialog.showMessageBox(setupWindow, {
-      buttons: ['Take me to the FAQ', 'Understood'],
-      title: 'Heads-Up!',
-      message: `Welcome to Waddle Forever! If you know nothing about this client, you might be confused about some things:
+    if (nonInteractive) {
+      settingsManager.updateSettings({ faq_warning: true });
+      writeRuntimeDiagnostic('first-run-faq-skipped', { reason: 'noninteractive' });
+    } else {
+      const result = await dialog.showMessageBox(setupWindow, {
+        buttons: ['Take me to the FAQ', 'Understood'],
+        title: 'Heads-Up!',
+        message: `Welcome to Waddle Forever! If you know nothing about this client, you might be confused about some things:
 - You don't need to create an account, just log in with any name or password
 - The game is entirely offline
 - You can choose the day in the timeline, use commands, and more through the menu
 
 These are the most important things, but there is a full list of questions in our FAQ. If you're ever lost, you can read it in our website.`,
-      cancelId: 1
-    });
+        cancelId: 1
+      });
 
-    if (result.response === 0 || result.response === 1) {
-      if (result.response === 0) {
-        void shell.openExternal(`${WEBSITE}/faq`);
+      if (result.response === 0 || result.response === 1) {
+        if (result.response === 0) {
+          void shell.openExternal(`${WEBSITE}/faq`);
+        }
+        settingsManager.updateSettings({ faq_warning: true });
       }
-      settingsManager.updateSettings({ faq_warning: true });
     }
   }
 
   const failedMods = startMods();
   if (failedMods.length > 0) {
     writeRuntimeDiagnostic('mods-failed', { mods: failedMods.join(',') });
-    await dialog.showMessageBox(setupWindow, {
-      buttons: ['OK'],
-      title: 'Error with Mods',
-      message: `The following mods could not be turned on. Please fix them and then try enabling them again:\n\n${failedMods.map(mod => `* ${mod}`).join('\n')}`
-    });
+    if (!nonInteractive) {
+      await dialog.showMessageBox(setupWindow, {
+        buttons: ['OK'],
+        title: 'Error with Mods',
+        message: `The following mods could not be turned on. Please fix them and then try enabling them again:\n\n${failedMods.map(mod => `* ${mod}`).join('\n')}`
+      });
+    }
   }
 
   try {
+    writeRuntimeDiagnostic('services-start-begin');
     server = await startServices();
     writeRuntimeDiagnostic('services-started');
   } catch (error) {
     writeRuntimeDiagnostic('services-start-failed', {
       error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
     });
+
+    if (nonInteractive) {
+      throw error;
+    }
 
     if (error instanceof Error && error.message.includes('EADDRINUSE')) {
       const result = await dialog.showMessageBox(setupWindow, {
@@ -183,6 +215,7 @@ These are the most important things, but there is a full list of questions in ou
     }
   }
 
+  writeRuntimeDiagnostic('main-window-create-begin');
   mainWindow = await createWindow(store, globalSettings, settingsManager);
   instrumentRuntimeWindow(mainWindow, 'main');
   setupWindow.close();
