@@ -1,3 +1,4 @@
+import '@common/runtime-node-path';
 import path from 'path'
 
 import { app, BrowserWindow, dialog, shell } from "electron";
@@ -126,9 +127,7 @@ These are the most important things, but there is a full list of questions in ou
     await dialog.showMessageBox(mainWindow, {
       buttons: ['OK'],
       title: 'Error with Mods',
-      message: `The following mods could not be turned on. Please fix them and then try enabling them again:
-
-${failedMods.map(mod => `* ${mod}`).join('\n')}}`
+      message: `The following mods could not be turned on. Please fix them and then try enabling them again:\n\n${failedMods.map(mod => `* ${mod}`).join('\n')}}`
     });
   }
 
