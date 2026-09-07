@@ -27,7 +27,6 @@ Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_NODE_EXE' -Value $managedNode.no
 Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_NPM_CMD' -Value $managedNode.npm
 Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_YARN_CMD' -Value $managedNode.yarn
 Import-WaddleLocalEnv -Path $envPath
-$dependencies = Invoke-WaddleDependencyBootstrap -RepoRoot $repo -WorkRoot $workspace.work_root
 $sourceFlash = Test-WaddlePepperFlash -RepoRoot $repo
 $runtimeHome = Get-WaddleExternalRuntimeHome -AndroidBuildRoot $root
 $statePath = Join-Path $workspace.work_root 'state\waddle-client.json'
@@ -179,12 +178,15 @@ function Start-WaddleDetachedElectron {
 
 Write-Host "WADDLE_LAYOUT=PASS platform=windows-x64 launcher_root=$repo mutable_build_root=$($workspace.work_root) runtime_home=$runtimeHome runtime_execution_outside_work=true swf_analysis=.work\swf-analysis"
 
-# Single-client invariant. State-based cleanup handles the normal path; the two
-# process scans recover old/pre-migration or orphaned Waddle instances without
-# touching unrelated Electron applications.
+# The canonical dependency tree may need to be installed when package inputs
+# change. Always stop every managed Waddle client before dependency bootstrap so
+# Yarn never mutates repo\node_modules while Electron is resolving modules from
+# that same physical tree. This is the single-tree no-lock invariant.
 Stop-WaddleExistingClient
 Stop-WaddleLegacyWorkRuntimes
 Stop-WaddleExternalManagedRuntimes
+$dependencies = Invoke-WaddleDependencyBootstrap -RepoRoot $repo -WorkRoot $workspace.work_root
+Write-Host "WADDLE_DEPENDENCY_MUTATION_GATE=PASS clients_stopped_before_bootstrap=true mode=$($dependencies.mode) node_modules=$($dependencies.node_modules)"
 
 $gitState = $null
 try {
@@ -234,6 +236,9 @@ foreach ($runtimePath in @($electron,$flashPath,$entry,$runtimeModules,$runtimeR
 }
 if (-not (Test-Path -LiteralPath $entry -PathType Leaf)) { throw "WADDLE_START=FAIL external_entry_missing=$entry" }
 if (-not (Test-Path -LiteralPath $runtimeModules -PathType Container)) { throw "WADDLE_START=FAIL external_modules_missing=$runtimeModules" }
+if ([IO.Path]::GetFullPath($runtimeModules) -ne [IO.Path]::GetFullPath((Join-Path $repo 'node_modules'))) {
+  throw "WADDLE_START=FAIL runtime_modules_not_canonical actual=$runtimeModules expected=$(Join-Path $repo 'node_modules')"
+}
 
 Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_ELECTRON_EXE' -Value $electron
 Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_RUNTIME_ROOT' -Value $runtimeRoot
@@ -249,7 +254,7 @@ Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_RUNTIME_NODE_MODULES' -Value $ru
 [Environment]::SetEnvironmentVariable('WADDLE_NODE_MODULES',$runtimeModules,'Process')
 [Environment]::SetEnvironmentVariable('NODE_PATH',$runtimeModules,'Process')
 
-Write-Host "WADDLE_RUNTIME_ISOLATION=PASS runtime=$runtimeRoot current=$($runtime.current_root) electron=$electron app_entry=$entry runtime_node_modules=$runtimeModules mutable_build_root=$($workspace.work_root) work_execution=false"
+Write-Host "WADDLE_RUNTIME_ISOLATION=PASS runtime=$runtimeRoot current=$($runtime.current_root) electron=$electron app_entry=$entry runtime_node_modules=$runtimeModules mutable_build_root=$($workspace.work_root) work_execution=false dependency_mutation_while_running=false"
 
 $runtimeLogs = Join-Path $workspace.work_root 'logs\runtime'
 New-Item -ItemType Directory -Force -Path $runtimeLogs | Out-Null
@@ -264,7 +269,7 @@ try {
   $launch = Start-WaddleDetachedElectron -Electron $electron -Entry $entry -WorkingDirectory $repo -Stdout $stdout -Stderr $stderr
   $process = $launch.process
   $state = [ordered]@{
-    schema = 'waddle-client-state/v9'
+    schema = 'waddle-client-state/v10'
     status = 'RUNNING'
     platform = 'windows-x64'
     pid = $process.Id
@@ -274,6 +279,7 @@ try {
     dependency_build_root = $dependencies.node_modules
     dependency_fingerprint = $dependencies.fingerprint
     dependency_mode = $dependencies.mode
+    dependency_mutation_while_running = $false
     managed_node_home = $managedNode.home
     managed_node_exe = $managedNode.node
     runtime_mode = 'external_deployment'
@@ -304,7 +310,7 @@ try {
   throw
 }
 
-Write-Host "WADDLE_START=PASS process_id=$($process.Id) sha=$sha platform=windows-x64 node=$($managedNode.node) electron=$($sourceElectron.version) launch_mode=external_runtime_start_process launcher_return_ms=$($launch.return_ms) runtime=$runtimeRoot work_execution=false dependencies=$($dependencies.mode)"
+Write-Host "WADDLE_START=PASS process_id=$($process.Id) sha=$sha platform=windows-x64 node=$($managedNode.node) electron=$($sourceElectron.version) launch_mode=external_runtime_start_process launcher_return_ms=$($launch.return_ms) runtime=$runtimeRoot work_execution=false dependencies=$($dependencies.mode) live_dependency_mutation=false"
 Write-Host "WADDLE_PPAPI_FLASH=PASS path=$flashPath version=$($runtime.ppapi_flash_version) source=$($sourceFlash.path)"
 Write-Host 'WADDLE_VISUAL_STUDIO=NOT_REQUIRED'
 Write-Host "WADDLE_RUNTIME_STDOUT=$stdout"
