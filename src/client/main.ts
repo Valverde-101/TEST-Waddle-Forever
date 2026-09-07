@@ -18,10 +18,14 @@ import { Popups } from './popups';
 import { WEBSITE } from '@common/website';
 import { WorldServer } from '@server/socket-server/world-server';
 import { startMods, startServices } from '@server/boot';
+import { installRuntimeDiagnostics, instrumentRuntimeWindow, writeRuntimeDiagnostic } from './runtime-diagnostics';
 
 log.initialize();
 
 console.log = log.log;
+
+const runtimeDiagnosticPath = installRuntimeDiagnostics();
+writeRuntimeDiagnostic('diagnostics-ready', { path: runtimeDiagnosticPath });
 
 const store = createStore();
 
@@ -45,6 +49,8 @@ const globalSettings : GlobalSettings = {
 const popups: Popups = new Map<string, BrowserWindow>();
 
 app.on('ready', async () => {
+  writeRuntimeDiagnostic('electron-ready');
+
   // A real window must exist while first-run media/setup work is in progress.
   // mainWindow is deliberately created only after services are ready, so every
   // dialog in this phase must be parented to setupWindow rather than referencing
@@ -55,6 +61,7 @@ app.on('ready', async () => {
     frame: false,
     resizable: false
   });
+  instrumentRuntimeWindow(setupWindow, 'setup');
   await setupWindow.loadFile(path.join(__dirname, 'views/setup.html'));
 
   try {
@@ -62,6 +69,10 @@ app.on('ready', async () => {
     // an administrator
     await startMedia();
   } catch (error) {
+    writeRuntimeDiagnostic('media-start-failed', {
+      error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+    });
+
     if (error instanceof AdminError) {
       await dialog.showMessageBox(setupWindow, {
         buttons: ['Ok'],
@@ -105,6 +116,7 @@ app.on('ready', async () => {
         settingsManager.updateSettings({ answered_packages: VERSION });
       } else {
         const detail = clothingError instanceof Error ? clothingError.message : String(clothingError ?? 'Unknown error');
+        writeRuntimeDiagnostic('optional-clothing-download-failed', { detail });
         await dialog.showMessageBox(setupWindow, {
           buttons: ['OK'],
           title: 'Clothing Download Failed',
@@ -139,6 +151,7 @@ These are the most important things, but there is a full list of questions in ou
 
   const failedMods = startMods();
   if (failedMods.length > 0) {
+    writeRuntimeDiagnostic('mods-failed', { mods: failedMods.join(',') });
     await dialog.showMessageBox(setupWindow, {
       buttons: ['OK'],
       title: 'Error with Mods',
@@ -148,7 +161,12 @@ These are the most important things, but there is a full list of questions in ou
 
   try {
     server = await startServices();
+    writeRuntimeDiagnostic('services-started');
   } catch (error) {
+    writeRuntimeDiagnostic('services-start-failed', {
+      error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+    });
+
     if (error instanceof Error && error.message.includes('EADDRINUSE')) {
       const result = await dialog.showMessageBox(setupWindow, {
         buttons: ['Boot Serverless', 'Check out error'],
@@ -167,6 +185,7 @@ These are the most important things, but there is a full list of questions in ou
   }
 
   mainWindow = await createWindow(store, globalSettings, settingsManager);
+  instrumentRuntimeWindow(mainWindow, 'main');
   setupWindow.close();
 
   // Some users were reporting problems with cache.
@@ -178,6 +197,10 @@ These are the most important things, but there is a full list of questions in ou
     startDiscordRPC(store, mainWindow);
   }
 
+  writeRuntimeDiagnostic('main-window-ready', {
+    url: mainWindow.webContents.getURL()
+  });
+
   mainWindow.on('closed', () => {
     popups.forEach(win => {
       win.close();
@@ -187,8 +210,8 @@ These are the most important things, but there is a full list of questions in ou
 
 
 app.on('window-all-closed', async () => {
-  // On macOS it is common for applications and their menu bar
-  // to stay active until the user quits explicitly with Cmd + Q
+  // On macOS it is common for applications and their menu bar to stay active
+  // until the user quits explicitly with Cmd + Q.
   if (process.platform !== 'darwin') {
     try
     {
@@ -200,6 +223,7 @@ app.on('window-all-closed', async () => {
     }
     finally
     {
+      writeRuntimeDiagnostic('window-all-closed');
       // Always try to quit
       app.quit();
 
@@ -213,6 +237,7 @@ app.on('activate', async () => {
   // dock icon is clicked and there are no other windows open.
   if (BrowserWindow.getAllWindows().length === 0) {
     mainWindow = await createWindow(store, globalSettings, settingsManager);
+    instrumentRuntimeWindow(mainWindow, 'main-reactivated');
     startMenu(store, mainWindow, globalSettings, settingsManager, popups, server);
   }
 });
