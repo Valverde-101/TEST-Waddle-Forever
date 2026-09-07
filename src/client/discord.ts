@@ -1,8 +1,8 @@
 import { Client, register } from "discord-rpc";
 import { BrowserWindow, dialog } from "electron";
 import { DISCORD_RPC_CLIENT_APP_ID, LARGE_IMAGE_KEY, ROOMS_JSONP_NAME } from "./discord/constants";
-import { getLocalizedPlaying, getLocalizedTalkingWith, getLocalizedUnlogged, getLocalizedVisiting, getLocalizedWaddling, getLocalizedWaddlingAt } from "./discord/localization/localization";
-import { parseJSONP, RoomsResponse, startRequestListener } from "./discord/requestHandler";
+import { getLanguageInStore, getLocalizedPlaying, getLocalizedTalkingWith, getLocalizedUnlogged, getLocalizedVisiting, getLocalizedWaddling, getLocalizedWaddlingAt } from "./discord/localization/localization";
+import { parseJSONP, RoomsJson, RoomsResponse, startRequestListener } from "./discord/requestHandler";
 import { Store } from "./store";
 import { CPLocation, CPLocationType, DiscordState } from "./store/DiscordState";
 import { promises as fs } from 'fs';
@@ -173,7 +173,9 @@ export const startDiscordRPC = (store: Store, mainWindow: BrowserWindow) => {
   registerWindowReload(store, mainWindow);
 
   startRequestListener(store, mainWindow);
-  setDefaultRooms(store);
+  void setDefaultRooms(store).catch(error => {
+    console.error('Could not initialize default Discord room names:', error);
+  });
 };
 
 export const stopDiscordRPC = (store: Store) => {
@@ -262,17 +264,18 @@ export const enableOrDisableDiscordRPCLocationTracking = async (store: Store, ma
 
 const setDefaultRooms = async (store: Store) => {
   const enPath = path.join(__dirname, '../assets/default/rooms-en.jsonp');
-  const ptPath = path.join(__dirname, '../assets/default/rooms-pt.jsonp');
+  const enRooms = await fs.readFile(enPath, 'utf8');
+  let localizedJson: RoomsJson | undefined;
 
-  const enRoomsBuff = await fs.readFile(enPath);
-  const ptRoomsBuff = await fs.readFile(ptPath);
-
-  const enRooms = enRoomsBuff.toString();
-  const ptRooms = ptRoomsBuff.toString();
+  if (getLanguageInStore(store) === 'pt') {
+    const ptPath = path.join(__dirname, '../assets/default/rooms-pt.jsonp');
+    const ptRooms = await fs.readFile(ptPath, 'utf8');
+    localizedJson = parseJSONP<RoomsJson>(ptRooms, ROOMS_JSONP_NAME);
+  }
   
   const result: RoomsResponse = {
-    roomsJson: parseJSONP(enRooms, ROOMS_JSONP_NAME),
-    localizedJson: parseJSONP(enRooms, ROOMS_JSONP_NAME),
+    roomsJson: parseJSONP<RoomsJson>(enRooms, ROOMS_JSONP_NAME),
+    localizedJson,
   };
 
   updateRooms(store, result);
