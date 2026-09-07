@@ -43,10 +43,11 @@ New-Item -ItemType Directory -Force -Path $certStateDir,$certLogDir | Out-Null
 $certStatePath = Join-Path $certStateDir 'waddle-certification.json'
 $clientStatePath = Join-Path $certStateDir 'waddle-client.json'
 $summaryPath = Join-Path $certStateDir 'waddle-build-summary.json'
-$runtimeStatePath = Join-Path $certStateDir 'runtime-snapshot.json'
+$dependencyStatePath = Join-Path $certStateDir 'dependencies.json'
 $workPrefix = [IO.Path]::GetFullPath($workspace.work_root).TrimEnd('\') + '\'
 $runtimeHome = Get-WaddleExternalRuntimeHome -AndroidBuildRoot $root
 $runtimePrefix = [IO.Path]::GetFullPath($runtimeHome).TrimEnd('\') + '\'
+$repoModules = [IO.Path]::GetFullPath((Join-Path $repo 'node_modules'))
 $env:WADDLE_NONINTERACTIVE = '1'
 $startedClientId = 0
 $certWatch = [Diagnostics.Stopwatch]::StartNew()
@@ -61,25 +62,20 @@ function Assert-WaddleExternalPath {
   return $full
 }
 
-function Invoke-WaddlePinnedYarnInstall {
+function Invoke-WaddleCommandWithTimeout {
   param(
+    [Parameter(Mandatory)][string]$Command,
     [Parameter(Mandatory)][string]$Phase,
-    [int]$TimeoutSeconds = 120
+    [int]$TimeoutSeconds = 60
   )
-  $yarn = [string]$env:WADDLE_YARN_CMD
-  if ([string]::IsNullOrWhiteSpace($yarn) -or -not (Test-Path -LiteralPath $yarn -PathType Leaf)) {
-    $resolved = Get-Command yarn.cmd -ErrorAction Stop
-    $yarn = $resolved.Source
-  }
 
-  $stdout = Join-Path $certLogDir ("yarn-$Phase.stdout.log")
-  $stderr = Join-Path $certLogDir ("yarn-$Phase.stderr.log")
+  $stdout = Join-Path $certLogDir ("$Phase.stdout.log")
+  $stderr = Join-Path $certLogDir ("$Phase.stderr.log")
   Remove-Item -LiteralPath $stdout,$stderr -Force -ErrorAction SilentlyContinue
 
-  $command = '& ' + "'" + $yarn.Replace("'","''") + "'" + ' install --frozen-lockfile --non-interactive'
   $proc = Start-Process `
-    -FilePath 'powershell.exe' `
-    -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-Command',$command) `
+    -FilePath $env:ComSpec `
+    -ArgumentList @('/d','/s','/c',$Command) `
     -WorkingDirectory $repo `
     -RedirectStandardOutput $stdout `
     -RedirectStandardError $stderr `
@@ -88,25 +84,72 @@ function Invoke-WaddlePinnedYarnInstall {
 
   if (-not $proc.WaitForExit($TimeoutSeconds * 1000)) {
     try { & taskkill.exe /PID $proc.Id /T /F | Out-Null } catch {}
-    throw "WADDLE_CERT=FAIL yarn_timeout phase=$Phase timeout_seconds=$TimeoutSeconds yarn=$yarn stdout=$stdout stderr=$stderr"
+    throw "WADDLE_CERT=FAIL command_timeout phase=$Phase timeout_seconds=$TimeoutSeconds command=$Command stdout=$stdout stderr=$stderr"
   }
+
+  # Windows PowerShell 5.1 can leave ExitCode unpopulated after the timed
+  # WaitForExit overload when redirected streams are involved. The parameterless
+  # call completes stream draining and process-handle state deterministically.
+  $proc.WaitForExit()
   $proc.Refresh()
+
   if (Test-Path -LiteralPath $stdout) { Get-Content -LiteralPath $stdout -ErrorAction SilentlyContinue | Out-Host }
   if (Test-Path -LiteralPath $stderr) { Get-Content -LiteralPath $stderr -ErrorAction SilentlyContinue | Out-Host }
-  if ($proc.ExitCode -ne 0) { throw "WADDLE_CERT=FAIL yarn_install phase=$Phase exit=$($proc.ExitCode) yarn=$yarn" }
-  Write-Host "WADDLE_CERT_YARN=PASS phase=$Phase yarn=$yarn timeout_seconds=$TimeoutSeconds"
+
+  $exitCode = [int]$proc.ExitCode
+  if ($exitCode -ne 0) {
+    throw "WADDLE_CERT=FAIL command_exit phase=$Phase exit=$exitCode command=$Command stdout=$stdout stderr=$stderr"
+  }
+  Write-Host "WADDLE_CERT_COMMAND=PASS phase=$Phase exit=0 timeout_seconds=$TimeoutSeconds"
 }
 
 function Stop-WaddleClientBestEffort {
-  Push-Location $repo
   try {
-    & cmd.exe /d /c 'Waddle-Stop.cmd' | Out-Host
-    $code = $LASTEXITCODE
-    $global:LASTEXITCODE = 0
-    if ($code -ne 0) { Write-Host "WADDLE_CERT_STOP=WARN exit=$code" }
+    Invoke-WaddleCommandWithTimeout -Command 'Waddle-Stop.cmd' -Phase 'stop' -TimeoutSeconds 30
   } catch {
     Write-Host "WADDLE_CERT_STOP=WARN error=$($_.Exception.Message)"
-  } finally { Pop-Location }
+  }
+}
+
+function Assert-WaddleDependencyTreeReadOnly {
+  param([Parameter(Mandatory)]$Dependencies)
+
+  if ([IO.Path]::GetFullPath([string]$Dependencies.node_modules) -ne $repoModules) {
+    throw "WADDLE_CERT=FAIL dependency_root actual=$($Dependencies.node_modules) expected=$repoModules"
+  }
+  if ([string]$Dependencies.electron -ne '10.4.7') {
+    throw "WADDLE_CERT=FAIL dependency_electron actual=$($Dependencies.electron) expected=10.4.7"
+  }
+  if ([string]$Dependencies.mode -notin @('reused','adopted_repo_existing')) {
+    throw "WADDLE_CERT=FAIL dependency_not_reused_after_setup mode=$($Dependencies.mode)"
+  }
+  if (-not (Test-Path -LiteralPath $dependencyStatePath -PathType Leaf)) {
+    throw "WADDLE_CERT=FAIL dependency_state_missing=$dependencyStatePath"
+  }
+
+  $dependencyState = Get-Content -LiteralPath $dependencyStatePath -Raw | ConvertFrom-Json
+  if ([string]$dependencyState.root -ne 'node_modules') {
+    throw "WADDLE_CERT=FAIL dependency_state_root actual=$($dependencyState.root)"
+  }
+  if ([string]$dependencyState.fingerprint -ne [string]$Dependencies.fingerprint) {
+    throw "WADDLE_CERT=FAIL dependency_fingerprint state=$($dependencyState.fingerprint) runtime=$($Dependencies.fingerprint)"
+  }
+
+  foreach ($required in @(
+    'electron\package.json',
+    'express\package.json',
+    'electron-log\package.json',
+    'tsx\package.json',
+    '.bin\copyfiles.cmd',
+    '.bin\electron.cmd'
+  )) {
+    $path = Join-Path $repoModules $required
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+      throw "WADDLE_CERT=FAIL dependency_missing=$path"
+    }
+  }
+
+  Write-Host "WADDLE_CERT_DEPENDENCIES=PASS mode=$($Dependencies.mode) root=$repoModules fingerprint=$($Dependencies.fingerprint) live_mutation=false"
 }
 
 function Get-WaddleDependencySentinelHashes {
@@ -146,34 +189,20 @@ function Assert-WaddleDependencySentinelsUnchanged {
 }
 
 try {
-  # 1) Real human setup contract: managed Node/Yarn, dependency bootstrap,
-  # Pepper Flash, Electron and package index regeneration.
-  Push-Location $repo
-  try {
-    & cmd.exe /d /c 'Waddle-Setup.cmd' | Out-Host
-    $setupExit = $LASTEXITCODE
-  } finally { Pop-Location }
-  $global:LASTEXITCODE = 0
-  if ($setupExit -ne 0) { throw "WADDLE_CERT=FAIL setup_exit=$setupExit" }
+  # 1) Setup is the only certification phase allowed to install/update packages.
+  # It runs with every managed Waddle client stopped by the workflow preclean.
+  Invoke-WaddleCommandWithTimeout -Command 'Waddle-Setup.cmd' -Phase 'setup' -TimeoutSeconds 180
   $packageInfo = Join-Path $repo 'src\server\game-data\package-info.ts'
   if (-not (Test-Path -LiteralPath $packageInfo -PathType Leaf)) { throw "WADDLE_CERT=FAIL package_info_missing=$packageInfo" }
   if ((Get-Item -LiteralPath $packageInfo).Length -le 20) { throw "WADDLE_CERT=FAIL package_info_empty=$packageInfo" }
   Write-Host "WADDLE_CERT_SETUP=PASS package_info=$packageInfo"
 
-  # 2) Prove upstream-style direct Yarn install remains valid while no Waddle
-  # client is running. Dependency mutation is intentionally forbidden after
-  # launch because repo\node_modules is now the one canonical runtime tree.
-  Invoke-WaddlePinnedYarnInstall -Phase 'before_build'
-  foreach ($required in @(
-    (Join-Path $repo 'node_modules\electron\package.json'),
-    (Join-Path $repo 'node_modules\.bin\copyfiles.cmd'),
-    (Join-Path $repo 'node_modules\tsx\package.json')
-  )) {
-    if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "WADDLE_CERT=FAIL dependency_missing=$required" }
-  }
+  # 2) From here onward node_modules is read-only. Re-entering bootstrap must
+  # therefore resolve to reuse/adoption rather than another Yarn installation.
+  $dependencies = Invoke-WaddleDependencyBootstrap -RepoRoot $repo -WorkRoot $workspace.work_root
+  Assert-WaddleDependencyTreeReadOnly -Dependencies $dependencies
 
-  # 3) Canonical Core build. This includes build-packages, TypeScript 7,
-  # tsc-alias, browser build, asset/view copying and lint on one exact SHA.
+  # 3) Canonical Core build on one exact SHA.
   $build = Invoke-AndroidBuildBuild `
     -RepoRoot $repo `
     -AndroidBuildRoot $root `
@@ -190,10 +219,15 @@ try {
   if ([string]$buildSummary.status -ne 'PASS' -or [string]$buildSummary.source_sha -ne $ExpectedSha) {
     throw "WADDLE_CERT=FAIL build_summary status=$($buildSummary.status) sha=$($buildSummary.source_sha)"
   }
+  if ([IO.Path]::GetFullPath([string]$buildSummary.node_modules) -ne $repoModules) {
+    throw "WADDLE_CERT=FAIL build_node_modules actual=$($buildSummary.node_modules) expected=$repoModules"
+  }
   Write-Host "WADDLE_CERT_BUILD=PASS sha=$ExpectedSha duration_ms=$($build.provenance.duration_ms)"
 
-  # 4) External immutable runtime deployment and Flash production probe.
+  # 4) Deploy Electron/Flash/compiled code outside .work while dependencies stay
+  # physically in the repository's single node_modules tree.
   $dependencies = Invoke-WaddleDependencyBootstrap -RepoRoot $repo -WorkRoot $workspace.work_root
+  Assert-WaddleDependencyTreeReadOnly -Dependencies $dependencies
   $sourceElectron = Test-WaddleElectronRuntime -WorkRoot $workspace.work_root -ExpectedVersion $dependencies.electron
   $sourceFlash = Test-WaddlePepperFlash -RepoRoot $repo
   $runtime = New-WaddleRuntimeSnapshot `
@@ -212,10 +246,9 @@ try {
   $runtimeEntry = Assert-WaddleExternalPath -Path ([string]$runtime.app_entry) -Label 'app_entry'
   $runtimeModules = Assert-WaddleExternalPath -Path ([string]$runtime.runtime_node_modules) -Label 'runtime_node_modules'
   if (-not $runtimeRoot.StartsWith($runtimePrefix,[StringComparison]::OrdinalIgnoreCase)) { throw "WADDLE_CERT=FAIL runtime_home=$runtimeRoot expected=$runtimeHome" }
-  if ([IO.Path]::GetFullPath($runtimeModules) -ne [IO.Path]::GetFullPath((Join-Path $repo 'node_modules'))) {
-    throw "WADDLE_CERT=FAIL runtime_modules_not_canonical actual=$runtimeModules expected=$(Join-Path $repo 'node_modules')"
-  }
+  if ([IO.Path]::GetFullPath($runtimeModules) -ne $repoModules) { throw "WADDLE_CERT=FAIL runtime_modules_not_canonical actual=$runtimeModules expected=$repoModules" }
 
+  # 5) Real production page + real boots.swf + real Pepper Flash.
   $probe = Join-Path $repo 'scripts\flash-runtime-probe.js'
   if (-not (Test-Path -LiteralPath $probe -PathType Leaf)) { throw "WADDLE_CERT=FAIL flash_probe_missing=$probe" }
   $probeState = Join-Path $certStateDir 'flash-runtime-probe.json'
@@ -232,11 +265,13 @@ try {
   $env:WADDLE_RUNTIME_NODE_MODULES = $runtimeModules
   $env:WADDLE_NODE_MODULES = $runtimeModules
   $env:NODE_PATH = $runtimeModules
+
   $probeProcess = Start-Process -FilePath $runtimeElectron -ArgumentList ('"'+$probe+'"') -WorkingDirectory $repo -RedirectStandardOutput $probeOut -RedirectStandardError $probeErr -PassThru
   if (-not $probeProcess.WaitForExit(40000)) {
-    try { $probeProcess.Kill() } catch {}
+    try { & taskkill.exe /PID $probeProcess.Id /T /F | Out-Null } catch {}
     throw "WADDLE_CERT=FAIL flash_probe_timeout stdout=$probeOut stderr=$probeErr"
   }
+  $probeProcess.WaitForExit()
   $probeProcess.Refresh()
   if (-not (Test-Path -LiteralPath $probeState -PathType Leaf)) { throw "WADDLE_CERT=FAIL flash_probe_state_missing=$probeState" }
   $probeResult = Get-Content -LiteralPath $probeState -Raw | ConvertFrom-Json
@@ -246,23 +281,17 @@ try {
   if ([string]$probeResult.boots_content_type -notmatch 'application/x-shockwave-flash') { throw "WADDLE_CERT=FAIL flash_mime=$($probeResult.boots_content_type)" }
   if (-not [bool]$probeResult.renderer.mimePresent -or -not [bool]$probeResult.renderer.mimeEnabledPlugin -or -not [bool]$probeResult.renderer.objectPresent) { throw 'WADDLE_CERT=FAIL flash_renderer_contract' }
   if ([bool]$probeResult.fallback_visible -or -not [bool]$probeResult.scriptable_flash_object -or -not [bool]$probeResult.production_instantiated) { throw 'WADDLE_CERT=FAIL flash_not_instantiated' }
+  if ([IO.Path]::GetFullPath([string]$probeResult.runtime_node_modules) -ne $repoModules) { throw "WADDLE_CERT=FAIL flash_modules actual=$($probeResult.runtime_node_modules) expected=$repoModules" }
   if ([IO.Path]::GetFullPath([string]$probeResult.plugin_path) -ne $runtimeFlash) { throw "WADDLE_CERT=FAIL flash_plugin actual=$($probeResult.plugin_path) expected=$runtimeFlash" }
   Write-Host "WADDLE_CERT_FLASH=PASS runtime=$runtimeRoot plugin=$runtimeFlash boots=200 instantiated=true"
 
   $dependencySentinelsBeforeStart = Get-WaddleDependencySentinelHashes -ModulesRoot $runtimeModules
 
-  # 5) User-facing Start must reuse the exact build, deploy, launch a detached
-  # external client with Start-Process, write RUNNING state and return control
-  # while the client stays alive.
+  # 6) Human-facing Start must fast-reuse the exact build and dependency tree.
   $startWatch = [Diagnostics.Stopwatch]::StartNew()
-  Push-Location $repo
-  try {
-    & cmd.exe /d /c 'Waddle-Start.cmd' | Out-Host
-    $startExit = $LASTEXITCODE
-  } finally { Pop-Location }
-  $global:LASTEXITCODE = 0
+  Invoke-WaddleCommandWithTimeout -Command 'Waddle-Start.cmd' -Phase 'start' -TimeoutSeconds 60
   $startWatch.Stop()
-  if ($startExit -ne 0) { throw "WADDLE_CERT=FAIL actual_start_exit=$startExit" }
+
   if (-not (Test-Path -LiteralPath $clientStatePath -PathType Leaf)) { throw "WADDLE_CERT=FAIL client_state_missing=$clientStatePath" }
   $clientState = Get-Content -LiteralPath $clientStatePath -Raw | ConvertFrom-Json
   if ([string]$clientState.schema -ne 'waddle-client-state/v10') { throw "WADDLE_CERT=FAIL client_schema=$($clientState.schema)" }
@@ -271,9 +300,10 @@ try {
   if ($null -eq $clientState.PSObject.Properties['dependency_mutation_while_running'] -or [bool]$clientState.dependency_mutation_while_running) {
     throw "WADDLE_CERT=FAIL client_dependency_mutation_contract value=$($clientState.dependency_mutation_while_running)"
   }
-  if ([string]$clientState.dependency_mode -notin @('reused','adopted_repo_existing')) {
-    throw "WADDLE_CERT=FAIL start_reinstalled_dependencies mode=$($clientState.dependency_mode)"
-  }
+  if ([string]$clientState.dependency_mode -notin @('reused','adopted_repo_existing')) { throw "WADDLE_CERT=FAIL start_reinstalled_dependencies mode=$($clientState.dependency_mode)" }
+  if ([IO.Path]::GetFullPath([string]$clientState.runtime_node_modules) -ne $repoModules) { throw "WADDLE_CERT=FAIL client_modules_not_canonical actual=$($clientState.runtime_node_modules) expected=$repoModules" }
+  if (-not ([IO.Path]::GetFullPath([string]$clientState.runtime_root)).StartsWith($runtimePrefix,[StringComparison]::OrdinalIgnoreCase)) { throw "WADDLE_CERT=FAIL client_runtime_home=$($clientState.runtime_root)" }
+
   foreach ($pair in @(
     @{name='runtime_root'; value=[string]$clientState.runtime_root},
     @{name='app_entry'; value=[string]$clientState.runtime_app_entry},
@@ -281,39 +311,30 @@ try {
     @{name='electron'; value=[string]$clientState.electron_executable},
     @{name='flash'; value=[string]$clientState.ppapi_flash_path}
   )) { Assert-WaddleExternalPath -Path $pair.value -Label $pair.name | Out-Null }
-  if (-not ([IO.Path]::GetFullPath([string]$clientState.runtime_root)).StartsWith($runtimePrefix,[StringComparison]::OrdinalIgnoreCase)) { throw "WADDLE_CERT=FAIL client_runtime_home=$($clientState.runtime_root)" }
-  if ([IO.Path]::GetFullPath([string]$clientState.runtime_node_modules) -ne [IO.Path]::GetFullPath((Join-Path $repo 'node_modules'))) {
-    throw "WADDLE_CERT=FAIL client_modules_not_canonical actual=$($clientState.runtime_node_modules)"
-  }
+
   $startedClientId = [int]$clientState.pid
   $clientProcess = Get-Process -Id $startedClientId -ErrorAction Stop
   $clientProcess.Refresh()
   if ($clientProcess.HasExited) { throw "WADDLE_CERT=FAIL client_exited process_id=$startedClientId" }
   $clientCim = Get-CimInstance Win32_Process -Filter "ProcessId=$startedClientId" -ErrorAction Stop
   if ([IO.Path]::GetFullPath([string]$clientCim.ExecutablePath) -ne [IO.Path]::GetFullPath([string]$clientState.electron_executable)) { throw "WADDLE_CERT=FAIL client_executable actual=$($clientCim.ExecutablePath) expected=$($clientState.electron_executable)" }
-  if ($startWatch.Elapsed.TotalMinutes -ge 3) { throw "WADDLE_CERT=FAIL launcher_return_too_slow duration_ms=$($startWatch.ElapsedMilliseconds)" }
+  if ($startWatch.Elapsed.TotalSeconds -ge 60) { throw "WADDLE_CERT=FAIL launcher_return_too_slow duration_ms=$($startWatch.ElapsedMilliseconds)" }
   Write-Host "WADDLE_CERT_START=PASS process_id=$startedClientId launcher_return_ms=$($startWatch.ElapsedMilliseconds) runtime=$($clientState.runtime_root) dependency_mode=$($clientState.dependency_mode)"
 
-  # 6) The single repo node_modules tree is immutable while Electron is alive.
-  # We deliberately do NOT run yarn here: mutating the same dependency tree that
-  # the live client resolves modules from recreates Windows file-lock races and
-  # can hang a self-hosted runner. Dependency installation/update is a pre-start
-  # operation only; fast start must reuse the validated tree unchanged.
+  # 7) Prove the canonical tree remains unchanged while Electron is alive.
   Start-Sleep -Seconds 2
   $clientProcess.Refresh()
   if ($clientProcess.HasExited) { throw "WADDLE_CERT=FAIL client_died_after_start process_id=$startedClientId" }
   Assert-WaddleDependencySentinelsUnchanged -ModulesRoot $runtimeModules -Before $dependencySentinelsBeforeStart
   Write-Host "WADDLE_CERT_RUNTIME_ISOLATION=PASS process_id=$startedClientId dependency_tree=repo_physical live_mutation=false sentinels_unchanged=true"
 
-  # 7) Stop must not need Core/workspace junction initialization and must clean
-  # both state-owned and recoverable Waddle process trees.
-  Stop-WaddleClientBestEffort
+  # 8) Stop must return promptly and leave no managed Electron process behind.
+  Invoke-WaddleCommandWithTimeout -Command 'Waddle-Stop.cmd' -Phase 'stop' -TimeoutSeconds 30
   Start-Sleep -Seconds 1
   if (Get-Process -Id $startedClientId -ErrorAction SilentlyContinue) { throw "WADDLE_CERT=FAIL stop_left_client process_id=$startedClientId" }
   $postState = Get-Content -LiteralPath $clientStatePath -Raw | ConvertFrom-Json
   if ([string]$postState.status -ne 'STOPPED') { throw "WADDLE_CERT=FAIL stop_state=$($postState.status)" }
 
-  # 8) No executable Waddle runtime may remain under .work after certification.
   $legacy = @(Get-CimInstance Win32_Process -Filter "Name='electron.exe'" -ErrorAction SilentlyContinue | Where-Object {
     $exe = [string]$_.ExecutablePath
     if ([string]::IsNullOrWhiteSpace($exe)) { return $false }
@@ -324,7 +345,7 @@ try {
   Test-AndroidBuildExactHead -RepoRoot $repo -ExpectedSha $ExpectedSha -AndroidBuildRoot $root | Out-Null
   $certWatch.Stop()
   $final = [ordered]@{
-    schema='waddle-certification/v2'
+    schema='waddle-certification/v3'
     status='PASS'
     source_sha=$ExpectedSha
     repository=$Repository
@@ -334,7 +355,8 @@ try {
     electron=[string]$dependencies.electron
     flash=[string]$sourceFlash.version
     package_index='PASS'
-    direct_yarn_before_start='PASS'
+    dependency_setup='PASS'
+    dependency_reuse_after_setup='PASS'
     live_dependency_mutation='DISABLED'
     build='PASS'
     flash_runtime='PASS'
@@ -343,6 +365,7 @@ try {
     stop='PASS'
     legacy_work_runtime_count=0
     runtime_home=$runtimeHome
+    node_modules=$repoModules
     launcher_return_ms=[int64]$startWatch.ElapsedMilliseconds
     duration_ms=[int64]$certWatch.ElapsedMilliseconds
     completed_utc=[DateTime]::UtcNow.ToString('o')
@@ -353,7 +376,7 @@ try {
   try { Stop-WaddleClientBestEffort } catch {}
   $certWatch.Stop()
   [ordered]@{
-    schema='waddle-certification/v2'
+    schema='waddle-certification/v3'
     status='FAIL'
     source_sha=$ExpectedSha
     repository=$Repository
