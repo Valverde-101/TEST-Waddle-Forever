@@ -1,6 +1,26 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Invoke-WaddleGitHeadProbe {
+  [CmdletBinding()]
+  param(
+    [Parameter(Mandatory)][string]$GitPath,
+    [Parameter(Mandatory)][string]$RepoRoot
+  )
+
+  $lines = New-Object System.Collections.Generic.List[string]
+  & $GitPath -C $RepoRoot rev-parse HEAD 2>&1 | ForEach-Object {
+    $lines.Add([string]$_)
+  }
+  $exitCode = $LASTEXITCODE
+  $text = ($lines -join "`n").Trim()
+
+  [pscustomobject]@{
+    exit_code = $exitCode
+    text = $text
+  }
+}
+
 function Get-WaddleRepositoryHead {
   [CmdletBinding()]
   param(
@@ -10,16 +30,10 @@ function Get-WaddleRepositoryHead {
 
   $repo = [IO.Path]::GetFullPath($RepoRoot)
   $git = Get-AndroidBuildGitPath $AndroidBuildRoot
-
-  $probe = Invoke-AndroidBuildProcess `
-    -FilePath $git `
-    -ArgumentList @('-C',$repo,'rev-parse','HEAD') `
-    -TimeoutSeconds 30 `
-    -AllowNonZeroExit
+  $probe = Invoke-WaddleGitHeadProbe -GitPath $git -RepoRoot $repo
 
   if ($probe.exit_code -eq 0) {
-    $sha = [string]$probe.stdout
-    $sha = $sha.Trim()
+    $sha = [string]$probe.text
     if ([string]::IsNullOrWhiteSpace($sha)) { throw 'WADDLE_GIT_HEAD=FAIL empty_stdout' }
     Write-Host "WADDLE_GIT_HEAD=PASS sha=$sha ownership_mode=normal"
     return [pscustomobject]@{
@@ -35,9 +49,9 @@ function Get-WaddleRepositoryHead {
     }
   }
 
-  $stderr = [string]$probe.stderr
-  if ($stderr -notmatch '(?i)dubious ownership|safe\.directory') {
-    throw "WADDLE_GIT_HEAD=FAIL exit=$($probe.exit_code) stderr=$($stderr.Trim())"
+  $diagnostic = [string]$probe.text
+  if ($diagnostic -notmatch '(?i)dubious ownership|safe\.directory') {
+    throw "WADDLE_GIT_HEAD=FAIL exit=$($probe.exit_code) output=$diagnostic"
   }
 
   # Git itself reports the canonical path it wants trusted. This matters for mapped
@@ -46,14 +60,14 @@ function Get-WaddleRepositoryHead {
   # a drive letter, UNC server, username, or machine-specific global configuration.
   $safeDirectory = $null
   $recommended = [regex]::Match(
-    $stderr,
+    $diagnostic,
     "(?im)git\s+config\s+--global\s+--add\s+safe\.directory\s+'([^']+)'"
   )
   if ($recommended.Success) {
     $safeDirectory = [string]$recommended.Groups[1].Value
   }
   if ([string]::IsNullOrWhiteSpace($safeDirectory)) {
-    $detected = [regex]::Match($stderr, "(?im)repository at '([^']+)'" )
+    $detected = [regex]::Match($diagnostic, "(?im)repository at '([^']+)'" )
     if ($detected.Success) { $safeDirectory = [string]$detected.Groups[1].Value }
   }
   if ([string]::IsNullOrWhiteSpace($safeDirectory)) {
@@ -75,12 +89,7 @@ function Get-WaddleRepositoryHead {
   Set-Item -Path ("Env:" + $valueName) -Value $safeDirectory
   $env:GIT_CONFIG_COUNT = [string]($baseCount + 1)
 
-  $retry = Invoke-AndroidBuildProcess `
-    -FilePath $git `
-    -ArgumentList @('-C',$repo,'rev-parse','HEAD') `
-    -TimeoutSeconds 30 `
-    -AllowNonZeroExit
-
+  $retry = Invoke-WaddleGitHeadProbe -GitPath $git -RepoRoot $repo
   if ($retry.exit_code -ne 0) {
     $state = [pscustomobject]@{
       safe_directory_injected = $true
@@ -90,10 +99,10 @@ function Get-WaddleRepositoryHead {
       previous_value = $previousValue
     }
     Restore-WaddleGitSafeDirectoryScope -State $state
-    throw "WADDLE_GIT_HEAD=FAIL ownership_retry exit=$($retry.exit_code) safe_directory=$safeDirectory stderr=$(([string]$retry.stderr).Trim())"
+    throw "WADDLE_GIT_HEAD=FAIL ownership_retry exit=$($retry.exit_code) safe_directory=$safeDirectory output=$($retry.text)"
   }
 
-  $sha = ([string]$retry.stdout).Trim()
+  $sha = ([string]$retry.text).Trim()
   if ([string]::IsNullOrWhiteSpace($sha)) {
     $state = [pscustomobject]@{
       safe_directory_injected = $true
