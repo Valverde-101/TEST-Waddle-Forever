@@ -1,0 +1,70 @@
+name: Waddle Live Readonly Diagnostic
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [dev]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: waddle-live-readonly-diagnostic-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
+    timeout-minutes: 10
+    steps:
+      - name: Inspect current Waddle local state without mutation
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          Set-StrictMode -Version Latest
+          $roots=@()
+          if($env:ANDROIDBUILD_ROOT){$roots += [string]$env:ANDROIDBUILD_ROOT}
+          foreach($drive in [IO.DriveInfo]::GetDrives()){
+            try{if($drive.IsReady){$roots += [IO.Path]::Combine($drive.RootDirectory.FullName,'AndroidBuild')}}catch{}
+          }
+          $root=$null
+          foreach($candidate in ($roots | Select-Object -Unique)){
+            try{$full=(Resolve-Path -LiteralPath $candidate -ErrorAction Stop).Path}catch{continue}
+            if(Test-Path -LiteralPath (Join-Path $full 'Repositories\TEST-Waddle-Forever') -PathType Container){$root=$full;break}
+          }
+          if(-not $root){throw 'LIVE_DIAG=FAIL androidbuild_root_not_found'}
+          $repo=Join-Path $root 'Repositories\TEST-Waddle-Forever'
+          $work=Join-Path $repo '.work'
+          Write-Host "LIVE_DIAG=START root=$root repo=$repo"
+          try {
+            $head=& git.exe -C $repo rev-parse HEAD 2>$null
+            Write-Host "LIVE_DIAG_HEAD=$head"
+          } catch { Write-Host "LIVE_DIAG_HEAD=UNAVAILABLE error=$($_.Exception.Message)" }
+
+          foreach($name in @('setup-last.log','start-last.log','stop-last.log')){
+            $path=Join-Path $work ('logs\launcher\'+$name)
+            Write-Host "----- $name -----"
+            if(Test-Path -LiteralPath $path -PathType Leaf){Get-Content -LiteralPath $path -Tail 120 | Write-Host}else{Write-Host 'MISSING'}
+          }
+
+          foreach($relative in @('state\waddle-client.json','state\waddle-build-summary.json','state\build-provenance.json','state\runtime-snapshot.json')){
+            $path=Join-Path $work $relative
+            Write-Host "----- $relative -----"
+            if(Test-Path -LiteralPath $path -PathType Leaf){Get-Content -LiteralPath $path -Raw | Write-Host}else{Write-Host 'MISSING'}
+          }
+
+          Write-Host '----- relevant processes -----'
+          Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -in @('electron.exe','powershell.exe','cmd.exe','node.exe','yarn.cmd') -or [string]$_.CommandLine -match 'Waddle|waddle|TEST-Waddle-Forever' } |
+            Select-Object ProcessId,ParentProcessId,Name,ExecutablePath,CreationDate,CommandLine |
+            Format-List | Out-String -Width 500 | Write-Host
+
+          Write-Host '----- runtime versions -----'
+          $versions=Join-Path $root 'Runtime\Waddle-Forever\Versions'
+          if(Test-Path -LiteralPath $versions -PathType Container){
+            Get-ChildItem -LiteralPath $versions -Directory -ErrorAction SilentlyContinue |
+              Sort-Object LastWriteTimeUtc -Descending |
+              Select-Object -First 8 FullName,LastWriteTimeUtc |
+              Format-Table -AutoSize | Out-String -Width 500 | Write-Host
+          }
+          Write-Host 'LIVE_DIAG=PASS readonly=true'
