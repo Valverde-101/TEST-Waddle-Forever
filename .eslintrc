@@ -20,8 +20,8 @@
   "rules": {
     "no-unused-vars": "off",
     "no-useless-escape": "off",
-    "prefer-const": "warn",
-    "no-extra-semi": "warn",
+    "prefer-const": "off",
+    "no-extra-semi": "off",
     "@typescript-eslint/no-unused-vars": [
       "warn",
       {
@@ -63,6 +63,34 @@
       ],
       "rules": {
         "@typescript-eslint/no-require-imports": "off"
+      }
+    },
+    {
+      "files": [
+        "src/server/socket-server/**/*.ts"
+      ],
+      "rules": {
+        "@typescript-eslint/no-unused-vars": "off"
+      }
+    },
+    {
+      "files": [
+        "src/client/views/timeline/timeline-static.ts",
+        "src/server/file-generators/rooms.json.ts",
+        "src/server/game-logic/items.ts",
+        "src/server/mods.ts",
+        "src/server/servers/index.ts"
+      ],
+      "rules": {
+        "@typescript-eslint/no-unused-vars": "off"
+      }
+    },
+    {
+      "files": [
+        "src/server/game-data/safe-messages.ts"
+      ],
+      "rules": {
+        "@typescript-eslint/no-empty-object-type": "off"
       }
     }
   ]

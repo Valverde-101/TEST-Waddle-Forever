@@ -62,20 +62,21 @@ export function parseURL(url: string): {
     port = Number(portString)
   }
 
-  const path = '/' + slashSplit.join('/')
+  const requestPath = '/' + slashSplit.join('/')
 
   return {
     protocol: protocol,
     host,
-    path,
+    path: requestPath,
     port
   }
 }
 
-export const postJSON = async (path: string, body: any) => {
-  const urlData = parseURL(`${WEBSITE}${path}`);
+export const postJSON = async (requestPath: string, body: unknown) => {
+  const urlData = parseURL(`${WEBSITE}${requestPath}`);
 
   try {
+    // Legacy website endpoints have heterogeneous response shapes.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return await new Promise<any>((resolve, reject) => {
       let output = '';
@@ -106,8 +107,8 @@ export const postJSON = async (path: string, body: any) => {
           try {
             const obj = JSON.parse(output);
             resolve(obj);
-          } catch (error) {
-            reject(`The endpoint was successful but returned invalid JSON data: ${output}`);
+          } catch {
+            reject(new Error(`The endpoint was successful but returned invalid JSON data: ${output}`));
           }
         });
       });
@@ -121,7 +122,7 @@ export const postJSON = async (path: string, body: any) => {
       req.end();
     });
   } catch (error) {
-    console.log(`There was an error with the POST request to path ${path}: ${error}`);
+    console.log(`There was an error with the POST request to path ${requestPath}: ${error}`);
     return undefined;
   }
 };
@@ -139,7 +140,7 @@ export function getDateString(timestamp: number): string {
 /** Runs a command in the current shell, asynchronously. */
 export async function runCommand(command: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    exec(command, (err, stdout, stder) => {
+    exec(command, (err) => {
       if (err === null) {
         resolve();
       } else {
@@ -150,13 +151,13 @@ export async function runCommand(command: string): Promise<void> {
 }
 
 /** Function for logging more silent errors in production */
-export const logError = (message: string, error: any): void => {
+export const logError = (message: string, error: unknown): void => {
   const logDir = process.platform == 'darwin' ? path.join(__dirname, '..', '..', 'logs') : path.join(process.cwd(), 'logs');
   if (!fs.existsSync(logDir)) {
-    fs.mkdirSync(logDir);
+    fs.mkdirSync(logDir, { recursive: true });
   }
   const logFile = path.join(logDir, 'logs.txt');
-  fs.appendFileSync(logFile, `${message}: ${error}\n`);
+  fs.appendFileSync(logFile, `${message}: ${String(error)}\n`);
 }
 
 export const MEDIA_DIRECTORY = process.platform == 'darwin' ? path.join(__dirname, '..', '..', 'media') : path.join(process.cwd(), 'media');
@@ -294,6 +295,7 @@ export async function readFile(filePath: string) {
     fs.readFile(filePath, (err, data) => {
       if (err) {
         reject(err);
+        return;
       }
       resolve(data);
     });
@@ -305,6 +307,7 @@ export async function writeFile(filePath: string, content: string | Uint8Array<A
     fs.writeFile(filePath, content, (err) => {
       if (err) {
         reject(err);
+        return;
       }
       resolve();
     });
