@@ -37,6 +37,35 @@ $electronSource = Test-WaddleElectronRuntime -WorkRoot $workspace.work_root -Exp
 Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_ELECTRON_SOURCE_EXE' -Value $electronSource.executable
 [Environment]::SetEnvironmentVariable('WADDLE_ELECTRON_SOURCE_EXE',$electronSource.executable,'Process')
 
+# Upstream Waddle requires build-packages after dependency installation so the
+# generated media package index matches the current media tree. It is safe and
+# deterministic to refresh this index during Setup; the normal Start/build path
+# refreshes it again before compilation.
+$tsxBin = Join-Path $dependencies.node_modules 'tsx\dist\cli.mjs'
+$packageScript = Join-Path $repo 'scripts\build-packages.ts'
+$packageInfo = Join-Path $repo 'src\server\game-data\package-info.ts'
+foreach ($required in @($tsxBin,$packageScript)) {
+  if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+    throw "WADDLE_PACKAGE_INDEX=FAIL missing=$required"
+  }
+}
+$sw = [Diagnostics.Stopwatch]::StartNew()
+Push-Location $repo
+try {
+  & $managedNode.node $tsxBin $packageScript
+  $packageExit = $LASTEXITCODE
+} finally {
+  Pop-Location
+}
+$sw.Stop()
+if ($packageExit -ne 0) {
+  throw "WADDLE_PACKAGE_INDEX=FAIL exit=$packageExit duration_ms=$($sw.ElapsedMilliseconds)"
+}
+if (-not (Test-Path -LiteralPath $packageInfo -PathType Leaf)) {
+  throw "WADDLE_PACKAGE_INDEX=FAIL generated_missing=$packageInfo"
+}
+Write-Host "WADDLE_PACKAGE_INDEX=PASS script=build-packages duration_ms=$($sw.ElapsedMilliseconds) path=$packageInfo"
+
 Write-Host "WADDLE_BOOTSTRAP=PASS platform=windows-x64 repo=$repo work=$($workspace.work_root) runtime_home=$runtimeHome"
 Write-Host "WADDLE_NODE=$($toolchain.node)"
 Write-Host "WADDLE_NODE_HOME=$($managedNode.home)"
@@ -50,4 +79,4 @@ Write-Host "WADDLE_RUNTIME_MODE=external_deployment"
 Write-Host "WADDLE_RUNTIME_HOME=$runtimeHome"
 Write-Host "WADDLE_FLASH_SOURCE=$($flash.path)"
 Write-Host 'WADDLE_VISUAL_STUDIO=NOT_REQUIRED'
-Write-Host 'NEXT=yarn start or Waddle-Start.cmd'
+Write-Host 'NEXT=Waddle-Start.cmd'

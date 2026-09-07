@@ -107,20 +107,55 @@ function Test-WaddleInstalledCompilerContract {
 function Reset-WaddleCompiledOutput {
   $link = Join-Path $repo 'compiled'
   $target = Join-Path $workspace.work_root 'build\compiled'
+  New-Item -ItemType Directory -Force -Path $target | Out-Null
+
   if (Test-Path -LiteralPath $link) {
     $item = Get-Item -LiteralPath $link -Force
     if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+      $actual = Get-WaddleJunctionTarget -Path $link
+      if ($actual -and $actual.TrimEnd('\') -ieq ([IO.Path]::GetFullPath($target)).TrimEnd('\')) {
+        foreach ($child in @(Get-ChildItem -LiteralPath $target -Force -ErrorAction SilentlyContinue)) {
+          Remove-Item -LiteralPath $child.FullName -Recurse -Force -ErrorAction Stop
+        }
+        Write-Host "COMPILED_RESET=PASS mode=preserved_junction path=$link target=$target"
+        return
+      }
+
       & cmd.exe /d /c "rmdir `"$link`"" | Out-Null
-      if ($LASTEXITCODE -ne 0) { throw "COMPILED_RESET=FAIL remove_junction exit=$LASTEXITCODE" }
+      if ($LASTEXITCODE -ne 0) { throw "COMPILED_RESET=FAIL remove_wrong_junction exit=$LASTEXITCODE path=$link" }
       $global:LASTEXITCODE = 0
     } else {
-      Remove-Item -LiteralPath $link -Recurse -Force
+      Remove-Item -LiteralPath $link -Recurse -Force -ErrorAction Stop
+      New-Item -ItemType Directory -Force -Path $link | Out-Null
+      Write-Host "COMPILED_RESET=PASS mode=physical_existing path=$link"
+      return
     }
   }
-  if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
-  New-Item -ItemType Directory -Force -Path $target | Out-Null
-  Ensure-WaddleJunction -LinkPath $link -TargetPath $target
-  Write-Host "COMPILED_RESET=PASS target=$target"
+
+  foreach ($child in @(Get-ChildItem -LiteralPath $target -Force -ErrorAction SilentlyContinue)) {
+    Remove-Item -LiteralPath $child.FullName -Recurse -Force -ErrorAction Stop
+  }
+
+  try {
+    Ensure-WaddleJunction -LinkPath $link -TargetPath $target
+    Write-Host "COMPILED_RESET=PASS mode=junction_created path=$link target=$target"
+    return
+  } catch {
+    $junctionError = $_.Exception.Message
+    if (Test-Path -LiteralPath $link) {
+      try {
+        $maybe = Get-Item -LiteralPath $link -Force
+        if (($maybe.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+          & cmd.exe /d /c "rmdir `"$link`"" | Out-Null
+          $global:LASTEXITCODE = 0
+        } else {
+          Remove-Item -LiteralPath $link -Recurse -Force -ErrorAction SilentlyContinue
+        }
+      } catch {}
+    }
+    New-Item -ItemType Directory -Force -Path $link | Out-Null
+    Write-Host "COMPILED_RESET=PASS mode=physical_fallback path=$link reason=network_or_junction_unavailable detail=$junctionError"
+  }
 }
 
 Start-Transcript -LiteralPath $transcript -Force | Out-Null
@@ -141,21 +176,29 @@ try {
     Pop-Location
   }
 
+  $compiledPath = Join-Path $repo 'compiled'
+  $compiledStorage = $compiledPath
+  try {
+    $resolvedTarget = Get-WaddleJunctionTarget -Path $compiledPath
+    if ($resolvedTarget) { $compiledStorage = $resolvedTarget }
+  } catch {}
+
   $summary = [ordered]@{
-    schema='waddle-build-summary/v3'
+    schema='waddle-build-summary/v4'
     status='PASS'
     platform='windows-x64'
     source_sha=if ($ctx.ContainsKey('expected_sha')) { [string]$ctx.expected_sha } else { '' }
     repo_root=$repo
     work_root=$workspace.work_root
     node_modules=(Get-WaddleNodeModulesPath -WorkRoot $workspace.work_root)
-    compiled=(Join-Path $workspace.work_root 'build\compiled')
+    compiled=$compiledPath
+    compiled_storage=$compiledStorage
     dist=(Join-Path $workspace.work_root 'dist\package')
     yarn_cache=$env:YARN_CACHE_FOLDER
     node_path=$env:NODE_PATH
     dependency_fingerprint=$dependencies.fingerprint
     dependency_mode=$dependencies.mode
-    runtime_mode='immutable_snapshot'
+    runtime_mode='external_deployment'
     visual_studio='NOT_REQUIRED'
     optional_register_scheme='NOT_EXECUTED_WHEN_DEPENDENCY_FINGERPRINT_VALID'
     build_typescript='7.0.2'
