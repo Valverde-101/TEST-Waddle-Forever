@@ -30,6 +30,7 @@ export type Settings = {
 } & Record<BooleanSettingKey, boolean>;
 
 type PartialSettings = Partial<Settings>
+type SettingsRecord = Record<string, unknown>;
 
 export class SettingsManager {
   settings: Settings;
@@ -53,10 +54,28 @@ export class SettingsManager {
   }
 
   constructor () {
-    let settingsJson: any = {};
+    let settingsJson: SettingsRecord = {};
 
     if (fs.existsSync(SETTINGS_PATH)) {
-      settingsJson = JSON.parse(fs.readFileSync(SETTINGS_PATH, { encoding: 'utf-8' }));
+      try {
+        const parsed: unknown = JSON.parse(fs.readFileSync(SETTINGS_PATH, { encoding: 'utf-8' }));
+        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+          throw new Error('settings.json root must be an object');
+        }
+        settingsJson = parsed as SettingsRecord;
+      } catch (error) {
+        // A truncated settings file used to throw during module import and could
+        // prevent the entire client/server from starting. Preserve the bad bytes
+        // for diagnosis, recover defaults, then rewrite a valid file below.
+        const backupPath = `${SETTINGS_PATH}.corrupt-${Date.now()}`;
+        try {
+          fs.copyFileSync(SETTINGS_PATH, backupPath);
+          console.error(`Invalid settings file preserved at ${backupPath}:`, error);
+        } catch (backupError) {
+          console.error('Invalid settings file could not be backed up:', backupError, error);
+        }
+        settingsJson = {};
+      }
     }
 
     this.mods = new ModManager();
@@ -87,7 +106,7 @@ export class SettingsManager {
     this.targetPort = HTTP_PORT;
   }
 
-  readString(object: any, property: string): string {
+  readString(object: SettingsRecord, property: string): string {
     const value = object[property];
     if (typeof value === 'string') {
       return value;
@@ -96,16 +115,16 @@ export class SettingsManager {
     }
   }
 
-  readVersion(object: any): Version {
+  readVersion(object: SettingsRecord): Version {
     const value = object['version'];
-    if (value === undefined || !isVersionValid(value)) {
+    if (typeof value !== 'string' || !isVersionValid(value)) {
       return '2010-10-25';
     } else {
       return value;
     }
   }
 
-  readBoolean(object: any, property: string, default_value: boolean): boolean {
+  readBoolean(object: SettingsRecord, property: string, default_value: boolean): boolean {
     const value = object[property];
     if (typeof value === 'boolean') {
       return value;
@@ -116,7 +135,19 @@ export class SettingsManager {
 
   updateSettings(partial: PartialSettings): void {
     this.settings = { ...this.settings, ...partial};
-    fs.writeFileSync(SETTINGS_PATH, JSON.stringify(this.settings));
+    const temporaryPath = `${SETTINGS_PATH}.tmp-${process.pid}-${Date.now()}`;
+
+    try {
+      fs.writeFileSync(temporaryPath, JSON.stringify(this.settings));
+      fs.renameSync(temporaryPath, SETTINGS_PATH);
+    } catch (error) {
+      try {
+        if (fs.existsSync(temporaryPath)) {
+          fs.unlinkSync(temporaryPath);
+        }
+      } catch {}
+      throw error;
+    }
 
     this.updateListener.fire();
   }
