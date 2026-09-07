@@ -50,7 +50,7 @@ jobs:
           if(-not $root){throw 'WADDLE_CERT=FAIL androidbuild_core_not_found'}
           $env:ANDROIDBUILD_ROOT=$root
           "ANDROIDBUILD_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Import-Module (Join-Path $root 'Core\Current\AndroidBuild.psd1') -Force
+          Import-Module (Join-Path $root 'Core\Current\AndroidBuild.psd1') -Force -DisableNameChecking
           $version=[string](Get-AndroidBuildCoreVersion)
           if([version]$version -lt [version]'3.0.17'){throw "WADDLE_CERT=FAIL core_required=3.0.17 actual=$version"}
           Enable-AndroidBuildPortableTools -AndroidBuildRoot $root | Out-Null
@@ -126,7 +126,7 @@ jobs:
           $summary=Join-Path $repo '.work\swf-analysis\summary.json'
           if(-not(Test-Path -LiteralPath $summary -PathType Leaf)){throw "WADDLE_SWF_ANALYSIS=FAIL summary_missing=$summary"}
           Get-Content -LiteralPath $summary -Raw | Write-Host
-          Import-Module (Join-Path $env:ANDROIDBUILD_ROOT 'Core\Current\AndroidBuild.psd1') -Force
+          Import-Module (Join-Path $env:ANDROIDBUILD_ROOT 'Core\Current\AndroidBuild.psd1') -Force -DisableNameChecking
           Test-AndroidBuildExactHead -RepoRoot $repo -ExpectedSha $env:WADDLE_EXPECTED_SHA -AndroidBuildRoot $env:ANDROIDBUILD_ROOT | Out-Null
           Write-Host "WADDLE_SWF_ANALYSIS_EXACT_HEAD=PASS sha=$env:WADDLE_EXPECTED_SHA"
 
