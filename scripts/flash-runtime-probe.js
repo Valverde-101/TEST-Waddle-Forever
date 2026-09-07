@@ -3,6 +3,7 @@
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
+const Module = require('module');
 const { app, BrowserWindow } = require('electron');
 
 // Waddle has three intentionally separate roots on Windows:
@@ -54,6 +55,21 @@ const runtimeModulesRoot = path.resolve(
   || process.env.WADDLE_NODE_MODULES
   || path.join(sourceRoot, 'node_modules')
 );
+
+// Electron 10 embeds Node 12. In this launch mode NODE_PATH is present in the
+// environment but Module.globalPaths can still reflect Electron's earlier
+// initialization. Reinitialize it before loading any compiled Waddle module so
+// their bare imports resolve against the one physical repo node_modules tree.
+process.env.WADDLE_RUNTIME_NODE_MODULES = runtimeModulesRoot;
+process.env.WADDLE_NODE_MODULES = runtimeModulesRoot;
+process.env.NODE_PATH = [runtimeModulesRoot, process.env.NODE_PATH]
+  .filter(Boolean)
+  .join(path.delimiter);
+if (typeof Module._initPaths !== 'function') {
+  throw new Error('WADDLE_FLASH_RUNTIME=FAIL Module._initPaths unavailable');
+}
+Module._initPaths();
+
 const settingsBackup = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath) : null;
 
 let server = null;
@@ -108,6 +124,7 @@ function basePayload(status, reason, extra = {}) {
     runtime_app_root: runtimeAppRoot,
     runtime_compiled_root: compiledRoot,
     runtime_node_modules: runtimeModulesRoot,
+    module_global_paths: Array.from(Module.globalPaths || []),
     dependency_layout: 'repo_physical',
     cwd: process.cwd(),
     plugin_path: pluginPath,
@@ -188,9 +205,9 @@ const appReady = app.whenReady().then(async () => {
     answered_packages: 'probe',
   }));
 
-  // Load dependencies explicitly from the one repository node_modules tree.
-  // This proves the external runtime does not hide a second dependency copy.
-  const express = require(path.join(runtimeModulesRoot, 'express'));
+  // Prove both the probe and compiled runtime modules resolve dependencies from
+  // the canonical repository tree after Module._initPaths().
+  const express = require('express');
   const settingsModule = require(path.join(compiledRoot, 'server', 'settings.js'));
   const settingsManager = settingsModule.default || settingsModule;
   const { GameData } = require(path.join(compiledRoot, 'server', 'timelines', 'game-data.js'));
