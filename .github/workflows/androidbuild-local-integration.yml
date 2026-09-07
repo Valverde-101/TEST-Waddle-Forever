@@ -109,16 +109,19 @@ jobs:
           $work=Join-Path $repo '.work'
           foreach($relative in @(
             'state\waddle-certification.json',
+            'state\flash-runtime-probe.json',
             'state\waddle-client.json',
             'state\waddle-build-summary.json',
             'state\runtime-snapshot.json',
+            'logs\certification\flash-runtime-probe.stdout.log',
+            'logs\certification\flash-runtime-probe.stderr.log',
             'logs\launcher\setup-last.log',
             'logs\launcher\start-last.log',
             'logs\launcher\stop-last.log'
           )){
             $path=Join-Path $work $relative
             Write-Host "----- $relative -----"
-            if(Test-Path -LiteralPath $path -PathType Leaf){Get-Content -LiteralPath $path -Tail 160 | Write-Host}else{Write-Host 'MISSING'}
+            if(Test-Path -LiteralPath $path -PathType Leaf){Get-Content -LiteralPath $path -Tail 240 | Write-Host}else{Write-Host 'MISSING'}
           }
           Write-Host '----- Waddle Electron processes -----'
           Get-CimInstance Win32_Process -Filter "Name='electron.exe'" -ErrorAction SilentlyContinue |
