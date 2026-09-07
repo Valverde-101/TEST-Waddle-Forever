@@ -59,9 +59,31 @@ try {
 }
 
 $entry = Join-Path $repo 'compiled\client\main.js'
-$electron = Join-Path $workspace.work_root 'dependencies\node_modules\.bin\electron.cmd'
+$electron = Join-Path $workspace.work_root 'dependencies\node_modules\electron\dist\electron.exe'
 if (-not (Test-Path -LiteralPath $entry -PathType Leaf)) { throw "WADDLE_START=FAIL compiled_entry_missing=$entry" }
-if (-not (Test-Path -LiteralPath $electron -PathType Leaf)) { throw "WADDLE_START=FAIL electron_missing=$electron run=Waddle-Setup.cmd" }
+if (-not (Test-Path -LiteralPath $electron -PathType Leaf)) { throw "WADDLE_START=FAIL electron_executable_missing=$electron run=Waddle-Setup.cmd" }
+
+# Validate the exact executable that will be launched. The old implementation
+# executed node_modules\.bin\electron.cmd through `cmd.exe /s /c`, which is
+# fragile on mapped/network repositories because cmd.exe rewrites the quoted
+# command line before Electron receives it. Launch the packaged electron.exe
+# directly so there is no intermediary shell, no .cmd shim and no V:/UNC
+# quoting ambiguity.
+$electronVersionOutput = @(& $electron --version 2>&1)
+$electronProbeExit = $LASTEXITCODE
+$electronVersion = (($electronVersionOutput | ForEach-Object { [string]$_ }) -join '').Trim().TrimStart('v')
+if ($electronProbeExit -ne 0) {
+  throw "WADDLE_START=FAIL electron_probe_exit=$electronProbeExit executable=$electron output=$($electronVersionOutput -join ' | ')"
+}
+if ([string]::IsNullOrWhiteSpace($electronVersion)) {
+  throw "WADDLE_START=FAIL electron_probe_empty executable=$electron"
+}
+if ($electronVersion -ne [string]$dependencies.electron) {
+  throw "WADDLE_START=FAIL electron_version_mismatch manifest=$($dependencies.electron) executable=$electronVersion path=$electron"
+}
+Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_ELECTRON_EXE' -Value ([IO.Path]::GetFullPath($electron))
+[Environment]::SetEnvironmentVariable('WADDLE_ELECTRON_EXE',[IO.Path]::GetFullPath($electron),'Process')
+Write-Host "WADDLE_ELECTRON_RUNTIME=PASS version=$electronVersion executable=$electron launch_mode=direct_exe"
 
 $flash = Test-WaddlePepperFlash -RepoRoot $repo
 $runtimeLogs = Join-Path $workspace.work_root 'logs\runtime'
@@ -72,8 +94,10 @@ $stderr = Join-Path $runtimeLogs "client-$stamp.stderr.log"
 $statePath = Join-Path $workspace.work_root 'state\waddle-client.json'
 
 $env:NODE_ENV = 'dev'
-$command = "`"$electron`" `"$entry`""
-$process = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/d','/s','/c',$command) -WorkingDirectory $repo -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+# A Windows path cannot contain a double quote, so quoting the one application
+# argument is sufficient for ProcessStartInfo/Start-Process argument parsing.
+$entryArgument = '"' + $entry + '"'
+$process = Start-Process -FilePath $electron -ArgumentList $entryArgument -WorkingDirectory $repo -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
 Start-Sleep -Seconds 3
 $process.Refresh()
 if ($process.HasExited) {
@@ -82,7 +106,7 @@ if ($process.HasExited) {
 }
 
 $state = [ordered]@{
-  schema = 'waddle-client-state/v3'
+  schema = 'waddle-client-state/v4'
   status = 'RUNNING'
   pid = $process.Id
   source_sha = $sha
@@ -90,7 +114,9 @@ $state = [ordered]@{
   work_root = $workspace.work_root
   managed_node_home = $managedNode.home
   managed_node_exe = $managedNode.node
-  electron = $electron
+  electron_executable = $electron
+  electron_version = $electronVersion
+  electron_launch_mode = 'direct_exe'
   dependency_mode = $dependencies.mode
   ppapi_flash_path = $flash.path
   ppapi_flash_version = $flash.version
@@ -101,7 +127,7 @@ $state = [ordered]@{
 }
 $state | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $statePath -Encoding UTF8
 
-Write-Host "WADDLE_START=PASS pid=$($process.Id) sha=$sha node=$($managedNode.node) dependencies=$($dependencies.mode)"
+Write-Host "WADDLE_START=PASS pid=$($process.Id) sha=$sha node=$($managedNode.node) electron=$electronVersion launch_mode=direct_exe dependencies=$($dependencies.mode)"
 Write-Host "WADDLE_PPAPI_FLASH=PASS path=$($flash.path) version=$($flash.version)"
 Write-Host 'WADDLE_VISUAL_STUDIO=NOT_REQUIRED'
 Write-Host "WADDLE_RUNTIME_STDOUT=$stdout"
