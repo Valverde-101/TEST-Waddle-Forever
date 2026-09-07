@@ -35,21 +35,41 @@ $electronExe = Join-Path $workspace.work_root 'dependencies\node_modules\electro
 if (-not (Test-Path -LiteralPath $electronExe -PathType Leaf)) {
   throw "WADDLE_ELECTRON_RUNTIME=FAIL executable_missing=$electronExe run=yarn_install"
 }
-$electronVersionOutput = @(& $electronExe --version 2>&1)
-$electronExit = $LASTEXITCODE
+
+# electron.exe is a Windows GUI subsystem executable, so plain `--version` is not
+# guaranteed to attach stdout to PowerShell. ELECTRON_RUN_AS_NODE makes the same
+# binary execute as Node, giving us a deterministic direct-executable probe while
+# still proving that the mapped-drive executable itself can start.
+$previousRunAsNode = [Environment]::GetEnvironmentVariable('ELECTRON_RUN_AS_NODE','Process')
+$previousErrorActionPreference = $ErrorActionPreference
+$electronVersionOutput = @()
+$electronExit = -1
+try {
+  [Environment]::SetEnvironmentVariable('ELECTRON_RUN_AS_NODE','1','Process')
+  $ErrorActionPreference = 'Continue'
+  $electronVersionOutput = @(& $electronExe -p "process.versions.electron" 2>&1)
+  $electronExit = $LASTEXITCODE
+} finally {
+  $ErrorActionPreference = $previousErrorActionPreference
+  if ($null -eq $previousRunAsNode) {
+    Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
+  } else {
+    [Environment]::SetEnvironmentVariable('ELECTRON_RUN_AS_NODE',$previousRunAsNode,'Process')
+  }
+}
 $electronVersion = (($electronVersionOutput | ForEach-Object { [string]$_ }) -join '').Trim().TrimStart('v')
 if ($electronExit -ne 0) {
   throw "WADDLE_ELECTRON_RUNTIME=FAIL executable_exit=$electronExit path=$electronExe output=$($electronVersionOutput -join ' | ')"
 }
 if ([string]::IsNullOrWhiteSpace($electronVersion)) {
-  throw "WADDLE_ELECTRON_RUNTIME=FAIL version_empty path=$electronExe"
+  throw "WADDLE_ELECTRON_RUNTIME=FAIL version_empty path=$electronExe mode=run_as_node"
 }
 if ($electronVersion -ne [string]$dependencies.electron) {
   throw "WADDLE_ELECTRON_RUNTIME=FAIL version_mismatch manifest=$($dependencies.electron) executable=$electronVersion path=$electronExe"
 }
 Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_ELECTRON_EXE' -Value ([IO.Path]::GetFullPath($electronExe))
 [Environment]::SetEnvironmentVariable('WADDLE_ELECTRON_EXE',[IO.Path]::GetFullPath($electronExe),'Process')
-Write-Host "WADDLE_ELECTRON_RUNTIME=PASS version=$electronVersion executable=$electronExe launch_mode=direct_exe"
+Write-Host "WADDLE_ELECTRON_RUNTIME=PASS version=$electronVersion executable=$electronExe launch_mode=direct_exe probe_mode=run_as_node"
 
 Write-Host "WADDLE_BOOTSTRAP=PASS repo=$repo work=$($workspace.work_root)"
 Write-Host "WADDLE_NODE=$($toolchain.node)"
