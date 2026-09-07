@@ -48,6 +48,7 @@ export function initializeRuntimeNodePath(): void {
   }
 
   process.env.WADDLE_RUNTIME_MODULE_PATH_READY = '1';
+  console.log(`WADDLE_RUNTIME_MODULE_PATH=PASS canonical=${canonical} node=${process.versions.node}`);
 }
 
 initializeRuntimeNodePath();
