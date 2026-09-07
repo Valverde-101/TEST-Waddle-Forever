@@ -39,5 +39,31 @@
     "@typescript-eslint/no-unsafe-function-type": "warn",
     "@typescript-eslint/no-wrapper-object-types": "warn",
     "@typescript-eslint/no-require-imports": "warn"
-  }
+  },
+  "overrides": [
+    {
+      "files": [
+        "src/client/views/**/*.ts",
+        "src/common/flash/**/*.ts",
+        "src/server/socket-server/**/*.ts",
+        "src/server/http/php-server/**/*.ts",
+        "src/server/mods.ts",
+        "src/server/database/database.ts",
+        "src/server/updates/index.ts"
+      ],
+      "rules": {
+        "@typescript-eslint/no-explicit-any": "off",
+        "@typescript-eslint/no-empty-object-type": "off"
+      }
+    },
+    {
+      "files": [
+        "src/client/flash-loader.ts",
+        "src/common/version.ts"
+      ],
+      "rules": {
+        "@typescript-eslint/no-require-imports": "off"
+      }
+    }
+  ]
 }

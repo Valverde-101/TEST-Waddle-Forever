@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, dialog } from "electron";
+import { BrowserWindow, ipcMain } from "electron";
 import electronIsDev from "electron-is-dev";
 import path from "path";
 import fs from 'fs';
@@ -8,7 +8,7 @@ import { getPopupCreator } from "@client/popups";
 import { SettingsManager } from "@server/settings";
 import { WorldServer } from "@server/socket-server/world-server";
 
-export const createSettingsWindow = getPopupCreator('settings', ['download-package', 'delete-package', 'reload-window', 'clear-cache', 'update-settings'], (mainWindow: BrowserWindow, settings: SettingsManager, server: WorldServer) => {
+export const createSettingsWindow = getPopupCreator('settings', ['download-package', 'delete-package', 'reload-window', 'clear-cache', 'reload-cache', 'update-settings'], (mainWindow: BrowserWindow, settings: SettingsManager, server: WorldServer) => {
   const settingsWindow = new BrowserWindow({
     width: 500,
     height: 500,
@@ -23,22 +23,20 @@ export const createSettingsWindow = getPopupCreator('settings', ['download-packa
 
   settingsWindow.loadFile(path.join(__dirname, 'settings.html'));
 
-  ipcMain.on('download-package', (e, arg) => {
-    (async () => {
-      downloadMediaFolder(arg, () => {
-        settingsWindow?.webContents.send('finish-download', arg)
-      }, () => {
-        settingsWindow?.webContents.send('download-fail')
-      })
-    })()
+  ipcMain.on('download-package', (_e, arg) => {
+    void downloadMediaFolder(arg, () => {
+      settingsWindow.webContents.send('finish-download', arg)
+    }, () => {
+      settingsWindow.webContents.send('download-fail')
+    });
   })
 
-  ipcMain.on('delete-package', (e, arg) => {
+  ipcMain.on('delete-package', (_e, arg) => {
     // must not remove packages in development, as that would greatly disturb git
     if (!electronIsDev) {
       fs.rmdirSync(path.join(MEDIA_DIRECTORY, arg), { recursive: true })
     }
-    settingsWindow?.webContents.send('finish-deleting', arg)
+    settingsWindow.webContents.send('finish-deleting', arg)
   })
 
   ipcMain.on('reload-window', () => {
@@ -46,7 +44,7 @@ export const createSettingsWindow = getPopupCreator('settings', ['download-packa
   })
 
   ipcMain.on('clear-cache', () => {
-    mainWindow.webContents.session.clearCache();
+    void mainWindow.webContents.session.clearCache();
   })
 
   ipcMain.on('reload-cache', () => {
@@ -60,7 +58,6 @@ export const createSettingsWindow = getPopupCreator('settings', ['download-packa
     }
     settings.updateSettings(s);
   });
-
 
   settingsWindow.webContents.on('did-finish-load', () => {
     settingsWindow.webContents.send('get-settings', settings.settings);
