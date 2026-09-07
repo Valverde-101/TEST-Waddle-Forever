@@ -4,7 +4,8 @@ param(
   [ValidateSet('setup','start','stop')]
   [string]$Action,
   [switch]$NonInteractive,
-  [switch]$SelfTestFailure
+  [switch]$SelfTestFailure,
+  [switch]$SkipBuild
 )
 
 Set-StrictMode -Version Latest
@@ -15,6 +16,10 @@ $ErrorActionPreference = 'Stop'
 # to noninteractive CI; humans can also invoke -SelfTestFailure explicitly.
 if ($env:WADDLE_NONINTERACTIVE -eq '1' -and $env:WADDLE_LAUNCHER_SELFTEST_FAIL -eq '1') {
   $SelfTestFailure = $true
+}
+
+if ($SkipBuild -and $Action -ne 'start') {
+  throw "WADDLE_LAUNCHER=FAIL skip_build_only_valid_for_start action=$Action"
 }
 
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
@@ -51,10 +56,12 @@ if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
 Set-Content -LiteralPath $runLog -Value @(
   "WADDLE_LAUNCHER=START action=$Action repo=$repo",
   "WADDLE_LAUNCHER_LOG=$runLog",
-  "WADDLE_TARGET=$target"
+  "WADDLE_TARGET=$target",
+  "WADDLE_SKIP_BUILD=$([bool]$SkipBuild)"
 ) -Encoding UTF8
 Write-Host "WADDLE_LAUNCHER=START action=$Action repo=$repo"
 Write-Host "WADDLE_LAUNCHER_LOG=$runLog"
+Write-Host "WADDLE_SKIP_BUILD=$([bool]$SkipBuild)"
 
 $exitCode = 0
 $failureMessage = $null
@@ -65,7 +72,9 @@ if ($SelfTestFailure) {
   Write-WaddleLauncherLine -Text $failureMessage -Color Red
 } else {
   try {
-    $command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$target`" 2>&1"
+    $targetArguments = ''
+    if ($Action -eq 'start' -and $SkipBuild) { $targetArguments = ' -SkipBuild' }
+    $command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$target`"$targetArguments 2>&1"
     & cmd.exe /d /s /c $command | ForEach-Object {
       $line = [string]$_
       Add-Content -LiteralPath $runLog -Value $line -Encoding UTF8
