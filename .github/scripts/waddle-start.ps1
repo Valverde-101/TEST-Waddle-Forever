@@ -30,9 +30,7 @@ $dependencies = Invoke-WaddleDependencyBootstrap -RepoRoot $repo -WorkRoot $work
 Test-WaddlePepperFlash -RepoRoot $repo | Out-Null
 
 # The launcher lives in the repository root. Heavy/generated state remains under
-# .work by design and is surfaced back at the root through junctions. This keeps
-# exact-source syncs clean while the root launcher still sees node_modules,
-# compiled and dist as normal project paths.
+# .work by design and is surfaced back at the root through junctions.
 Write-Host "WADDLE_LAYOUT=PASS launcher_root=$repo mutable_root=$($workspace.work_root) node_modules=repo_junction swf_analysis=.work\swf-analysis"
 
 $gitState = $null
@@ -53,52 +51,19 @@ try {
       -LeaseWaitSeconds 1200 | Out-Host
   }
 } finally {
-  # Ownership trust is process-scoped only. Never leave a global safe.directory
-  # exception behind on the user's Git installation.
   Restore-WaddleGitSafeDirectoryScope -State $gitState
 }
 
 $entry = Join-Path $repo 'compiled\client\main.js'
-$electron = Join-Path $workspace.work_root 'dependencies\node_modules\electron\dist\electron.exe'
 if (-not (Test-Path -LiteralPath $entry -PathType Leaf)) { throw "WADDLE_START=FAIL compiled_entry_missing=$entry" }
-if (-not (Test-Path -LiteralPath $electron -PathType Leaf)) { throw "WADDLE_START=FAIL electron_executable_missing=$electron run=Waddle-Setup.cmd" }
 
-# Validate the exact executable that will be launched. The old implementation
-# executed node_modules\.bin\electron.cmd through `cmd.exe /s /c`, which is
-# fragile on mapped/network repositories because cmd.exe rewrites the quoted
-# command line before Electron receives it. Launch the packaged electron.exe
-# directly so there is no intermediary shell, no .cmd shim and no V:/UNC
-# quoting ambiguity.
-$previousRunAsNode = [Environment]::GetEnvironmentVariable('ELECTRON_RUN_AS_NODE','Process')
-$previousErrorActionPreference = $ErrorActionPreference
-$electronVersionOutput = @()
-$electronProbeExit = -1
-try {
-  [Environment]::SetEnvironmentVariable('ELECTRON_RUN_AS_NODE','1','Process')
-  $ErrorActionPreference = 'Continue'
-  $electronVersionOutput = @(& $electron -p "process.versions.electron" 2>&1)
-  $electronProbeExit = $LASTEXITCODE
-} finally {
-  $ErrorActionPreference = $previousErrorActionPreference
-  if ($null -eq $previousRunAsNode) {
-    Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
-  } else {
-    [Environment]::SetEnvironmentVariable('ELECTRON_RUN_AS_NODE',$previousRunAsNode,'Process')
-  }
-}
-$electronVersion = (($electronVersionOutput | ForEach-Object { [string]$_ }) -join '').Trim().TrimStart('v')
-if ($electronProbeExit -ne 0) {
-  throw "WADDLE_START=FAIL electron_probe_exit=$electronProbeExit executable=$electron output=$($electronVersionOutput -join ' | ')"
-}
-if ([string]::IsNullOrWhiteSpace($electronVersion)) {
-  throw "WADDLE_START=FAIL electron_probe_empty executable=$electron mode=run_as_node"
-}
-if ($electronVersion -ne [string]$dependencies.electron) {
-  throw "WADDLE_START=FAIL electron_version_mismatch manifest=$($dependencies.electron) executable=$electronVersion path=$electron"
-}
-Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_ELECTRON_EXE' -Value ([IO.Path]::GetFullPath($electron))
-[Environment]::SetEnvironmentVariable('WADDLE_ELECTRON_EXE',[IO.Path]::GetFullPath($electron),'Process')
-Write-Host "WADDLE_ELECTRON_RUNTIME=PASS version=$electronVersion executable=$electron launch_mode=direct_exe probe_mode=run_as_node"
+# Validate the packaged runtime itself and its direct Windows process-creation
+# path. This deliberately avoids `.bin\electron.cmd`, `cmd.exe /s /c`, and their
+# mapped-drive quoting/canonicalization behavior.
+$electronRuntime = Test-WaddleElectronRuntime -WorkRoot $workspace.work_root -ExpectedVersion $dependencies.electron
+$electron = $electronRuntime.executable
+Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_ELECTRON_EXE' -Value $electron
+[Environment]::SetEnvironmentVariable('WADDLE_ELECTRON_EXE',$electron,'Process')
 
 $flash = Test-WaddlePepperFlash -RepoRoot $repo
 $runtimeLogs = Join-Path $workspace.work_root 'logs\runtime'
@@ -109,13 +74,15 @@ $stderr = Join-Path $runtimeLogs "client-$stamp.stderr.log"
 $statePath = Join-Path $workspace.work_root 'state\waddle-client.json'
 
 $env:NODE_ENV = 'dev'
-# Never inherit ELECTRON_RUN_AS_NODE into the real desktop client; that mode is
-# used only for the deterministic runtime probe above.
+# A stale host variable would turn the desktop app back into Node mode. Never
+# inherit it into the real Waddle client process.
 Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
-# A Windows path cannot contain a double quote, so quoting the one application
-# argument is sufficient for Start-Process argument parsing.
 $entryArgument = '"' + $entry + '"'
-$process = Start-Process -FilePath $electron -ArgumentList $entryArgument -WorkingDirectory $repo -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+try {
+  $process = Start-Process -FilePath $electron -ArgumentList $entryArgument -WorkingDirectory $repo -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+} catch {
+  throw "WADDLE_START=FAIL process_create executable=$electron entry=$entry error=$($_.Exception.Message)"
+}
 Start-Sleep -Seconds 3
 $process.Refresh()
 if ($process.HasExited) {
@@ -133,8 +100,9 @@ $state = [ordered]@{
   managed_node_home = $managedNode.home
   managed_node_exe = $managedNode.node
   electron_executable = $electron
-  electron_version = $electronVersion
+  electron_version = $electronRuntime.version
   electron_launch_mode = 'direct_exe'
+  electron_direct_process_probe = $electronRuntime.direct_process_probe
   dependency_mode = $dependencies.mode
   ppapi_flash_path = $flash.path
   ppapi_flash_version = $flash.version
@@ -145,7 +113,7 @@ $state = [ordered]@{
 }
 $state | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $statePath -Encoding UTF8
 
-Write-Host "WADDLE_START=PASS pid=$($process.Id) sha=$sha node=$($managedNode.node) electron=$electronVersion launch_mode=direct_exe dependencies=$($dependencies.mode)"
+Write-Host "WADDLE_START=PASS pid=$($process.Id) sha=$sha node=$($managedNode.node) electron=$($electronRuntime.version) launch_mode=direct_exe dependencies=$($dependencies.mode)"
 Write-Host "WADDLE_PPAPI_FLASH=PASS path=$($flash.path) version=$($flash.version)"
 Write-Host 'WADDLE_VISUAL_STUDIO=NOT_REQUIRED'
 Write-Host "WADDLE_RUNTIME_STDOUT=$stdout"
