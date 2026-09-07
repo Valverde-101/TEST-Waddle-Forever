@@ -5,15 +5,22 @@ const http = require('http');
 const path = require('path');
 const { app, BrowserWindow } = require('electron');
 
-const repoRoot = path.resolve(__dirname, '..');
-process.chdir(repoRoot);
+// Waddle has two intentionally separate roots on Windows:
+// - sourceRoot: mutable user/content root (media, settings, .env, evidence)
+// - runtimeAppRoot: immutable deployed executable app (compiled + runtime deps)
+// Keeping cwd at sourceRoot preserves the real desktop launch semantics while
+// allowing CI to prove that executable JS is loaded from the external runtime.
+const inferredRoot = path.resolve(__dirname, '..');
+const sourceRoot = path.resolve(process.env.WADDLE_SOURCE_ROOT || inferredRoot);
+const runtimeAppRoot = path.resolve(process.env.WADDLE_RUNTIME_APP_ROOT || sourceRoot);
+process.chdir(sourceRoot);
 process.env.NODE_ENV = 'dev';
 
-const envPath = path.join(repoRoot, '.env');
-const settingsPath = path.join(repoRoot, 'settings.json');
+const envPath = path.join(sourceRoot, '.env');
+const settingsPath = path.join(sourceRoot, 'settings.json');
 const resultPath = process.env.WADDLE_FLASH_PROBE_RESULT
   ? path.resolve(process.env.WADDLE_FLASH_PROBE_RESULT)
-  : path.join(repoRoot, '.work', 'state', 'flash-runtime-probe.json');
+  : path.join(sourceRoot, '.work', 'state', 'flash-runtime-probe.json');
 
 function importDotEnv(file) {
   if (!fs.existsSync(file)) return;
@@ -36,10 +43,11 @@ const defaultPlugin = process.arch === 'ia32'
   ? 'pepflashplayer32_32_0_0_303.dll'
   : 'pepflashplayer64_32_0_0_303.dll';
 const pluginPath = path.resolve(
-  process.env.WADDLE_PPAPI_FLASH_PATH || path.join(repoRoot, 'assets', 'flash', defaultPlugin)
+  process.env.WADDLE_PPAPI_FLASH_PATH || path.join(sourceRoot, 'assets', 'flash', defaultPlugin)
 );
 const pluginVersion = (process.env.WADDLE_PPAPI_FLASH_VERSION || '32.0.0.303').trim();
-const compiledRoot = path.join(repoRoot, 'compiled');
+const compiledRoot = path.join(runtimeAppRoot, 'compiled');
+const runtimeModulesRoot = path.join(runtimeAppRoot, 'node_modules');
 const settingsBackup = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath) : null;
 
 let server = null;
@@ -82,7 +90,7 @@ function finish(code, payload) {
 
 function basePayload(status, reason, extra = {}) {
   return {
-    schema: 'waddle-flash-runtime-probe/v3',
+    schema: 'waddle-flash-runtime-probe/v4',
     status,
     reason,
     electron: process.versions.electron || null,
@@ -90,6 +98,11 @@ function basePayload(status, reason, extra = {}) {
     node: process.versions.node || null,
     arch: process.arch,
     platform: process.platform,
+    source_root: sourceRoot,
+    runtime_app_root: runtimeAppRoot,
+    runtime_compiled_root: compiledRoot,
+    runtime_node_modules: runtimeModulesRoot,
+    cwd: process.cwd(),
     plugin_path: pluginPath,
     plugin_version: pluginVersion,
     ...extra,
@@ -120,6 +133,12 @@ if (!fs.existsSync(pluginPath)) {
 }
 if (!fs.existsSync(path.join(compiledRoot, 'server', 'file-server', 'index.js'))) {
   finish(41, basePayload('FAIL', 'compiled_fileserver_missing'));
+}
+if (!fs.existsSync(runtimeModulesRoot)) {
+  finish(41, basePayload('FAIL', 'runtime_node_modules_missing'));
+}
+if (!fs.existsSync(path.join(sourceRoot, 'media', 'default'))) {
+  finish(41, basePayload('FAIL', 'source_media_default_missing'));
 }
 
 const pluginStat = fs.statSync(pluginPath);
@@ -161,7 +180,10 @@ const appReady = app.whenReady().then(async () => {
     answered_packages: 'probe',
   }));
 
-  const express = require('express');
+  // Load the server-side runtime dependency explicitly from the deployed app.
+  // This prevents the probe script's own source-tree location from accidentally
+  // resolving express through the mutable build node_modules junction.
+  const express = require(path.join(runtimeModulesRoot, 'express'));
   const settingsModule = require(path.join(compiledRoot, 'server', 'settings.js'));
   const settingsManager = settingsModule.default || settingsModule;
   const { GameData } = require(path.join(compiledRoot, 'server', 'timelines', 'game-data.js'));
