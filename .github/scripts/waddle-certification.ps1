@@ -189,8 +189,9 @@ try {
   if ([IO.Path]::GetFullPath([string]$probeResult.plugin_path) -ne $runtimeFlash) { throw "WADDLE_CERT=FAIL flash_plugin actual=$($probeResult.plugin_path) expected=$runtimeFlash" }
   Write-Host "WADDLE_CERT_FLASH=PASS runtime=$runtimeRoot plugin=$runtimeFlash boots=200 instantiated=true"
 
-  # 5) User-facing Start must build, deploy, launch a detached external client,
-  # write RUNNING state and return control while the client stays alive.
+  # 5) User-facing Start must reuse the exact build, deploy, launch a detached
+  # external client with Start-Process, write RUNNING state and return control
+  # while the client stays alive.
   $startWatch = [Diagnostics.Stopwatch]::StartNew()
   Push-Location $repo
   try {
@@ -202,9 +203,9 @@ try {
   if ($startExit -ne 0) { throw "WADDLE_CERT=FAIL actual_start_exit=$startExit" }
   if (-not (Test-Path -LiteralPath $clientStatePath -PathType Leaf)) { throw "WADDLE_CERT=FAIL client_state_missing=$clientStatePath" }
   $clientState = Get-Content -LiteralPath $clientStatePath -Raw | ConvertFrom-Json
-  if ([string]$clientState.schema -ne 'waddle-client-state/v8') { throw "WADDLE_CERT=FAIL client_schema=$($clientState.schema)" }
+  if ([string]$clientState.schema -ne 'waddle-client-state/v9') { throw "WADDLE_CERT=FAIL client_schema=$($clientState.schema)" }
   if ([string]$clientState.status -ne 'RUNNING' -or [string]$clientState.source_sha -ne $ExpectedSha) { throw "WADDLE_CERT=FAIL client_state status=$($clientState.status) sha=$($clientState.source_sha)" }
-  if ([string]$clientState.runtime_mode -ne 'external_deployment' -or [string]$clientState.electron_launch_mode -ne 'external_runtime_detached_cmd_start') { throw "WADDLE_CERT=FAIL client_runtime mode=$($clientState.runtime_mode) launch=$($clientState.electron_launch_mode)" }
+  if ([string]$clientState.runtime_mode -ne 'external_deployment' -or [string]$clientState.electron_launch_mode -ne 'external_runtime_start_process') { throw "WADDLE_CERT=FAIL client_runtime mode=$($clientState.runtime_mode) launch=$($clientState.electron_launch_mode)" }
   foreach ($pair in @(
     @{name='runtime_root'; value=[string]$clientState.runtime_root},
     @{name='app_entry'; value=[string]$clientState.runtime_app_entry},
@@ -222,7 +223,7 @@ try {
   if ($startWatch.Elapsed.TotalMinutes -ge 3) { throw "WADDLE_CERT=FAIL launcher_return_too_slow duration_ms=$($startWatch.ElapsedMilliseconds)" }
   Write-Host "WADDLE_CERT_START=PASS process_id=$startedClientId launcher_return_ms=$($startWatch.ElapsedMilliseconds) runtime=$($clientState.runtime_root)"
 
-  # 6) Prove the live external client cannot lock the mutable Yarn tree.
+  # 6) Prove the live external client cannot lock the canonical Yarn tree.
   Invoke-WaddlePinnedYarnInstall -Phase 'while_client_running'
   $clientProcess.Refresh()
   if ($clientProcess.HasExited) { throw "WADDLE_CERT=FAIL client_died_during_yarn process_id=$startedClientId" }
