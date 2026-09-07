@@ -92,12 +92,28 @@ app.on('ready', async () => {
       defaultId: 0,
       cancelId: 1
     });
+
     if (result.response === 0) {
-      await downloadMediaFolder('clothing', () => {
+      let clothingError: unknown;
+      const installed = await downloadMediaFolder('clothing', () => {
         settingsManager.updateSettings({ clothing: true });
-      }, () => {})
+      }, error => {
+        clothingError = error;
+      });
+
+      if (installed) {
+        settingsManager.updateSettings({ answered_packages: VERSION });
+      } else {
+        const detail = clothingError instanceof Error ? clothingError.message : String(clothingError ?? 'Unknown error');
+        await dialog.showMessageBox(setupWindow, {
+          buttons: ['OK'],
+          title: 'Clothing Download Failed',
+          message: `The optional clothing package could not be installed. Waddle Forever will continue without it and offer the download again next time.\n\n${detail}`
+        });
+      }
+    } else {
+      settingsManager.updateSettings({ answered_packages: VERSION });
     }
-    settingsManager.updateSettings({ answered_packages: VERSION });
   }
 
   if (!settingsManager.settings.faq_warning) {
