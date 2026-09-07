@@ -9,7 +9,12 @@ const UPDATE_PATH = path.join(process.cwd(), 'tempupdate');
 
 export async function checkUpdates (mainWindow: BrowserWindow, settings: SettingsManager): Promise<void> {
   if (fs.existsSync(UPDATE_PATH)) {
-    fs.rmdirSync(UPDATE_PATH, { recursive: true })
+    try {
+      fs.rmSync(UPDATE_PATH, { recursive: true, force: true });
+    } catch (error) {
+      // A stale update directory is not allowed to prevent an offline game boot.
+      console.warn(`Could not clean stale update directory ${UPDATE_PATH}:`, error);
+    }
   }
 
   const versionStatus = await postJSON(`/api/version`, {
@@ -37,7 +42,7 @@ export async function checkUpdates (mainWindow: BrowserWindow, settings: Setting
     if (result.response === 1) {
       settings.updateSettings({ ignored_version: newVersion });
     } else if (result.response === 2) {
-      shell.openExternal('https://waddleforever.com/');
+      void shell.openExternal('https://waddleforever.com/');
     }
   }
 }
