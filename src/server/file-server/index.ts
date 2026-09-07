@@ -80,25 +80,28 @@ export class FileServer {
     const router = Router();
 
     // generic files (swfs, json, etc.)
-    router.get('/*', (req: Request, res, next) => {
-      const route = req.params[0];
-      this.getFile(route).then((binary) => {
+    router.get('/*', async (req: Request, res, next) => {
+      try {
+        const route = req.params[0];
+        const binary = await this.getFile(route);
         if (binary === undefined) {
           next();
-        } else {
-          const split = route.split('.');
-          // if less than 1, then there was no file extension
-          // route with no file extension -> a GET request for an HTML file
-          const type = split.length < 2 ? '.html' : route.split('.').pop();
-          if (type === undefined) {
-            throw new Error('Split somehow returned empty list');
-          }
-          
-          this.overrider.override(route, binary).then((value) => {
-            res.status(200).type(type).send(value);
-          });
+          return;
         }
-      });
+
+        const split = route.split('.');
+        // if less than 1, then there was no file extension
+        // route with no file extension -> a GET request for an HTML file
+        const type = split.length < 2 ? '.html' : split.pop();
+        if (type === undefined) {
+          throw new Error('Split somehow returned empty list');
+        }
+
+        const value = await this.overrider.override(route, binary);
+        res.status(200).type(type).send(value);
+      } catch (error) {
+        next(error);
+      }
     });
     router.post('/*', (req: Request, res, next) => {
       const generator = this.postGenerators.get(req.params[0]);
