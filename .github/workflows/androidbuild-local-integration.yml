@@ -13,9 +13,12 @@ permissions:
 env:
   WADDLE_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
+# Every Waddle CI path materializes the same canonical repository and .work tree
+# under V:\AndroidBuild. Serializing repo-wide prevents sync/install/build/runtime
+# processes from racing and locking Electron/Node files across AUTO_REPO slots.
 concurrency:
-  group: waddle-core-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: waddle-canonical-workspace
+  cancel-in-progress: false
 
 jobs:
   local-integration:
