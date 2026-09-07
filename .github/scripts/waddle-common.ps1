@@ -67,7 +67,7 @@ function Import-WaddleCore {
   param([string]$AndroidBuildRoot)
   $module = Join-Path $AndroidBuildRoot 'Core\Current\AndroidBuild.psd1'
   if (-not (Test-Path -LiteralPath $module -PathType Leaf)) { throw "ANDROIDBUILD_CORE=FAIL missing=$module" }
-  Import-Module $module -Force
+  Import-Module $module -Force -DisableNameChecking
   $version = [string](Get-AndroidBuildCoreVersion)
   $required = Get-WaddleRequiredCoreVersion
   if ([version]$version -lt [version]$required) { throw "ANDROIDBUILD_CORE=FAIL required=$required actual=$version" }
