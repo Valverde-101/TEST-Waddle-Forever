@@ -34,3 +34,14 @@ if (-not (Test-Path -LiteralPath $externalRuntime -PathType Leaf)) {
 }
 . $externalRuntime
 Write-Host "WADDLE_RUNTIME_OVERRIDE=PASS mode=external_deployment script=$externalRuntime"
+
+# Final policy layer: keep exactly one persistent node_modules tree at the
+# repository root and make the external runtime consume it via NODE_PATH. This
+# is sourced last intentionally so it replaces the historical .work dependency
+# implementation without duplicating the rest of the resilience/runtime logic.
+$repoDependencies = Join-Path $PSScriptRoot 'waddle-repo-dependencies.ps1'
+if (-not (Test-Path -LiteralPath $repoDependencies -PathType Leaf)) {
+  throw "WADDLE_REPO_DEPENDENCIES=FAIL missing=$repoDependencies"
+}
+. $repoDependencies
+Write-Host "WADDLE_REPO_DEPENDENCIES=PASS layout=repo_physical script=$repoDependencies"
