@@ -64,7 +64,7 @@ jobs:
           "WADDLE_CANONICAL_REPO=$repo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "FLASH_GATE_EXACT_HEAD=PASS sha=$($sync.actual_sha) core=$version platform=windows-x64"
 
-      - name: Prepare Waddle local runtime
+      - name: Prepare Waddle build environment
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
@@ -79,7 +79,7 @@ jobs:
           }
           Write-Host 'FLASH_GATE_SETUP=PASS'
 
-      - name: Build exact Waddle source before production probe
+      - name: Build exact Waddle source before external runtime deployment
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
@@ -97,7 +97,7 @@ jobs:
           if([string]$result.provenance.source_sha -ne [string]$env:WADDLE_EXPECTED_SHA){throw "FLASH_GATE=FAIL provenance_sha=$($result.provenance.source_sha) expected=$env:WADDLE_EXPECTED_SHA"}
           Write-Host "FLASH_GATE_BUILD=PASS sha=$($result.provenance.source_sha)"
 
-      - name: Prove production page and boots.swf inside immutable Chromium snapshot
+      - name: Prove boots.swf from external deployed runtime
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
@@ -110,9 +110,21 @@ jobs:
           $deps=Invoke-WaddleDependencyBootstrap -RepoRoot $repo -WorkRoot $work
           $sourceElectron=Test-WaddleElectronRuntime -WorkRoot $work -ExpectedVersion $deps.electron
           $sourceFlash=Test-WaddlePepperFlash -RepoRoot $repo
-          $snapshot=New-WaddleRuntimeSnapshot -RepoRoot $repo -WorkRoot $work -ElectronExecutable $sourceElectron.executable -ElectronVersion $sourceElectron.version -PepperFlashPath $sourceFlash.path -PepperFlashVersion $sourceFlash.version -SourceSha $env:WADDLE_EXPECTED_SHA -DependencyFingerprint $deps.fingerprint
-          $electron=$snapshot.electron_executable
-          $probe=Join-Path $repo 'scripts\flash-runtime-probe.js'
+          $runtime=New-WaddleRuntimeSnapshot -RepoRoot $repo -WorkRoot $work -ElectronExecutable $sourceElectron.executable -ElectronVersion $sourceElectron.version -PepperFlashPath $sourceFlash.path -PepperFlashVersion $sourceFlash.version -SourceSha $env:WADDLE_EXPECTED_SHA -DependencyFingerprint $deps.fingerprint
+
+          $workFull=[IO.Path]::GetFullPath($work).TrimEnd('\')+'\'
+          foreach($p in @($runtime.root,$runtime.electron_executable,$runtime.ppapi_flash_path,$runtime.app_entry,$runtime.runtime_node_modules)){
+            if(([IO.Path]::GetFullPath([string]$p)).StartsWith($workFull,[StringComparison]::OrdinalIgnoreCase)){throw "FLASH_GATE=FAIL runtime_inside_work=$p"}
+          }
+
+          # Run the existing production Flash probe from the deployed app root so
+          # __dirname resolves to the external runtime, not to the source tree.
+          $probeDir=Join-Path $runtime.app_root 'scripts'
+          New-Item -ItemType Directory -Force -Path $probeDir | Out-Null
+          $probe=Join-Path $probeDir 'flash-runtime-probe.js'
+          Copy-Item -LiteralPath (Join-Path $repo 'scripts\flash-runtime-probe.js') -Destination $probe -Force
+
+          $electron=$runtime.electron_executable
           $state=Join-Path $work 'state\flash-runtime-probe.json'
           $runtimeLogs=Join-Path $work 'logs\runtime'
           New-Item -ItemType Directory -Force -Path $runtimeLogs | Out-Null
@@ -121,10 +133,14 @@ jobs:
           Remove-Item -LiteralPath $state,$stdout,$stderr -Force -ErrorAction SilentlyContinue
           Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
           $env:WADDLE_FLASH_PROBE_RESULT=$state
-          $env:WADDLE_PPAPI_FLASH_PATH=$snapshot.ppapi_flash_path
-          $env:WADDLE_PPAPI_FLASH_VERSION=$snapshot.ppapi_flash_version
+          $env:WADDLE_PPAPI_FLASH_PATH=$runtime.ppapi_flash_path
+          $env:WADDLE_PPAPI_FLASH_VERSION=$runtime.ppapi_flash_version
+          $env:WADDLE_RUNTIME_ROOT=$runtime.root
+          $env:WADDLE_RUNTIME_NODE_MODULES=$runtime.runtime_node_modules
+          $env:WADDLE_NODE_MODULES=$runtime.runtime_node_modules
+          $env:NODE_PATH=$runtime.runtime_node_modules
           $arg='"'+$probe+'"'
-          $process=Start-Process -FilePath $electron -ArgumentList $arg -WorkingDirectory $repo -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+          $process=Start-Process -FilePath $electron -ArgumentList $arg -WorkingDirectory $runtime.app_root -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
           if(-not $process.WaitForExit(40000)){
             try{$process.Kill()}catch{}
             throw "FLASH_GATE=FAIL probe_timeout stdout=$stdout stderr=$stderr"
@@ -135,11 +151,11 @@ jobs:
           if(-not(Test-Path -LiteralPath $state -PathType Leaf)){throw "FLASH_GATE=FAIL state_missing stdout=$stdout stderr=$stderr"}
           $result=Get-Content -LiteralPath $state -Raw | ConvertFrom-Json
           if([string]$result.status -ne 'PASS'){throw "FLASH_GATE=FAIL renderer_status=$($result.status) reason=$($result.reason)"}
-          if([IO.Path]::GetFullPath([string]$result.plugin_path) -ne [IO.Path]::GetFullPath([string]$snapshot.ppapi_flash_path)){throw "FLASH_GATE=FAIL plugin_not_snapshot actual=$($result.plugin_path) expected=$($snapshot.ppapi_flash_path)"}
+          if([IO.Path]::GetFullPath([string]$result.plugin_path) -ne [IO.Path]::GetFullPath([string]$runtime.ppapi_flash_path)){throw "FLASH_GATE=FAIL plugin_not_external_runtime actual=$($result.plugin_path) expected=$($runtime.ppapi_flash_path)"}
           if([int]$result.root_status -ne 200 -or [int]$result.boots_status -ne 200){throw "FLASH_GATE=FAIL http root=$($result.root_status) boots=$($result.boots_status)"}
           if([string]$result.boots_content_type -notmatch 'application/x-shockwave-flash'){throw "FLASH_GATE=FAIL boots_mime=$($result.boots_content_type)"}
           if(-not [bool]$result.html_has_boots_object -or -not [bool]$result.renderer.mimePresent -or -not [bool]$result.renderer.mimeEnabledPlugin){throw 'FLASH_GATE=FAIL flash_contract_missing'}
           if(@($result.flash_plugins).Count -lt 1 -or -not [bool]$result.renderer.objectPresent){throw 'FLASH_GATE=FAIL flash_plugin_not_exposed'}
           if([bool]$result.fallback_visible -or -not [bool]$result.scriptable_flash_object -or -not [bool]$result.production_instantiated){throw 'FLASH_GATE=FAIL production_flash_not_instantiated'}
           if([int]$process.ExitCode -ne 0){throw "FLASH_GATE=FAIL probe_exit=$($process.ExitCode)"}
-          Write-Host "FLASH_GATE=PASS platform=windows-x64 runtime_snapshot=$($snapshot.root) electron=$($result.electron) chromium=$($result.chromium) plugin=$($result.plugin_path) root=$($result.root_status) boots=$($result.boots_status) instantiated=$($result.production_instantiated)"
+          Write-Host "FLASH_GATE=PASS platform=windows-x64 runtime=$($runtime.root) app=$($runtime.app_root) electron=$($result.electron) chromium=$($result.chromium) plugin=$($result.plugin_path) root=$($result.root_status) boots=$($result.boots_status) instantiated=$($result.production_instantiated) work_execution=false"

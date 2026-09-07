@@ -182,7 +182,7 @@ jobs:
           if([string]$result.provenance.source_sha -ne [string]$env:WADDLE_EXPECTED_SHA){throw "LOCAL_BUILD=FAIL provenance=$($result.provenance.source_sha)"}
           Write-Host "LOCAL_BUILD=PASS sha=$($result.provenance.source_sha)"
 
-      - name: Prove open snapshot cannot lock Yarn dependency tree
+      - name: Prove external runtime cannot lock Yarn dependency tree
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
@@ -195,15 +195,21 @@ jobs:
           $deps=Invoke-WaddleDependencyBootstrap -RepoRoot $repo -WorkRoot $work
           $sourceElectron=Test-WaddleElectronRuntime -WorkRoot $work -ExpectedVersion $deps.electron
           $sourceFlash=Test-WaddlePepperFlash -RepoRoot $repo
-          $snapshot=New-WaddleRuntimeSnapshot -RepoRoot $repo -WorkRoot $work -ElectronExecutable $sourceElectron.executable -ElectronVersion $sourceElectron.version -PepperFlashPath $sourceFlash.path -PepperFlashVersion $sourceFlash.version -SourceSha $env:WADDLE_EXPECTED_SHA -DependencyFingerprint $deps.fingerprint
-          $dependencyRoot=Get-WaddleNodeModulesPath -WorkRoot $work
-          if($snapshot.electron_executable.StartsWith($dependencyRoot,[StringComparison]::OrdinalIgnoreCase)){throw 'RUNTIME_ISOLATION=FAIL electron_inside_dependencies'}
+          $runtime=New-WaddleRuntimeSnapshot -RepoRoot $repo -WorkRoot $work -ElectronExecutable $sourceElectron.executable -ElectronVersion $sourceElectron.version -PepperFlashPath $sourceFlash.path -PepperFlashVersion $sourceFlash.version -SourceSha $env:WADDLE_EXPECTED_SHA -DependencyFingerprint $deps.fingerprint
+          $workFull=[IO.Path]::GetFullPath($work).TrimEnd('\')+'\'
+          foreach($p in @($runtime.root,$runtime.electron_executable,$runtime.ppapi_flash_path,$runtime.app_entry,$runtime.runtime_node_modules)){
+            $full=[IO.Path]::GetFullPath([string]$p)
+            if($full.StartsWith($workFull,[StringComparison]::OrdinalIgnoreCase)){throw "RUNTIME_ISOLATION=FAIL path_inside_work=$full"}
+          }
+          $expectedHome=[IO.Path]::GetFullPath((Join-Path $env:ANDROIDBUILD_ROOT 'Runtime\Waddle-Forever'))
+          if(-not ([IO.Path]::GetFullPath([string]$runtime.root)).StartsWith(($expectedHome.TrimEnd('\')+'\'),[StringComparison]::OrdinalIgnoreCase)){throw "RUNTIME_ISOLATION=FAIL wrong_home=$($runtime.root) expected=$expectedHome"}
           $hold=Join-Path $work 'tmp\runtime-lock-probe.js'
           Set-Content -LiteralPath $hold -Value 'setTimeout(() => process.exit(0), 45000);' -Encoding ASCII
           $process=$null
           try {
             $env:ELECTRON_RUN_AS_NODE='1'
-            $process=Start-Process -FilePath $snapshot.electron_executable -ArgumentList ('"'+$hold+'"') -WorkingDirectory $snapshot.root -PassThru
+            $env:NODE_PATH=[string]$runtime.runtime_node_modules
+            $process=Start-Process -FilePath $runtime.electron_executable -ArgumentList ('"'+$hold+'"') -WorkingDirectory $runtime.root -PassThru
             Start-Sleep -Seconds 2
             $process.Refresh()
             if($process.HasExited){throw "RUNTIME_ISOLATION=FAIL hold_process_exited code=$($process.ExitCode)"}
@@ -213,7 +219,7 @@ jobs:
               & yarn.cmd install --frozen-lockfile --non-interactive
               if($LASTEXITCODE -ne 0){throw "RUNTIME_ISOLATION=FAIL yarn_exit=$LASTEXITCODE"}
             } finally { Pop-Location }
-            Write-Host "RUNTIME_DEPENDENCY_ISOLATION=PASS snapshot=$($snapshot.root) mutable_dependencies=$dependencyRoot yarn_while_electron_open=true"
+            Write-Host "RUNTIME_DEPENDENCY_ISOLATION=PASS runtime=$($runtime.root) current=$($runtime.current_root) runtime_modules=$($runtime.runtime_node_modules) mutable_build_root=$work yarn_while_electron_open=true work_execution=false"
           } finally {
             Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
             if($process -and -not $process.HasExited){try{$process.Kill()}catch{};try{$process.WaitForExit(5000)}catch{}}
@@ -232,7 +238,6 @@ jobs:
             'build\compiled',
             'dist\package',
             'cache\yarn',
-            'runtime\interactive',
             'state\dependencies.json',
             'state\runtime-snapshot.json',
             'state\waddle-build-summary.json',
@@ -243,12 +248,19 @@ jobs:
           }
           $nodeLink=Get-Item -LiteralPath (Join-Path $env:WADDLE_CANONICAL_REPO 'node_modules') -Force
           if(($nodeLink.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0){throw 'LOCAL_INTEGRATION=FAIL node_modules_not_junction'}
-          $raw=@($nodeLink.Target)[0]
-          $actual=if([IO.Path]::IsPathRooted([string]$raw)){[IO.Path]::GetFullPath([string]$raw)}else{[IO.Path]::GetFullPath((Join-Path $nodeLink.Parent.FullName ([string]$raw)))}
-          $expected=[IO.Path]::GetFullPath((Join-Path $work 'dependencies\current\node_modules'))
-          if($actual.TrimEnd('\') -ine $expected.TrimEnd('\')){throw "LOCAL_INTEGRATION=FAIL node_modules_target=$actual expected=$expected"}
           $runtime=Get-Content -LiteralPath (Join-Path $work 'state\runtime-snapshot.json') -Raw | ConvertFrom-Json
           if([string]$runtime.platform -ne 'windows-x64'){throw "LOCAL_INTEGRATION=FAIL runtime_platform=$($runtime.platform)"}
+          if([string]$runtime.runtime_mode -ne 'external_deployment'){throw "LOCAL_INTEGRATION=FAIL runtime_mode=$($runtime.runtime_mode)"}
           if([string]$runtime.source_sha -ne [string]$env:WADDLE_EXPECTED_SHA){throw "LOCAL_INTEGRATION=FAIL runtime_sha=$($runtime.source_sha)"}
-          Write-Host "LOCAL_INTEGRATION=PASS platform=windows-x64 repo=$env:WADDLE_CANONICAL_REPO work=$work sha=$env:WADDLE_EXPECTED_SHA runtime_isolated=true"
+          $expectedHome=[IO.Path]::GetFullPath((Join-Path $env:ANDROIDBUILD_ROOT 'Runtime\Waddle-Forever'))
+          $versionRoot=[IO.Path]::GetFullPath([string]$runtime.version_root)
+          if(-not $versionRoot.StartsWith(($expectedHome.TrimEnd('\')+'\'),[StringComparison]::OrdinalIgnoreCase)){throw "LOCAL_INTEGRATION=FAIL runtime_home=$versionRoot expected=$expectedHome"}
+          $workFull=[IO.Path]::GetFullPath($work).TrimEnd('\')+'\'
+          foreach($p in @($runtime.version_root,$runtime.electron_executable,$runtime.ppapi_flash_path,$runtime.app_entry,$runtime.runtime_node_modules)){
+            if(([IO.Path]::GetFullPath([string]$p)).StartsWith($workFull,[StringComparison]::OrdinalIgnoreCase)){throw "LOCAL_INTEGRATION=FAIL runtime_path_inside_work=$p"}
+          }
+          foreach($requiredExternal in @($runtime.electron_executable,$runtime.ppapi_flash_path,$runtime.app_entry,$runtime.runtime_node_modules,$runtime.deployment_manifest)){
+            if(-not(Test-Path -LiteralPath ([string]$requiredExternal))){throw "LOCAL_INTEGRATION=FAIL external_missing=$requiredExternal"}
+          }
+          Write-Host "LOCAL_INTEGRATION=PASS platform=windows-x64 repo=$env:WADDLE_CANONICAL_REPO work=$work sha=$env:WADDLE_EXPECTED_SHA runtime_home=$expectedHome work_execution=false"
           Write-Host 'ANDROID=NOT_APPLICABLE APK=NOT_APPLICABLE PHYSICAL_ADB=NOT_APPLICABLE'
