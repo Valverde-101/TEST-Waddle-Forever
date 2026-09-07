@@ -44,14 +44,35 @@ function Stop-WaddlePriorState {
 
 function Get-WaddleCurrentSha {
   $git = Get-Command git.exe -ErrorAction SilentlyContinue
-  if (-not $git) { return '' }
-  try {
-    $safe = $repo.Replace('"','\"')
-    $value = & $git.Source -c "safe.directory=$safe" -C $repo rev-parse HEAD 2>$null
-    $global:LASTEXITCODE = 0
-    if ($value) { return ([string]$value).Trim().ToLowerInvariant() }
-  } catch {}
+  if ($git) {
+    try {
+      $safe = $repo.Replace('"','\"')
+      $value = & $git.Source -c "safe.directory=$safe" -C $repo rev-parse HEAD 2>$null
+      $global:LASTEXITCODE = 0
+      if ($value) { return ([string]$value).Trim().ToLowerInvariant() }
+    } catch {}
+  }
+
+  $summaryPath = Join-Path $work 'state\waddle-build-summary.json'
+  if (Test-Path -LiteralPath $summaryPath -PathType Leaf) {
+    try {
+      $summary = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json -ErrorAction Stop
+      if ($summary.source_sha) { return ([string]$summary.source_sha).Trim().ToLowerInvariant() }
+    } catch {}
+  }
   return ''
+}
+
+function Get-WaddleDependencyFingerprint {
+  $parts = New-Object System.Collections.Generic.List[string]
+  foreach ($name in @('package.json','yarn.lock')) {
+    $path = Join-Path $repo $name
+    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return '' }
+    $parts.Add((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToUpperInvariant())
+  }
+  $bytes = [Text.Encoding]::UTF8.GetBytes(($parts -join '|'))
+  $sha = [Security.Cryptography.SHA256]::Create()
+  try { return ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','') } finally { $sha.Dispose() }
 }
 
 function Get-WaddleMappedProvider {
@@ -85,8 +106,7 @@ function Add-WaddleHostCandidate {
   $short = $candidate.Split('.')[0]
   foreach ($item in @($short,$candidate)) {
     if ([string]::IsNullOrWhiteSpace($item)) { continue }
-    $exists = @($List | Where-Object { $_ -ieq $item }).Count -gt 0
-    if (-not $exists) { $List.Add($item) }
+    if (@($List | Where-Object { $_ -ieq $item }).Count -eq 0) { $List.Add($item) }
   }
 }
 
@@ -95,20 +115,19 @@ function Resolve-WaddlePortableLaunchRoot {
 
   $mapping = Get-WaddleMappedProvider -Path $RepoRoot
   if (-not $mapping) {
-    return [pscustomobject]@{ repo=$RepoRoot; network_backed=$false; mode='local'; server=''; share='' }
+    return [pscustomobject]@{ repo=$RepoRoot; network_backed=$false; mode='local'; server=''; share=''; host='' }
   }
 
   $provider = ([string]$mapping.provider_root).TrimEnd('\')
-  if ($provider -notmatch '^\\\\([^\\]+)\\([^\\]+)') {
-    throw "WADDLE_SMB_ALIAS=FAIL provider_parse provider=$provider"
-  }
-  $server = [string]$Matches[1]
-  $share = [string]$Matches[2]
+  $providerMatch = [regex]::Match($provider,'^\\\\([^\\]+)\\([^\\]+)')
+  if (-not $providerMatch.Success) { throw "WADDLE_SMB_ALIAS=FAIL provider_parse provider=$provider" }
+  $server = [string]$providerMatch.Groups[1].Value
+  $share = [string]$providerMatch.Groups[2].Value
   $sourceRoot = [string]$mapping.source_root
   $relativeRepo = ([IO.Path]::GetFullPath($RepoRoot)).Substring($sourceRoot.Length).TrimStart('\')
 
   $simpleServer = ($server -notmatch '^\d{1,3}(\.\d{1,3}){3}$' -and $server -notmatch '\.')
-  $candidates = New-Object 'System.Collections.Generic.List[string]'
+  $candidates = New-Object System.Collections.Generic.List[string]
   if ($simpleServer) { Add-WaddleHostCandidate -List $candidates -Value $server }
 
   try {
@@ -207,8 +226,8 @@ foreach ($required in @($launchElectron,$launchEntry,$launchFlash,$launchModules
   if (-not (Test-Path -LiteralPath $required)) { throw "WADDLE_PLAY=FAIL launch_alias_missing=$required mode=$($launchRoot.mode)" }
 }
 
-# Remove a file-level Mark-of-the-Web stream if one exists. This changes only
-# metadata on the shared executable; it does not install or copy Electron.
+# Remove only a file-level Mark-of-the-Web stream if present. No file is copied
+# or installed and no Windows security-zone policy/registry value is changed.
 try { Unblock-File -LiteralPath $electronCanonical -ErrorAction Stop } catch {}
 try { if ($launchElectron -ine $electronCanonical) { Unblock-File -LiteralPath $launchElectron -ErrorAction Stop } } catch {}
 
@@ -239,24 +258,64 @@ $env:WADDLE_RUNTIME_DIAGNOSTIC_LOG = $stderr
 Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
 
 $sha = Get-WaddleCurrentSha
+$fingerprint = Get-WaddleDependencyFingerprint
 $launchWatch = [Diagnostics.Stopwatch]::StartNew()
 $process = $null
 try {
-  $arguments = @("--user-data-dir=$chromiumProfile",$launchEntry)
-  $process = Start-Process -FilePath $launchElectron -ArgumentList $arguments -WorkingDirectory $launchRepo -PassThru -ErrorAction Stop
+  $psi = New-Object System.Diagnostics.ProcessStartInfo
+  $psi.FileName = $launchElectron
+  $psi.WorkingDirectory = $repo
+  $escapedProfile = $chromiumProfile.Replace('"','\"')
+  $escapedEntry = $launchEntry.Replace('"','\"')
+  $psi.Arguments = "--user-data-dir=`"$escapedProfile`" `"$escapedEntry`""
+  $psi.UseShellExecute = $false
+  $psi.CreateNoWindow = $false
+  $process = [Diagnostics.Process]::Start($psi)
 } catch {
-  throw "WADDLE_PLAY=FAIL process_start executable=$launchElectron mode=$($launchRoot.mode) error=$($_.Exception.Message)"
+  throw "WADDLE_PLAY=FAIL process_start executable=$launchElectron mode=$($launchRoot.mode) shell_execute=false error=$($_.Exception.Message)"
 }
 
 if (-not $process -or $process.Id -le 0) { throw 'WADDLE_PLAY=FAIL process_id_missing' }
 
 $startingState = [ordered]@{
-  schema='waddle-client-state/v12'; status='STARTING'; platform='windows-x64'; pid=$process.Id; source_sha=$sha;
-  repo_root=$repo; work_root=$work; runtime_mode='repo_local_direct'; runtime_root=$repo; runtime_home=$repo;
-  runtime_app_entry=$entryCanonical; runtime_node_modules=$modulesCanonical; electron_executable=$electronCanonical;
-  electron_launch_executable=$launchElectron; electron_version='10.4.7'; electron_network_backed=[bool]$launchRoot.network_backed;
-  smb_launch_mode=[string]$launchRoot.mode; ppapi_flash_path=$flashCanonical; portable_user_data=$portableUserData;
-  chromium_profile=$chromiumProfile; stdout=$stdout; stderr=$stderr; started_utc=[DateTime]::UtcNow.ToString('o')
+  schema='waddle-client-state/v11'
+  status='STARTING'
+  platform='windows-x64'
+  pid=$process.Id
+  source_sha=$sha
+  repo_root=$repo
+  work_root=$work
+  dependency_build_root=$modulesCanonical
+  dependency_fingerprint=$fingerprint
+  dependency_mode='reused'
+  dependency_mutation_while_running=$false
+  stdio_mode='detached_no_runner_pipes'
+  managed_node_home='NOT_REQUIRED_FOR_PLAY'
+  managed_node_exe='NOT_REQUIRED_FOR_PLAY'
+  runtime_mode='repo_local_direct'
+  runtime_home=$repo
+  runtime_root=$repo
+  runtime_current_root=$repo
+  runtime_manifest=(Join-Path $stateDir 'runtime-snapshot.json')
+  runtime_app_entry=$entryCanonical
+  runtime_node_modules=$modulesCanonical
+  electron_source_executable=$electronCanonical
+  electron_executable=$electronCanonical
+  electron_launch_executable=$launchElectron
+  electron_version='10.4.7'
+  electron_launch_mode='repo_direct_start_process'
+  electron_network_backed=[bool]$launchRoot.network_backed
+  launcher_return_ms=0
+  smb_launch_mode=[string]$launchRoot.mode
+  ppapi_flash_source_path=$flashCanonical
+  ppapi_flash_path=$flashCanonical
+  ppapi_flash_version='32.0.0.303'
+  ffdec_path='NOT_REQUIRED_FOR_PLAY'
+  portable_user_data=$portableUserData
+  chromium_profile=$chromiumProfile
+  stdout=$stdout
+  stderr=$stderr
+  started_utc=[DateTime]::UtcNow.ToString('o')
 }
 $startingState | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
 
@@ -286,12 +345,12 @@ try {
       $readyEvent = $ready[0]
       $urlProp = $readyEvent.PSObject.Properties['url']
       $url = if ($urlProp) { [string]$urlProp.Value } else { '' }
-      $startingState.status = 'RUNNING'
-      $startingState | Add-Member -NotePropertyName ready_utc -NotePropertyValue ([DateTime]::UtcNow.ToString('o')) -Force
-      $startingState | Add-Member -NotePropertyName launcher_return_ms -NotePropertyValue ([int64]$launchWatch.ElapsedMilliseconds) -Force
-      $startingState | Add-Member -NotePropertyName main_window_url -NotePropertyValue $url -Force
+      $startingState['status'] = 'RUNNING'
+      $startingState['ready_utc'] = [DateTime]::UtcNow.ToString('o')
+      $startingState['launcher_return_ms'] = [int64]$launchWatch.ElapsedMilliseconds
+      $startingState['main_window_url'] = $url
       $startingState | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
-      Write-Host "WADDLE_PLAY=PASS pid=$($process.Id) electron=10.4.7 event=main-window-ready url=$url launch_ms=$($launchWatch.ElapsedMilliseconds) runtime=$repo node_modules=$modulesCanonical flash=$flashCanonical portable_user_data=$portableUserData chromium_profile=$chromiumProfile network_backed=$($launchRoot.network_backed) smb_mode=$($launchRoot.mode) files_copied=0 local_install=0"
+      Write-Host "WADDLE_PLAY=PASS pid=$($process.Id) electron=10.4.7 event=main-window-ready url=$url launch_ms=$($launchWatch.ElapsedMilliseconds) runtime=$repo node_modules=$modulesCanonical flash=$flashCanonical portable_user_data=$portableUserData chromium_profile=$chromiumProfile network_backed=$($launchRoot.network_backed) smb_mode=$($launchRoot.mode) shell_execute=false files_copied=0 local_install=0"
       exit 0
     }
   } while ([DateTime]::UtcNow -lt $deadline)
@@ -300,9 +359,9 @@ try {
   throw "WADDLE_PLAY=FAIL main_window_ready_timeout pid=$($process.Id) timeout_seconds=$healthSeconds last_event=$lastEvent diagnostic=$stderr tail=$tail"
 } catch {
   try { Stop-WaddlePortableProcess -ProcessId $process.Id -Reason 'health_failure' } catch {}
-  $startingState.status = 'FAILED'
-  $startingState | Add-Member -NotePropertyName failure -NotePropertyValue ([string]$_.Exception.Message) -Force
-  $startingState | Add-Member -NotePropertyName failed_utc -NotePropertyValue ([DateTime]::UtcNow.ToString('o')) -Force
+  $startingState['status'] = 'FAILED'
+  $startingState['failure'] = [string]$_.Exception.Message
+  $startingState['failed_utc'] = [DateTime]::UtcNow.ToString('o')
   $startingState | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
   throw
 }
