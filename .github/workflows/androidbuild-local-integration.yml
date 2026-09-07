@@ -100,6 +100,32 @@ jobs:
             -AndroidBuildRoot $env:ANDROIDBUILD_ROOT
           if($LASTEXITCODE -ne 0){throw "WADDLE_CERT=FAIL certification_exit=$LASTEXITCODE"}
 
+      - name: Build incremental SWF dependency analysis
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Set-StrictMode -Version Latest
+          $repo=$env:WADDLE_CANONICAL_REPO
+          $common=Join-Path $repo '.github\scripts\waddle-common.ps1'
+          $analyzer=Join-Path $repo '.github\scripts\waddle-swf-analysis.ps1'
+          if(-not(Test-Path -LiteralPath $common -PathType Leaf)){throw "WADDLE_SWF_ANALYSIS=FAIL common_missing=$common"}
+          if(-not(Test-Path -LiteralPath $analyzer -PathType Leaf)){throw "WADDLE_SWF_ANALYSIS=FAIL analyzer_missing=$analyzer"}
+          . $common
+          $toolchain=Test-WaddleToolchain -AndroidBuildRoot $env:ANDROIDBUILD_ROOT
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $analyzer `
+            -RepoRoot $repo `
+            -WorkRoot (Join-Path $repo '.work') `
+            -FFDecPath $toolchain.ffdec `
+            -DeepBudget 8 `
+            -FFDecTimeoutSeconds 12
+          if($LASTEXITCODE -ne 0){throw "WADDLE_SWF_ANALYSIS=FAIL exit=$LASTEXITCODE"}
+          $summary=Join-Path $repo '.work\swf-analysis\summary.json'
+          if(-not(Test-Path -LiteralPath $summary -PathType Leaf)){throw "WADDLE_SWF_ANALYSIS=FAIL summary_missing=$summary"}
+          Get-Content -LiteralPath $summary -Raw | Write-Host
+          Import-Module (Join-Path $env:ANDROIDBUILD_ROOT 'Core\Current\AndroidBuild.psd1') -Force
+          Test-AndroidBuildExactHead -RepoRoot $repo -ExpectedSha $env:WADDLE_EXPECTED_SHA -AndroidBuildRoot $env:ANDROIDBUILD_ROOT | Out-Null
+          Write-Host "WADDLE_SWF_ANALYSIS_EXACT_HEAD=PASS sha=$env:WADDLE_EXPECTED_SHA"
+
       - name: Emit diagnostic context on failure
         if: failure()
         shell: powershell
@@ -114,6 +140,9 @@ jobs:
             'state\waddle-client.json',
             'state\waddle-build-summary.json',
             'state\runtime-snapshot.json',
+            'swf-analysis\summary.json',
+            'swf-analysis\missing-swfs.json',
+            'swf-analysis\runtime-trace.json',
             'logs\certification\setup.stdout.log',
             'logs\certification\setup.stderr.log',
             'logs\certification\flash-runtime-probe.stdout.log',
