@@ -78,7 +78,7 @@ jobs:
           }
           Write-Host 'FLASH_GATE_SETUP=PASS'
 
-      - name: Prove Pepper Flash inside Chromium renderer
+      - name: Prove real boots.swf instantiation inside Chromium
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
@@ -91,6 +91,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $runtimeLogs | Out-Null
           $stdout=Join-Path $runtimeLogs 'flash-runtime-probe.stdout.log'
           $stderr=Join-Path $runtimeLogs 'flash-runtime-probe.stderr.log'
+          Remove-Item -LiteralPath $state,$stdout,$stderr -Force -ErrorAction SilentlyContinue
           if(-not(Test-Path -LiteralPath $electron -PathType Leaf)){throw "FLASH_GATE=FAIL electron_missing=$electron"}
           if(-not(Test-Path -LiteralPath $probe -PathType Leaf)){throw "FLASH_GATE=FAIL probe_missing=$probe"}
           Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
@@ -104,10 +105,23 @@ jobs:
           $process.Refresh()
           if(Test-Path -LiteralPath $stdout){Get-Content -LiteralPath $stdout | Write-Host}
           if(Test-Path -LiteralPath $stderr){Get-Content -LiteralPath $stderr | Write-Host}
-          if($process.ExitCode -ne 0){throw "FLASH_GATE=FAIL probe_exit=$($process.ExitCode) state=$state stdout=$stdout stderr=$stderr"}
-          if(-not(Test-Path -LiteralPath $state -PathType Leaf)){throw "FLASH_GATE=FAIL state_missing=$state"}
+          if(-not(Test-Path -LiteralPath $state -PathType Leaf)){
+            throw "FLASH_GATE=FAIL state_missing stdout=$stdout stderr=$stderr"
+          }
           $result=Get-Content -LiteralPath $state -Raw | ConvertFrom-Json
           if([string]$result.status -ne 'PASS'){throw "FLASH_GATE=FAIL renderer_status=$($result.status) reason=$($result.reason)"}
           if(-not [bool]$result.renderer.mimePresent){throw 'FLASH_GATE=FAIL flash_mime_absent'}
-          if(-not [bool]$result.renderer.mimeEnabledPlugin -and @($result.flash_plugins).Count -lt 1){throw 'FLASH_GATE=FAIL flash_plugin_not_exposed'}
-          Write-Host "FLASH_GATE=PASS electron=$($result.electron) chromium=$($result.chromium) plugin=$($result.plugin_path) version=$($result.plugin_version) mime_enabled=$($result.renderer.mimeEnabledPlugin) flash_plugins=$(@($result.flash_plugins).Count)"
+          if(-not [bool]$result.renderer.mimeEnabledPlugin){throw 'FLASH_GATE=FAIL flash_mime_plugin_disabled'}
+          if(@($result.flash_plugins).Count -lt 1){throw 'FLASH_GATE=FAIL flash_plugin_not_exposed'}
+          if([int]$result.swf_requests -lt 1){throw 'FLASH_GATE=FAIL boots_swf_never_requested'}
+          if([bool]$result.fallback_visible){throw 'FLASH_GATE=FAIL html_flash_fallback_visible'}
+          if(-not [bool]$result.swf_instantiated){throw 'FLASH_GATE=FAIL boots_swf_not_instantiated'}
+          # Electron is a GUI-subsystem executable and PowerShell can expose a blank
+          # ExitCode even after WaitForExit. The persisted renderer state is the
+          # authoritative cross-process result; do not turn a proven PASS red on a
+          # blank GUI ExitCode.
+          $exitText=[string]$process.ExitCode
+          if(-not [string]::IsNullOrWhiteSpace($exitText) -and [int]$exitText -ne 0){
+            throw "FLASH_GATE=FAIL probe_exit=$exitText state=$state"
+          }
+          Write-Host "FLASH_GATE=PASS electron=$($result.electron) chromium=$($result.chromium) plugin=$($result.plugin_path) version=$($result.plugin_version) swf_requests=$($result.swf_requests) fallback_visible=$($result.fallback_visible) instantiated=$($result.swf_instantiated)"
