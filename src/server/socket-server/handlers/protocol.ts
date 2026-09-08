@@ -1,17 +1,16 @@
-import { PenguinHandler } from './handlers';
-
 /**
- * Modern shells send j#crl after the room SWF has finished loading. The legacy
- * server does not need to mutate state or answer this acknowledgement; handling
- * it explicitly prevents a valid lifecycle packet from being classified as an
- * unsupported gameplay action.
+ * Client-to-server packets that are acknowledgements/lifecycle notifications,
+ * not gameplay commands. They are intentionally accepted without a response.
+ *
+ * j#crl: client room SWF finished loading. Historical CPPS implementations
+ * handled this as an empty room-loaded callback.
+ *
+ * bi#ack: Airtower acknowledgement for selected server commands. The payload is
+ * variable-length telemetry metadata (time=<epoch>, acknowledged command, ...).
  */
-export const handleClientRoomLoaded: PenguinHandler<[]> = () => undefined;
+const noResponseClientPackets = new Set<string>([
+  's%j#crl',
+  's%bi#ack'
+]);
 
-/**
- * Airtower sends bi#ack after selected server commands (for example room/world
- * transitions). The payload is telemetry/ack metadata such as time=<epoch> and
- * the acknowledged command. It is intentionally variable-length and requires
- * no response in the offline server.
- */
-export const handleClientCommandAck: PenguinHandler<string[]> = () => undefined;
+export const isNoResponseClientPacket = (action: string): boolean => noResponseClientPackets.has(action);
