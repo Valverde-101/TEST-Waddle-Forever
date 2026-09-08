@@ -106,7 +106,12 @@ const prepareRuntimePlugin = (sourcePath: string, flashVersion: string) => {
       copied = true;
     } finally {
       if (fs.existsSync(temporaryPath)) {
-        try { fs.unlinkSync(temporaryPath); } catch {}
+        try {
+          fs.unlinkSync(temporaryPath);
+        } catch (cleanupError) {
+          const detail = cleanupError instanceof Error ? cleanupError.message : String(cleanupError);
+          console.warn(`WADDLE_PPAPI_FLASH_CACHE_CLEANUP=WARN path=${temporaryPath} error=${detail}`);
+        }
       }
     }
     runtimeHash = hashFile(runtimePath);
