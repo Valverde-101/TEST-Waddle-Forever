@@ -184,7 +184,8 @@ export class XtHandler {
               source: 'xt-handler',
               action: name,
               direction: 'in',
-              status: 'handler-rejected',
+              status: 'handler-threw',
+              async: true,
               error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
             });
             throw error;
