@@ -17,7 +17,7 @@ export interface ClientSocket {
 const maxBufferedPacketChars = 4 * 1024 * 1024;
 const maxHttpUpgradeHeaderBytes = 64 * 1024;
 const httpUpgradeTimeoutMs = 10_000;
-const httpHeaderTerminator = Buffer.from('\r\n\r\n', 'ascii');
+const httpHeaderTerminator = '\r\n\r\n';
 
 const parseHeaders = (data: string): Record<string, string> => {
   const lines = data.split('\r\n');
@@ -140,7 +140,11 @@ export const setupSocketServer = async (name: string, port: number, handler: Mes
       };
 
       const startWebSocketUpgrade = (firstBuffer: Buffer) => {
-        let pending = Buffer.from(firstBuffer);
+        // Normalize through number[] instead of Buffer<ArrayBufferLike> overloads.
+        // The project intentionally combines TypeScript 7 with Node 18 typings;
+        // direct Buffer-to-Buffer overloads can otherwise become incompatible
+        // when one side is inferred with SharedArrayBuffer-capable generics.
+        let pending = Buffer.from(Array.from(firstBuffer));
         let settled = false;
         const timeout = setTimeout(() => {
           if (settled) return;
@@ -151,7 +155,7 @@ export const setupSocketServer = async (name: string, port: number, handler: Mes
 
         const finish = () => {
           if (settled) return true;
-          const headerEnd = pending.indexOf(httpHeaderTerminator);
+          const headerEnd = pending.indexOf(httpHeaderTerminator, 0, 'ascii');
           if (headerEnd === -1) {
             if (pending.length > maxHttpUpgradeHeaderBytes) {
               settled = true;
@@ -164,7 +168,7 @@ export const setupSocketServer = async (name: string, port: number, handler: Mes
 
           settled = true;
           clearTimeout(timeout);
-          const bodyOffset = headerEnd + httpHeaderTerminator.length;
+          const bodyOffset = headerEnd + Buffer.byteLength(httpHeaderTerminator, 'ascii');
           const requestText = pending.subarray(0, bodyOffset).toString('utf8');
           const head = pending.subarray(bodyOffset);
           const headers = parseHeaders(requestText);
@@ -187,7 +191,7 @@ export const setupSocketServer = async (name: string, port: number, handler: Mes
         const readMore = () => {
           if (finish()) return;
           socket.once('data', (chunk: Buffer) => {
-            pending = Buffer.concat([pending, chunk]);
+            pending = Buffer.from([...pending, ...chunk]);
             readMore();
           });
         };
