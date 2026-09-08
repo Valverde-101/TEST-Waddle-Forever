@@ -91,9 +91,10 @@ function Add-Issue {
   })
 }
 
-$criticalEvents = @('uncaught-exception','render-process-gone','flash-runtime-missing','services-start-failed','runtime-lease-acquire-failed')
-$errorEvents = @('window-did-fail-load','resource-load-failed','renderer-console-error')
+$criticalEvents = @('uncaught-exception','flash-runtime-missing','services-start-failed','runtime-lease-acquire-failed')
+$errorEvents = @('renderer-console-error')
 $warningEvents = @('window-unresponsive','mods-failed','runtime-lease-heartbeat-failed','renderer-console-warning')
+$criticalRendererReasons = @('abnormal-exit','crashed','oom','launch-failed','integrity-failure')
 
 foreach ($event in $events) {
   $name = [string](Get-PropertyValue -Object $event -Name 'event' -Default '')
@@ -105,8 +106,33 @@ foreach ($event in $events) {
     Add-Issue -Severity warning -Code $name -Message "Runtime warning event: $name" -Source 'runtime' -Evidence $event
   }
 
+  if ($name -eq 'render-process-gone') {
+    $reason = [string](Get-PropertyValue -Object $event -Name 'reason' -Default '')
+    if ($criticalRendererReasons -contains $reason) {
+      Add-Issue -Severity critical -Code 'render-process-gone' -Message "Renderer terminated abnormally: $reason" -Source 'runtime' -Evidence $event
+    } elseif ($reason -and $reason -ne 'clean-exit') {
+      Add-Issue -Severity warning -Code 'render-process-gone-nonfatal' -Message "Renderer terminated with non-clean reason: $reason" -Source 'runtime' -Evidence $event
+    }
+  }
+
+  if ($name -eq 'window-did-fail-load') {
+    $errorCode = [int](Get-PropertyValue -Object $event -Name 'errorCode' -Default 0)
+    $description = [string](Get-PropertyValue -Object $event -Name 'errorDescription' -Default '')
+    if ($errorCode -eq -3 -or $description -match 'ERR_ABORTED') {
+      Add-Issue -Severity info -Code 'window-load-aborted' -Message 'A navigation was intentionally/benignly aborted during reload or redirect.' -Source 'runtime' -Evidence $event
+    } else {
+      Add-Issue -Severity error -Code 'window-did-fail-load' -Message "Window load failed: $description ($errorCode)" -Source 'runtime' -Evidence $event
+    }
+  }
+
   if ($name -eq 'resource-load-failed') {
-    $resourceFailures.Add($event)
+    $resourceError = [string](Get-PropertyValue -Object $event -Name 'error' -Default '')
+    if ($resourceError -match 'ERR_ABORTED') {
+      Add-Issue -Severity info -Code 'resource-load-aborted' -Message 'A resource request was aborted during navigation/reload.' -Source 'runtime-network' -Evidence $event
+    } else {
+      $resourceFailures.Add($event)
+      Add-Issue -Severity error -Code 'resource-load-failed' -Message "Resource load failed: $resourceError" -Source 'runtime-network' -Evidence $event
+    }
   } elseif ($name -eq 'resource-response') {
     $statusCode = [int](Get-PropertyValue -Object $event -Name 'statusCode' -Default 0)
     if ($statusCode -ge 400) {
@@ -126,6 +152,9 @@ if ($bootCount -gt 0 -and $readyCount -eq 0) {
 }
 if ($readyCount -gt 0 -and $flashReadyCount -eq 0) {
   Add-Issue -Severity error -Code 'flash-ready-event-missing' -Message 'Main window became ready without a flash-runtime-ready event in the selected runtime log.' -Source 'runtime'
+}
+if (-not $runtimeLogPath) {
+  Add-Issue -Severity warning -Code 'runtime-log-missing' -Message 'No runtime diagnostic log is available yet.' -Source 'runtime'
 }
 
 $swfRoot = Join-Path $WorkRoot 'swf-analysis'

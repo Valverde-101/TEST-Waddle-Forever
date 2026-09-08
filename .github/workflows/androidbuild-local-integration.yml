@@ -145,6 +145,26 @@ jobs:
           Test-AndroidBuildExactHead -RepoRoot $repo -ExpectedSha $env:WADDLE_EXPECTED_SHA -AndroidBuildRoot $env:ANDROIDBUILD_ROOT | Out-Null
           Write-Host "WADDLE_SWF_ANALYSIS_EXACT_HEAD=PASS sha=$env:WADDLE_EXPECTED_SHA"
 
+      - name: Correlate runtime and SWF diagnostics
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Set-StrictMode -Version Latest
+          $repo=$env:WADDLE_CANONICAL_REPO
+          $diagnoser=Join-Path $repo '.github\scripts\waddle-diagnostics.ps1'
+          if(-not(Test-Path -LiteralPath $diagnoser -PathType Leaf)){throw "WADDLE_DIAGNOSTICS=FAIL script_missing=$diagnoser"}
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $diagnoser `
+            -RepoRoot $repo `
+            -WorkRoot (Join-Path $repo '.work') `
+            -FailOnCritical
+          if($LASTEXITCODE -ne 0){throw "WADDLE_DIAGNOSTICS=FAIL exit=$LASTEXITCODE"}
+          $summary=Join-Path $repo '.work\diagnostics\latest\summary.json'
+          if(-not(Test-Path -LiteralPath $summary -PathType Leaf)){throw "WADDLE_DIAGNOSTICS=FAIL summary_missing=$summary"}
+          Get-Content -LiteralPath $summary -Raw | Write-Host
+          Import-Module (Join-Path $env:ANDROIDBUILD_ROOT 'Core\Current\AndroidBuild.psd1') -Force -DisableNameChecking
+          Test-AndroidBuildExactHead -RepoRoot $repo -ExpectedSha $env:WADDLE_EXPECTED_SHA -AndroidBuildRoot $env:ANDROIDBUILD_ROOT | Out-Null
+          Write-Host "WADDLE_DIAGNOSTICS_EXACT_HEAD=PASS sha=$env:WADDLE_EXPECTED_SHA"
+
       - name: Emit diagnostic context on failure
         if: failure()
         shell: powershell
@@ -162,6 +182,11 @@ jobs:
             'swf-analysis\summary.json',
             'swf-analysis\missing-swfs.json',
             'swf-analysis\runtime-trace.json',
+            'diagnostics\latest\summary.json',
+            'diagnostics\latest\issues.json',
+            'diagnostics\latest\report.txt',
+            'diagnostics\latest\resource-failures.json',
+            'diagnostics\latest\slow-resources.json',
             'logs\certification\setup.stdout.log',
             'logs\certification\setup.stderr.log',
             'logs\certification\flash-runtime-probe.stdout.log',
