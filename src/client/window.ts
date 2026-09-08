@@ -6,6 +6,7 @@ import { GlobalSettings } from '../common/utils';
 import { SettingsManager } from '../server/settings';
 import { getSiteUrl } from './views/multiplayer/multiplayer';
 import { instrumentRuntimeWindow } from './runtime-diagnostics';
+import { installWaddleDiagnosticPanel } from './diagnostic-panel';
 
 export const toggleFullScreen = (store: Store, mainWindow: BrowserWindow) => {
   const fullScreen = !store.private.get("fullScreen");
@@ -52,6 +53,11 @@ const createWindow = async (store: Store, clientSettings: GlobalSettings, server
   // initial Club Penguin HTML/SWF/XML burst had already completed, so the most
   // important boot-time resource requests never reached diagnostics or DevTools.
   instrumentRuntimeWindow(mainWindow, 'main');
+
+  // The in-game diagnostic panel is also registered before loadURL. It consumes
+  // the same live trace without altering SWF bytes and can export a sanitized
+  // share bundle under .work/diagnostics/share for reproducible support.
+  installWaddleDiagnosticPanel(mainWindow);
 
   const setFaviconByPlatform: FiveIconByPlatforms = {
     win32: () => {
