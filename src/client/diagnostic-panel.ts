@@ -392,6 +392,7 @@ const installPanelIntoRenderer = (window: BrowserWindow): Promise<DiagnosticPane
   }
   const css = JSON.stringify(diagnosticPanelCss);
   const script = `(() => {
+    const NL = String.fromCharCode(10);
     const verify = () => ({
       toggle: Boolean(document.getElementById('waddle-diagnostic-toggle')),
       panel: Boolean(document.getElementById('waddle-diagnostic-panel')),
@@ -424,7 +425,7 @@ const installPanelIntoRenderer = (window: BrowserWindow): Promise<DiagnosticPane
     const renderResult = (payload) => {
       if (!payload) { result.textContent = 'Sin resultado.'; return; }
       if (payload.schema === 'waddle-share-result/v1') {
-        result.textContent = payload.message + '\n\nJSON: ' + payload.latest_json + '\nTXT: ' + payload.latest_txt + '\nClasificación: ' + payload.classification + ' (' + payload.confidence + ')';
+        result.textContent = payload.message + NL + NL + 'JSON: ' + payload.latest_json + NL + 'TXT: ' + payload.latest_txt + NL + 'Clasificación: ' + payload.classification + ' (' + payload.confidence + ')';
         return;
       }
       const lines = [];
@@ -435,8 +436,8 @@ const installPanelIntoRenderer = (window: BrowserWindow): Promise<DiagnosticPane
       if (payload.explanation) lines.push('Causa probable: ' + payload.explanation);
       if (payload.recommended_action) lines.push('Siguiente paso: ' + payload.recommended_action);
       const sources = payload.static && payload.static.requested_by_candidates || [];
-      if (sources.length) lines.push('Referencias encontradas:\n - ' + sources.slice(0, 8).join('\n - '));
-      result.textContent = lines.join('\n');
+      if (sources.length) lines.push('Referencias encontradas:' + NL + ' - ' + sources.slice(0, 8).join(NL + ' - '));
+      result.textContent = lines.join(NL);
     };
     window.__WADDLE_DIAG_SET_RESULT__ = renderResult;
 
