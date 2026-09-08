@@ -17,6 +17,12 @@ $modulesCanonical = Join-Path $repo 'node_modules'
 
 New-Item -ItemType Directory -Force -Path $stateDir,$runtimeLogs | Out-Null
 
+$nativeProcessScript = Join-Path $PSScriptRoot 'waddle-win32-process.ps1'
+if (-not (Test-Path -LiteralPath $nativeProcessScript -PathType Leaf)) {
+  throw "WADDLE_PLAY=FAIL native_process_helper_missing=$nativeProcessScript"
+}
+. $nativeProcessScript
+
 function Stop-WaddlePortableProcess {
   param([int]$ProcessId,[string]$Reason)
   if ($ProcessId -le 0) { return }
@@ -262,17 +268,13 @@ $fingerprint = Get-WaddleDependencyFingerprint
 $launchWatch = [Diagnostics.Stopwatch]::StartNew()
 $process = $null
 try {
-  $psi = New-Object System.Diagnostics.ProcessStartInfo
-  $psi.FileName = $launchElectron
-  $psi.WorkingDirectory = $repo
-  $escapedProfile = $chromiumProfile.Replace('"','\"')
-  $escapedEntry = $launchEntry.Replace('"','\"')
-  $psi.Arguments = "--user-data-dir=`"$escapedProfile`" `"$escapedEntry`""
-  $psi.UseShellExecute = $false
-  $psi.CreateNoWindow = $false
-  $process = [Diagnostics.Process]::Start($psi)
+  $processId = Start-WaddleWin32DetachedProcess `
+    -FilePath $launchElectron `
+    -ArgumentList @("--user-data-dir=$chromiumProfile",$launchEntry) `
+    -WorkingDirectory $repo
+  $process = Get-Process -Id $processId -ErrorAction Stop
 } catch {
-  throw "WADDLE_PLAY=FAIL process_start executable=$launchElectron mode=$($launchRoot.mode) shell_execute=false error=$($_.Exception.Message)"
+  throw "WADDLE_PLAY=FAIL process_start executable=$launchElectron mode=$($launchRoot.mode) shell_execute=false inherit_handles=false error=$($_.Exception.Message)"
 }
 
 if (-not $process -or $process.Id -le 0) { throw 'WADDLE_PLAY=FAIL process_id_missing' }
@@ -289,7 +291,7 @@ $startingState = [ordered]@{
   dependency_fingerprint=$fingerprint
   dependency_mode='reused'
   dependency_mutation_while_running=$false
-  stdio_mode='detached_no_runner_pipes'
+  stdio_mode='win32_detached_no_inherited_handles'
   managed_node_home='NOT_REQUIRED_FOR_PLAY'
   managed_node_exe='NOT_REQUIRED_FOR_PLAY'
   runtime_mode='repo_local_direct'
@@ -350,7 +352,7 @@ try {
       $startingState['launcher_return_ms'] = [int64]$launchWatch.ElapsedMilliseconds
       $startingState['main_window_url'] = $url
       $startingState | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
-      Write-Host "WADDLE_PLAY=PASS pid=$($process.Id) electron=10.4.7 event=main-window-ready url=$url launch_ms=$($launchWatch.ElapsedMilliseconds) runtime=$repo node_modules=$modulesCanonical flash=$flashCanonical portable_user_data=$portableUserData chromium_profile=$chromiumProfile network_backed=$($launchRoot.network_backed) smb_mode=$($launchRoot.mode) shell_execute=false files_copied=0 local_install=0"
+      Write-Host "WADDLE_PLAY=PASS pid=$($process.Id) electron=10.4.7 event=main-window-ready url=$url launch_ms=$($launchWatch.ElapsedMilliseconds) runtime=$repo node_modules=$modulesCanonical flash=$flashCanonical portable_user_data=$portableUserData chromium_profile=$chromiumProfile network_backed=$($launchRoot.network_backed) smb_mode=$($launchRoot.mode) shell_execute=false inherit_handles=false files_copied=0 local_install=0"
       exit 0
     }
   } while ([DateTime]::UtcNow -lt $deadline)
