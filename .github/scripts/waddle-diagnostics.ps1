@@ -144,9 +144,18 @@ foreach ($event in $events) {
   }
 }
 
-$bootCount = @($events | Where-Object { [string](Get-PropertyValue -Object $_ -Name 'event' -Default '') -eq 'main-process-boot' }).Count
-$readyCount = @($events | Where-Object { [string](Get-PropertyValue -Object $_ -Name 'event' -Default '') -eq 'main-window-ready' }).Count
-$flashReadyCount = @($events | Where-Object { [string](Get-PropertyValue -Object $_ -Name 'event' -Default '') -eq 'flash-runtime-ready' }).Count
+# Do not use @($genericList) on Windows PowerShell 5.1. Its dynamic binder can
+# throw System.ArgumentException ("Argument types do not match") for
+# System.Collections.Generic.List[T]. ToArray() is deterministic on both 5.1
+# and newer PowerShell versions and preserves an explicit JSON [] when empty.
+$eventArray = $events.ToArray()
+$issueArray = $issues.ToArray()
+$resourceFailureArray = $resourceFailures.ToArray()
+$slowResourceArray = $slowResources.ToArray()
+
+$bootCount = @($eventArray | Where-Object { [string](Get-PropertyValue -Object $_ -Name 'event' -Default '') -eq 'main-process-boot' }).Count
+$readyCount = @($eventArray | Where-Object { [string](Get-PropertyValue -Object $_ -Name 'event' -Default '') -eq 'main-window-ready' }).Count
+$flashReadyCount = @($eventArray | Where-Object { [string](Get-PropertyValue -Object $_ -Name 'event' -Default '') -eq 'flash-runtime-ready' }).Count
 if ($bootCount -gt 0 -and $readyCount -eq 0) {
   Add-Issue -Severity critical -Code 'main-window-never-ready' -Message 'Runtime booted but no main-window-ready event was observed.' -Source 'runtime'
 }
@@ -176,7 +185,7 @@ if ($null -eq $swfSummary) {
 }
 
 $networkFailuresByLeaf = @{}
-foreach ($failure in $resourceFailures) {
+foreach ($failure in $resourceFailureArray) {
   $url = [string](Get-PropertyValue -Object $failure -Name 'url' -Default '')
   if (-not $url) { continue }
   try { $leaf = [IO.Path]::GetFileName(([Uri]$url).AbsolutePath).ToLowerInvariant() }
@@ -190,8 +199,10 @@ foreach ($missing in $missingSwfs) {
   }
 }
 
+# Refresh after all correlation issues have been added.
+$issueArray = $issues.ToArray()
 $severityCounts = [ordered]@{ critical=0; error=0; warning=0; info=0 }
-foreach ($issue in $issues) {
+foreach ($issue in $issueArray) {
   $severity = [string]$issue.severity
   $severityCounts[$severity] = [int]$severityCounts[$severity] + 1
 }
@@ -211,12 +222,12 @@ $summary = [ordered]@{
   repository_root=$RepoRoot
   git_sha=$gitSha
   runtime_log=$runtimeLogPath
-  runtime_event_count=$events.Count
+  runtime_event_count=$eventArray.Count
   runtime_boot_count=$bootCount
   main_window_ready_count=$readyCount
   flash_runtime_ready_count=$flashReadyCount
-  resource_failure_count=$resourceFailures.Count
-  slow_resource_count=$slowResources.Count
+  resource_failure_count=$resourceFailureArray.Count
+  slow_resource_count=$slowResourceArray.Count
   severity=$severityCounts
   swf_analysis_available=($null -ne $swfSummary)
   swf_runtime_trace_available=$(if ($null -eq $runtimeTrace) { $false } else { [bool](Get-PropertyValue -Object $runtimeTrace -Name 'available' -Default $false) })
@@ -228,21 +239,21 @@ $report = New-Object System.Collections.Generic.List[string]
 $report.Add("Waddle diagnostics: $status")
 $report.Add("SHA: $gitSha")
 $report.Add("Runtime log: $runtimeLogPath")
-$report.Add("Runtime events: $($events.Count); main ready: $readyCount; flash ready: $flashReadyCount")
-$report.Add("Resource failures: $($resourceFailures.Count); slow resources: $($slowResources.Count); unresolved SWF refs: $($missingSwfs.Count)")
+$report.Add("Runtime events: $($eventArray.Count); main ready: $readyCount; flash ready: $flashReadyCount")
+$report.Add("Resource failures: $($resourceFailureArray.Count); slow resources: $($slowResourceArray.Count); unresolved SWF refs: $($missingSwfs.Count)")
 $report.Add("Issues: critical=$($severityCounts.critical) error=$($severityCounts.error) warning=$($severityCounts.warning) info=$($severityCounts.info)")
 $report.Add('')
-foreach ($issue in @($issues | Sort-Object @{Expression={ switch ($_.severity) { 'critical' {0} 'error' {1} 'warning' {2} default {3} } }},code)) {
-  $report.Add("[$([string]$issue.severity).ToUpperInvariant())] $($issue.code) - $($issue.message)")
+foreach ($issue in ($issueArray | Sort-Object @{Expression={ switch ($_.severity) { 'critical' {0} 'error' {1} 'warning' {2} default {3} } }},code)) {
+  $report.Add("[$([string]$issue.severity).ToUpperInvariant()] $($issue.code) - $($issue.message)")
 }
 
 Write-JsonFile -Value $summary -Path (Join-Path $runRoot 'summary.json') -Depth 12
-Write-JsonFile -Value @($issues) -Path (Join-Path $runRoot 'issues.json') -Depth 20
-Write-JsonFile -Value @($events) -Path (Join-Path $runRoot 'runtime-events.json') -Depth 20
-Write-JsonFile -Value @($resourceFailures) -Path (Join-Path $runRoot 'resource-failures.json') -Depth 20
-Write-JsonFile -Value @($slowResources) -Path (Join-Path $runRoot 'slow-resources.json') -Depth 20
-Write-JsonFile -Value @($missingSwfs) -Path (Join-Path $runRoot 'swf-unresolved.json') -Depth 20
-$report | Set-Content -LiteralPath (Join-Path $runRoot 'report.txt') -Encoding UTF8
+Write-JsonFile -Value $issueArray -Path (Join-Path $runRoot 'issues.json') -Depth 20
+Write-JsonFile -Value $eventArray -Path (Join-Path $runRoot 'runtime-events.json') -Depth 20
+Write-JsonFile -Value $resourceFailureArray -Path (Join-Path $runRoot 'resource-failures.json') -Depth 20
+Write-JsonFile -Value $slowResourceArray -Path (Join-Path $runRoot 'slow-resources.json') -Depth 20
+Write-JsonFile -Value $missingSwfs -Path (Join-Path $runRoot 'swf-unresolved.json') -Depth 20
+$report.ToArray() | Set-Content -LiteralPath (Join-Path $runRoot 'report.txt') -Encoding UTF8
 
 foreach ($file in Get-ChildItem -LiteralPath $runRoot -File) {
   Copy-Item -LiteralPath $file.FullName -Destination (Join-Path $latestRoot $file.Name) -Force
@@ -250,6 +261,6 @@ foreach ($file in Get-ChildItem -LiteralPath $runRoot -File) {
 Get-ChildItem -LiteralPath $diagnosticRoot -Directory -Filter 'run-*' -ErrorAction SilentlyContinue |
   Sort-Object Name -Descending | Select-Object -Skip 3 | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
-Write-Host "WADDLE_DIAGNOSTICS=$status sha=$gitSha events=$($events.Count) critical=$($severityCounts.critical) errors=$($severityCounts.error) warnings=$($severityCounts.warning) resource_failures=$($resourceFailures.Count) slow_resources=$($slowResources.Count) unresolved_swfs=$($missingSwfs.Count) report=$latestRoot"
+Write-Host "WADDLE_DIAGNOSTICS=$status sha=$gitSha events=$($eventArray.Count) critical=$($severityCounts.critical) errors=$($severityCounts.error) warnings=$($severityCounts.warning) resource_failures=$($resourceFailureArray.Count) slow_resources=$($slowResourceArray.Count) unresolved_swfs=$($missingSwfs.Count) report=$latestRoot"
 if ($FailOnCritical -and [int]$severityCounts.critical -gt 0) { exit 2 }
 exit 0
