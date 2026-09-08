@@ -44,8 +44,11 @@ const getPluginPath = () => {
 };
 
 const hashFile = (filePath: string) => {
-  const bytes = fs.readFileSync(filePath);
-  return crypto.createHash('sha256').update(bytes).digest('hex').toUpperCase();
+  // latin1 maps every code unit 1:1 to the original byte value. Using a string
+  // here avoids the incompatible Buffer/BinaryLike declarations introduced by
+  // the project's mixed Electron-10 and modern TypeScript type packages.
+  const bytes = fs.readFileSync(filePath, { encoding: 'latin1' });
+  return crypto.createHash('sha256').update(bytes, 'latin1').digest('hex').toUpperCase();
 };
 
 const getWindowsFlashCacheRoot = () => {
