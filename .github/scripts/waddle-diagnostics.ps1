@@ -93,7 +93,17 @@ function Add-Issue {
   })
 }
 
-$criticalEvents = @('uncaught-exception','flash-runtime-missing','services-start-failed','runtime-lease-acquire-failed')
+# Keep the offline diagnoser aligned with Waddle-Start's fatal runtime policy.
+# A promise rejection or failed mandatory diagnostic panel is not a cosmetic
+# warning: both can make a nominal Electron process unusable even if it stays alive.
+$criticalEvents = @(
+  'uncaught-exception',
+  'unhandled-rejection',
+  'flash-runtime-missing',
+  'services-start-failed',
+  'runtime-lease-acquire-failed',
+  'diagnostic-panel-bootstrap-failed'
+)
 $warningEvents = @('window-unresponsive','mods-failed','runtime-lease-heartbeat-failed','renderer-console-warning')
 $criticalRendererReasons = @('abnormal-exit','crashed','oom','launch-failed','integrity-failure')
 $actionTraceErrorStatuses = @('unhandled-action','unhandled-context','invalid-signature','send-failed','handler-threw')
@@ -187,6 +197,7 @@ $liveTraceErrorArray = $liveTraceErrors.ToArray()
 $bootCount = @($eventArray | Where-Object { [string](Get-PropertyValue -Object $_ -Name 'event' -Default '') -eq 'main-process-boot' }).Count
 $readyCount = @($eventArray | Where-Object { [string](Get-PropertyValue -Object $_ -Name 'event' -Default '') -eq 'main-window-ready' }).Count
 $flashReadyCount = @($eventArray | Where-Object { [string](Get-PropertyValue -Object $_ -Name 'event' -Default '') -eq 'flash-runtime-ready' }).Count
+$diagnosticPanelReadyCount = @($eventArray | Where-Object { [string](Get-PropertyValue -Object $_ -Name 'event' -Default '') -eq 'diagnostic-panel-ready' }).Count
 $liveTraceConsoleReadyCount = @($eventArray | Where-Object { [string](Get-PropertyValue -Object $_ -Name 'event' -Default '') -eq 'live-trace-console-ready' }).Count
 $liveTraceCategories = @($liveTraceArray | ForEach-Object { [string](Get-PropertyValue -Object $_ -Name 'category' -Default '') } | Where-Object { $_ } | Sort-Object -Unique)
 
@@ -195,6 +206,9 @@ if ($bootCount -gt 0 -and $readyCount -eq 0) {
 }
 if ($readyCount -gt 0 -and $flashReadyCount -eq 0) {
   Add-Issue -Severity error -Code 'flash-ready-event-missing' -Message 'Main window became ready without a flash-runtime-ready event in the selected runtime log.' -Source 'runtime'
+}
+if ($readyCount -gt 0 -and $diagnosticPanelReadyCount -eq 0) {
+  Add-Issue -Severity critical -Code 'diagnostic-panel-ready-missing' -Message 'Main window became ready without proving that the in-game diagnostic controls were installed.' -Source 'runtime-diagnostics'
 }
 if ($readyCount -gt 0 -and $liveTraceConsoleReadyCount -eq 0) {
   Add-Issue -Severity critical -Code 'live-trace-console-missing' -Message 'Main window became ready but the WADDLE-LIVE DevTools console bridge was not installed.' -Source 'live-trace'
@@ -266,6 +280,7 @@ $summary = [ordered]@{
   runtime_boot_count=$bootCount
   main_window_ready_count=$readyCount
   flash_runtime_ready_count=$flashReadyCount
+  diagnostic_panel_ready_count=$diagnosticPanelReadyCount
   live_trace_console_ready_count=$liveTraceConsoleReadyCount
   live_trace_event_count=$liveTraceArray.Count
   live_trace_error_count=$liveTraceErrorArray.Count
@@ -283,13 +298,14 @@ $report = New-Object System.Collections.Generic.List[string]
 $report.Add("Waddle diagnostics: $status")
 $report.Add("SHA: $gitSha")
 $report.Add("Runtime log: $runtimeLogPath")
-$report.Add("Runtime events: $($eventArray.Count); main ready: $readyCount; flash ready: $flashReadyCount")
+$report.Add("Runtime events: $($eventArray.Count); main ready: $readyCount; flash ready: $flashReadyCount; diagnostic panel ready: $diagnosticPanelReadyCount")
 $report.Add("Live trace: console ready=$liveTraceConsoleReadyCount events=$($liveTraceArray.Count) errors=$($liveTraceErrorArray.Count) categories=$($liveTraceCategories -join ',')")
 $report.Add("Resource failures: $($resourceFailureArray.Count); slow resources: $($slowResourceArray.Count); unresolved SWF refs: $($missingSwfs.Count)")
 $report.Add("Issues: critical=$($severityCounts.critical) error=$($severityCounts.error) warning=$($severityCounts.warning) info=$($severityCounts.info)")
 $report.Add('')
 foreach ($issue in ($issueArray | Sort-Object @{Expression={ switch ($_.severity) { 'critical' {0} 'error' {1} 'warning' {2} default {3} } }},code)) {
-  $report.Add("[$([string]$issue.severity).ToUpperInvariant()] $($issue.code) - $($issue.message)")
+  $severityLabel = ([string]$issue.severity).ToUpperInvariant()
+  $report.Add("[$severityLabel] $($issue.code) - $($issue.message)")
 }
 
 Write-JsonFile -Value $summary -Path (Join-Path $runRoot 'summary.json') -Depth 12
@@ -308,6 +324,6 @@ foreach ($file in Get-ChildItem -LiteralPath $runRoot -File) {
 Get-ChildItem -LiteralPath $diagnosticRoot -Directory -Filter 'run-*' -ErrorAction SilentlyContinue |
   Sort-Object Name -Descending | Select-Object -Skip 3 | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
-Write-Host "WADDLE_DIAGNOSTICS=$status sha=$gitSha events=$($eventArray.Count) live_trace=$($liveTraceArray.Count) live_console=$liveTraceConsoleReadyCount live_errors=$($liveTraceErrorArray.Count) critical=$($severityCounts.critical) errors=$($severityCounts.error) warnings=$($severityCounts.warning) resource_failures=$($resourceFailureArray.Count) slow_resources=$($slowResourceArray.Count) unresolved_swfs=$($missingSwfs.Count) report=$latestRoot"
+Write-Host "WADDLE_DIAGNOSTICS=$status sha=$gitSha events=$($eventArray.Count) live_trace=$($liveTraceArray.Count) live_console=$liveTraceConsoleReadyCount live_errors=$($liveTraceErrorArray.Count) diagnostic_panel=$diagnosticPanelReadyCount critical=$($severityCounts.critical) errors=$($severityCounts.error) warnings=$($severityCounts.warning) resource_failures=$($resourceFailureArray.Count) slow_resources=$($slowResourceArray.Count) unresolved_swfs=$($missingSwfs.Count) report=$latestRoot"
 if ($FailOnCritical -and [int]$severityCounts.critical -gt 0) { exit 2 }
 exit 0
