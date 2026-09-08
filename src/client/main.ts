@@ -35,7 +35,123 @@ if (process.platform === 'linux') {
 
 let server: WorldServer | null = null;
 
-loadFlashPlugin(app);
+const flashConfig = loadFlashPlugin(app);
+
+type FlashRuntimeStatus = {
+  pluginFound: boolean;
+  pluginName: string;
+  pluginFilename: string;
+  mimeFound: boolean;
+  mimeType: string;
+  objectPresent: boolean;
+  scriptable: boolean;
+  fallbackPresent: boolean;
+  readyState: string;
+};
+
+const wait = (milliseconds: number) => new Promise<void>(resolve => setTimeout(resolve, milliseconds));
+
+const readFlashRuntimeStatus = async (window: BrowserWindow): Promise<FlashRuntimeStatus> => {
+  const result = await window.webContents.executeJavaScript(`(() => {
+    const plugins = [];
+    for (let i = 0; i < navigator.plugins.length; i += 1) {
+      const plugin = navigator.plugins[i];
+      plugins.push({
+        name: plugin.name || '',
+        filename: plugin.filename || '',
+        description: plugin.description || ''
+      });
+    }
+    const flash = plugins.find(plugin => /shockwave flash|pepperflash|flash player/i.test(
+      plugin.name + ' ' + plugin.filename + ' ' + plugin.description
+    ));
+    const mime = navigator.mimeTypes && navigator.mimeTypes.namedItem
+      ? navigator.mimeTypes.namedItem('application/x-shockwave-flash')
+      : null;
+    const documents = [document];
+    for (let i = 0; i < window.frames.length; i += 1) {
+      try {
+        const childDocument = window.frames[i].document;
+        if (childDocument) documents.push(childDocument);
+      } catch (_) {}
+    }
+    let object = null;
+    let fallbackPresent = false;
+    for (const currentDocument of documents) {
+      if (!object) {
+        object = currentDocument.querySelector(
+          'object[type="application/x-shockwave-flash"], embed[type="application/x-shockwave-flash"], object[data*=".swf"], embed[src*=".swf"]'
+        );
+      }
+      const text = currentDocument.body ? currentDocument.body.innerText || '' : '';
+      if (/download the free flash player now|latest version of the adobe flash player/i.test(text)) {
+        fallbackPresent = true;
+      }
+    }
+    const scriptable = Boolean(object && (
+      typeof object.PercentLoaded === 'function' ||
+      typeof object.SetVariable === 'function' ||
+      typeof object.GetVariable === 'function'
+    ));
+    return {
+      pluginFound: Boolean(flash),
+      pluginName: flash ? flash.name : '',
+      pluginFilename: flash ? flash.filename : '',
+      mimeFound: Boolean(mime),
+      mimeType: mime ? mime.type : '',
+      objectPresent: Boolean(object),
+      scriptable,
+      fallbackPresent,
+      readyState: document.readyState
+    };
+  })()`, true) as FlashRuntimeStatus;
+
+  return result;
+};
+
+const waitForFlashRuntime = async (window: BrowserWindow, timeoutMs = 25000): Promise<FlashRuntimeStatus> => {
+  const deadline = Date.now() + timeoutMs;
+  let lastStatus: FlashRuntimeStatus | null = null;
+  let reloadedAfterPluginDetection = false;
+  let lastError = '';
+
+  while (Date.now() < deadline) {
+    if (window.isDestroyed() || window.webContents.isDestroyed()) {
+      throw new Error('Main window was destroyed before Flash became ready');
+    }
+
+    try {
+      const status = await readFlashRuntimeStatus(window);
+      lastStatus = status;
+
+      if (status.pluginFound && status.mimeFound && status.objectPresent && !status.fallbackPresent) {
+        return status;
+      }
+
+      // PPAPI is registered at process startup, but on slow/network-backed
+      // launches the page can finish its old SWFObject feature test before the
+      // plugin enumeration has settled. Reload exactly once after the plugin is
+      // visible so the page can replace its fallback with the real SWF object.
+      if (status.pluginFound && status.mimeFound && status.fallbackPresent && !reloadedAfterPluginDetection) {
+        reloadedAfterPluginDetection = true;
+        writeRuntimeDiagnostic('flash-runtime-reload', {
+          reason: 'plugin_visible_after_page_fallback',
+          pluginName: status.pluginName,
+          pluginFilename: status.pluginFilename
+        });
+        window.webContents.reload();
+        await wait(750);
+        continue;
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    }
+
+    await wait(250);
+  }
+
+  throw new Error(`Flash runtime did not become usable within ${timeoutMs}ms; status=${JSON.stringify(lastStatus)} lastError=${lastError}`);
+};
 
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
@@ -229,8 +345,42 @@ These are the most important things, but there is a full list of questions in ou
     startDiscordRPC(store, mainWindow);
   }
 
+  try {
+    const flashRuntime = await waitForFlashRuntime(mainWindow);
+    writeRuntimeDiagnostic('flash-runtime-ready', {
+      pluginName: flashRuntime.pluginName,
+      pluginFilename: flashRuntime.pluginFilename,
+      mimeType: flashRuntime.mimeType,
+      objectPresent: flashRuntime.objectPresent,
+      scriptable: flashRuntime.scriptable,
+      sourcePath: flashConfig.sourcePath,
+      runtimePath: flashConfig.runtimePath,
+      sha256: flashConfig.sha256,
+      mode: flashConfig.mode,
+      copied: flashConfig.copied,
+      url: mainWindow.webContents.getURL()
+    });
+  } catch (error) {
+    writeRuntimeDiagnostic('flash-runtime-missing', {
+      error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+      sourcePath: flashConfig.sourcePath,
+      runtimePath: flashConfig.runtimePath,
+      sha256: flashConfig.sha256,
+      mode: flashConfig.mode,
+      copied: flashConfig.copied,
+      url: mainWindow.webContents.getURL()
+    });
+    throw error;
+  }
+
+  // This is intentionally emitted only after the real Club Penguin window has
+  // a registered Flash plugin, Flash MIME type and instantiated SWF object.
+  // Waddle-Start uses this event as its final health gate.
   writeRuntimeDiagnostic('main-window-ready', {
-    url: mainWindow.webContents.getURL()
+    url: mainWindow.webContents.getURL(),
+    flashRuntime: true,
+    flashRuntimePath: flashConfig.runtimePath,
+    flashMode: flashConfig.mode
   });
 
   mainWindow.on('closed', () => {
@@ -265,7 +415,7 @@ app.on('window-all-closed', async () => {
 });
 
 app.on('activate', async () => {
-  // On macOS it's common to re-create a window in the app when the
+  // On macOS it's common to re-create a window when the
   // dock icon is clicked and there are no windows open.
   if (BrowserWindow.getAllWindows().length === 0) {
     mainWindow = await createWindow(store, globalSettings, settingsManager);
