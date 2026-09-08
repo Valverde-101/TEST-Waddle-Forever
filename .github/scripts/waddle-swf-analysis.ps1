@@ -254,7 +254,7 @@ if (Test-Path -LiteralPath $runtimeLogRoot -PathType Container) {
 $runtimePrioritizedHashes = New-Object 'System.Collections.Generic.HashSet[string]' -ArgumentList ([StringComparer]::OrdinalIgnoreCase)
 foreach ($group in $uniqueGroups) {
   $runtimeRank = 9
-  foreach ($pathItem in @($byHash[$group.sha256])) {
+  foreach ($pathItem in $byHash[$group.sha256]) {
     $leaf = [IO.Path]::GetFileName([string]$pathItem.path).ToLowerInvariant()
     if ($runtimeSwfByLeaf.ContainsKey($leaf)) {
       $candidateRank = [int]$runtimeSwfByLeaf[$leaf].rank
@@ -365,7 +365,7 @@ foreach ($item in $inventory) {
       $leaf = [IO.Path]::GetFileName($rawRef).ToLowerInvariant()
       $targets = @()
       if ($byRelative.ContainsKey($rawRef.ToLowerInvariant())) { $targets = @($byRelative[$rawRef.ToLowerInvariant()]) }
-      elseif ($byLeaf.ContainsKey($leaf)) { $targets = @($byLeaf[$leaf]) }
+      elseif ($byLeaf.ContainsKey($leaf)) { $targets = $byLeaf[$leaf].ToArray() }
       if ($targets.Count -gt 0) {
         foreach ($target in $targets) { $edges.Add([pscustomobject]@{ source=$item.path; reference=$ref; target=$target }) }
       } else {
