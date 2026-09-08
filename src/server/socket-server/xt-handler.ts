@@ -3,7 +3,7 @@ import { ClientSocket } from "./socket-server";
 import { WorldContext } from "@server/socket-server/handlers/handlers";
 import { getBlueString, getRedString, logverbose } from "@server/logger";
 import { publishWaddleLiveTrace } from "@common/live-trace";
-import { isNoResponseClientPacket } from "./handlers/protocol";
+import { getXtCompatibilityRule, isNoResponseClientPacket } from "./handlers/protocol";
 
 const parseXtMessage = (message: string): [string, string[]] => {
   const values = message.split('%');
@@ -162,7 +162,8 @@ export class XtHandler {
 
       const [_, signature, callback] = callbackInfo;
       const parsedArgs = parseArgs(args, signature);
-      if (parsedArgs === null) {
+      const compatibility = parsedArgs === null ? getXtCompatibilityRule(name, args.length) : undefined;
+      if (parsedArgs === null && compatibility === undefined) {
         logverbose(getRedString('incorrect type signature: ' + name));
         publishWaddleLiveTrace({
           category: 'XT',
@@ -173,42 +174,40 @@ export class XtHandler {
           status: 'invalid-signature',
           argCount: args.length
         });
-      } else {
-        publishWaddleLiveTrace({
-          category: 'XT',
-          phase: 'handled',
-          source: 'xt-handler',
-          action: name,
-          direction: 'in',
-          status: 'handler-dispatched',
-          argCount: parsedArgs.length
-        });
-        try {
-          const result = callback.call(client, context, name, ...parsedArgs);
-          void Promise.resolve(result).then(() => {
-            publishWaddleLiveTrace({
-              category: 'XT',
-              phase: 'handled',
-              source: 'xt-handler',
-              action: name,
-              direction: 'in',
-              status: 'handler-complete',
-              argCount: parsedArgs.length
-            });
-          }).catch(error => {
-            publishWaddleLiveTrace({
-              category: 'XT',
-              phase: 'error',
-              source: 'xt-handler',
-              action: name,
-              direction: 'in',
-              status: 'handler-threw',
-              async: true,
-              error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
-            });
-            throw error;
+        return;
+      }
+
+      // Compatibility rules are explicit and read-only. Their extra arguments
+      // are version metadata/pagination fields that the legacy Waddle callback
+      // does not consume, so dispatch with the canonical parsed argument list.
+      // For normal signatures parsedArgs remains authoritative.
+      const dispatchArgs = parsedArgs ?? [];
+      publishWaddleLiveTrace({
+        category: 'XT',
+        phase: 'handled',
+        source: 'xt-handler',
+        action: name,
+        direction: 'in',
+        status: compatibility === undefined ? 'handler-dispatched' : 'compatibility-signature',
+        argCount: dispatchArgs.length,
+        receivedArgCount: args.length,
+        compatibilityReason: compatibility?.reason
+      });
+      try {
+        const result = callback.call(client, context, name, ...dispatchArgs);
+        void Promise.resolve(result).then(() => {
+          publishWaddleLiveTrace({
+            category: 'XT',
+            phase: 'handled',
+            source: 'xt-handler',
+            action: name,
+            direction: 'in',
+            status: 'handler-complete',
+            argCount: dispatchArgs.length,
+            receivedArgCount: args.length,
+            compatibility: compatibility !== undefined
           });
-        } catch (error) {
+        }).catch(error => {
           publishWaddleLiveTrace({
             category: 'XT',
             phase: 'error',
@@ -216,10 +215,22 @@ export class XtHandler {
             action: name,
             direction: 'in',
             status: 'handler-threw',
+            async: true,
             error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
           });
           throw error;
-        }
+        });
+      } catch (error) {
+        publishWaddleLiveTrace({
+          category: 'XT',
+          phase: 'error',
+          source: 'xt-handler',
+          action: name,
+          direction: 'in',
+          status: 'handler-threw',
+          error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+        });
+        throw error;
       }
     } else if (isNoResponseClientPacket(name)) {
       // These packets are protocol acknowledgements/lifecycle notifications, not
