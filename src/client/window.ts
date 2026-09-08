@@ -33,9 +33,14 @@ const isInternalNavigation = (url: string, clientSettings: GlobalSettings, serve
 };
 
 const createWindow = async (store: Store, clientSettings: GlobalSettings, serverSettings: SettingsManager) => {
+  // Keep the game window hidden only while its local page is loading. On SMB
+  // clients Chromium can otherwise create a nominal BrowserWindow while the
+  // renderer/profile is still settling, leaving a background/off-screen window
+  // even though the launcher later observes a healthy Flash object.
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 720,
+    show: false,
     title: "Loading...",
     webPreferences: {
       plugins: true,
@@ -57,7 +62,6 @@ const createWindow = async (store: Store, clientSettings: GlobalSettings, server
   setFaviconByPlatform[process.platform]();
   
   mainWindow.setMenu(null);
-  mainWindow.maximize();
 
   // Update discovery is advisory. Network/API cleanup errors must never become
   // an unhandled rejection that destabilizes an otherwise fully offline boot.
@@ -66,6 +70,23 @@ const createWindow = async (store: Store, clientSettings: GlobalSettings, server
   });
 
   await loadMain(mainWindow, clientSettings, serverSettings);
+
+  // Presentation is explicit and occurs only after loadURL resolves. center()
+  // resets stale/off-screen coordinates from a previous monitor topology, while
+  // show/maximize/focus make launcher success correspond to a window the user
+  // can actually see instead of merely a live renderer process.
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore();
+  }
+  mainWindow.center();
+  mainWindow.show();
+  mainWindow.maximize();
+  mainWindow.focus();
+
+  if (!mainWindow.isVisible()) {
+    throw new Error('WADDLE_MAIN_WINDOW_PRESENTATION=FAIL window_not_visible_after_show');
+  }
+  console.log(`WADDLE_MAIN_WINDOW_PRESENTATION=PASS visible=${mainWindow.isVisible()} focused=${mainWindow.isFocused()} minimized=${mainWindow.isMinimized()}`);
 
   // Only the exact Waddle server origin is allowed to navigate inside the
   // privileged Electron window. The previous substring check required a URL to
