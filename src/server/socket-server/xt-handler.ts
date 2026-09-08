@@ -57,10 +57,13 @@ class CallbackManager<Ctx extends WorldContext> {
   }
 
   call(client: ClientSocket, ctx: Ctx, action: string, ...args: Array<string | number>) {
+    const now = Date.now();
+
     if (this._cooldown !== null) {
       const last = this._timestamps.get(client);
 
-      if (last !== undefined && last + this._cooldown > Date.now()) {
+      if (last !== undefined && last + this._cooldown > now) {
+        const remainingMs = Math.max(0, last + this._cooldown - now);
         console.log('Rate limited');
         publishWaddleLiveTrace({
           category: 'XT',
@@ -68,7 +71,9 @@ class CallbackManager<Ctx extends WorldContext> {
           source: 'xt-handler',
           action,
           status: 'rate-limited',
-          argCount: args.length
+          argCount: args.length,
+          cooldownMs: this._cooldown,
+          remainingMs
         });
         return;
       }
@@ -87,6 +92,18 @@ class CallbackManager<Ctx extends WorldContext> {
         });
         return;
       }
+    }
+
+    // Commit acceptance state before entering game logic. The old implementation
+    // checked these maps but never wrote to them, so `once` and `cooldown` were
+    // effectively no-ops and repeated packets could execute the same handler
+    // indefinitely. Marking before dispatch also closes the re-entrancy window
+    // for back-to-back packets while an async handler is still running.
+    if (this._cooldown !== null) {
+      this._timestamps.set(client, now);
+    }
+    if (this._once) {
+      this._handled.set(client, true);
     }
 
     return this._callback(ctx, ...args);
