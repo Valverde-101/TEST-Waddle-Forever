@@ -344,9 +344,15 @@ const collectShareBundle = async (window: BrowserWindow) => {
       })
       .sort((a, b) => b.mtime - a.mtime);
     for (const stale of timestamped.slice(6)) {
-      try { fs.unlinkSync(stale.fullPath); } catch {}
+      try {
+        fs.unlinkSync(stale.fullPath);
+      } catch {
+        // Retention cleanup is best-effort; a locked stale bundle must not block export.
+      }
     }
-  } catch {}
+  } catch {
+    // Retention cleanup is best-effort; the newly generated diagnostic remains valid.
+  }
 
   shell.showItemInFolder(latestJson);
   return {
