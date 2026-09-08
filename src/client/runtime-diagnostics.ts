@@ -1,11 +1,13 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import type { BrowserWindow } from 'electron';
+import type { BrowserWindow, Session } from 'electron';
 
 const runtimeLogDirectory = path.join(process.cwd(), '.work', 'logs', 'runtime');
 const explicitDiagnosticPath = process.env.WADDLE_RUNTIME_DIAGNOSTIC_LOG?.trim();
 const runtimeLeaseRoot = path.join(process.cwd(), '.work', 'state', 'runtime-leases');
+const slowResourceThresholdMs = Math.max(250, Number(process.env.WADDLE_SLOW_RESOURCE_MS || 2000) || 2000);
+const healthIntervalMs = Math.max(15000, Number(process.env.WADDLE_RUNTIME_HEALTH_MS || 60000) || 60000);
 
 const getLatestLauncherStderr = (): string | undefined => {
   try {
@@ -50,6 +52,28 @@ const serializeError = (value: unknown) => {
   }
 
   return { value: String(value) };
+};
+
+const trimText = (value: unknown, maxLength = 4096) => {
+  const text = String(value ?? '');
+  return text.length <= maxLength ? text : `${text.slice(0, maxLength)}...[truncated]`;
+};
+
+const sanitizeUrl = (value: string) => {
+  try {
+    const parsed = new URL(value);
+    parsed.username = '';
+    parsed.password = '';
+    const sensitive = /pass|password|token|auth|session|secret|key/i;
+    for (const key of Array.from(parsed.searchParams.keys())) {
+      if (sensitive.test(key)) {
+        parsed.searchParams.set(key, '[redacted]');
+      }
+    }
+    return trimText(parsed.toString(), 4096);
+  } catch {
+    return trimText(value, 4096);
+  }
 };
 
 const appendRuntimeDiagnostic = (
@@ -186,7 +210,9 @@ export const installRuntimeDiagnostics = () => {
     chromium: process.versions.chrome ?? null,
     node: process.versions.node,
     cwd: process.cwd(),
-    explicitPath: Boolean(explicitDiagnosticPath)
+    explicitPath: Boolean(explicitDiagnosticPath),
+    slowResourceThresholdMs,
+    healthIntervalMs
   }, Boolean(explicitDiagnosticPath));
 
   try {
@@ -213,13 +239,98 @@ export const installRuntimeDiagnostics = () => {
 
 export const runtimeDiagnosticPath = installRuntimeDiagnostics();
 
+const instrumentedSessions = new WeakSet<Session>();
+
+const isInterestingResource = (url: string, resourceType: string) => {
+  if (/\.(?:swf|xml|json|js|css)(?:[?#]|$)/i.test(url)) {
+    return true;
+  }
+  if (/\/(?:play|login|world|game|media|assets?|files?|api)(?:\/|\?|$)/i.test(url)) {
+    return true;
+  }
+  return /^(?:xhr|object|script|webSocket)$/i.test(resourceType);
+};
+
+const instrumentSession = (session: Session) => {
+  if (instrumentedSessions.has(session)) {
+    return;
+  }
+  instrumentedSessions.add(session);
+
+  const startedAt = new Map<number, number>();
+
+  session.webRequest.onBeforeRequest((details, callback) => {
+    startedAt.set(details.id, Date.now());
+    if (startedAt.size > 20000) {
+      startedAt.clear();
+      writeRuntimeDiagnostic('resource-timing-reset', { reason: 'request_map_limit' });
+    }
+    callback({ cancel: false });
+  });
+
+  session.webRequest.onCompleted(details => {
+    const started = startedAt.get(details.id);
+    startedAt.delete(details.id);
+    const durationMs = started === undefined ? null : Math.max(0, Date.now() - started);
+    const resourceType = String(details.resourceType || 'unknown');
+    const url = sanitizeUrl(details.url);
+    const statusCode = Number(details.statusCode || 0);
+    const slow = durationMs !== null && durationMs >= slowResourceThresholdMs;
+    const failedStatus = statusCode >= 400;
+    const interesting = isInterestingResource(url, resourceType);
+
+    if (interesting || slow || failedStatus) {
+      writeRuntimeDiagnostic('resource-response', {
+        requestId: details.id,
+        method: details.method,
+        resourceType,
+        url,
+        statusCode,
+        fromCache: Boolean(details.fromCache),
+        durationMs,
+        slow,
+        failedStatus
+      });
+    }
+
+    if (slow) {
+      writeRuntimeDiagnostic('resource-slow', {
+        requestId: details.id,
+        resourceType,
+        url,
+        statusCode,
+        durationMs,
+        thresholdMs: slowResourceThresholdMs
+      });
+    }
+  });
+
+  session.webRequest.onErrorOccurred(details => {
+    const started = startedAt.get(details.id);
+    startedAt.delete(details.id);
+    writeRuntimeDiagnostic('resource-load-failed', {
+      requestId: details.id,
+      method: details.method,
+      resourceType: String(details.resourceType || 'unknown'),
+      url: sanitizeUrl(details.url),
+      error: trimText(details.error, 2048),
+      durationMs: started === undefined ? null : Math.max(0, Date.now() - started)
+    });
+  });
+
+  writeRuntimeDiagnostic('session-network-diagnostics-ready', {
+    slowResourceThresholdMs
+  });
+};
+
 export const instrumentRuntimeWindow = (window: BrowserWindow, label: string) => {
   writeRuntimeDiagnostic('window-created', { label });
+  instrumentSession(window.webContents.session);
 
   window.webContents.on('did-finish-load', () => {
     writeRuntimeDiagnostic('window-did-finish-load', {
       label,
-      url: window.webContents.getURL()
+      url: sanitizeUrl(window.webContents.getURL())
     });
   });
 
@@ -227,9 +338,23 @@ export const instrumentRuntimeWindow = (window: BrowserWindow, label: string) =>
     writeRuntimeDiagnostic('window-did-fail-load', {
       label,
       errorCode,
-      errorDescription,
-      validatedURL,
+      errorDescription: trimText(errorDescription, 2048),
+      validatedURL: sanitizeUrl(validatedURL),
       isMainFrame
+    });
+  });
+
+  window.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    if (level < 1 && !/(?:error|warn|fail|missing|exception|timeout)/i.test(message)) {
+      return;
+    }
+    writeRuntimeDiagnostic(level >= 2 ? 'renderer-console-error' : 'renderer-console-warning', {
+      label,
+      level,
+      message: trimText(message, 4096),
+      line,
+      sourceId: trimText(sourceId, 2048),
+      url: sanitizeUrl(window.webContents.getURL())
     });
   });
 
@@ -243,11 +368,27 @@ export const instrumentRuntimeWindow = (window: BrowserWindow, label: string) =>
   window.on('unresponsive', () => {
     writeRuntimeDiagnostic('window-unresponsive', {
       label,
-      url: window.webContents.getURL()
+      url: sanitizeUrl(window.webContents.getURL())
     });
   });
 
+  const healthTimer = setInterval(() => {
+    if (window.isDestroyed() || window.webContents.isDestroyed()) {
+      clearInterval(healthTimer);
+      return;
+    }
+    writeRuntimeDiagnostic('window-health', {
+      label,
+      url: sanitizeUrl(window.webContents.getURL()),
+      loading: window.webContents.isLoading(),
+      focused: window.isFocused(),
+      visible: window.isVisible()
+    });
+  }, healthIntervalMs);
+  healthTimer.unref();
+
   window.on('closed', () => {
+    clearInterval(healthTimer);
     writeRuntimeDiagnostic('window-closed', { label });
   });
 };
