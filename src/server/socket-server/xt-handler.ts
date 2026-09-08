@@ -3,6 +3,7 @@ import { ClientSocket } from "./socket-server";
 import { WorldContext } from "@server/socket-server/handlers/handlers";
 import { getBlueString, getRedString, logverbose } from "@server/logger";
 import { publishWaddleLiveTrace } from "@common/live-trace";
+import { isNoResponseClientPacket } from "./handlers/protocol";
 
 const parseXtMessage = (message: string): [string, string[]] => {
   const values = message.split('%');
@@ -220,6 +221,20 @@ export class XtHandler {
           throw error;
         }
       }
+    } else if (isNoResponseClientPacket(name)) {
+      // These packets are protocol acknowledgements/lifecycle notifications, not
+      // missing gameplay handlers. Accepting them explicitly removes false
+      // "unhandled-action" noise while preserving strict errors for everything
+      // that really is unsupported.
+      publishWaddleLiveTrace({
+        category: 'XT',
+        phase: 'handled',
+        source: 'xt-handler',
+        action: name,
+        direction: 'in',
+        status: 'protocol-acknowledged',
+        argCount: args.length
+      });
     } else {
       logverbose(getRedString('unhandled XT: ' + name));
       publishWaddleLiveTrace({
