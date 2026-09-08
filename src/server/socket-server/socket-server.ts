@@ -15,6 +15,7 @@ export interface ClientSocket {
 }
 
 const maxBufferedPacketChars = 4 * 1024 * 1024;
+const maxWebSocketPayloadBytes = 4 * 1024 * 1024;
 const maxHttpUpgradeHeaderBytes = 64 * 1024;
 const httpUpgradeTimeoutMs = 10_000;
 const httpHeaderTerminator = '\r\n\r\n';
@@ -34,11 +35,33 @@ const parseHeaders = (data: string): Record<string, string> => {
   return Object.fromEntries(entries);
 }
 
+/**
+ * SmartFox packets are NUL-delimited on the raw TCP transport. Some WebSocket
+ * clients preserve that delimiter while others use the WebSocket message
+ * boundary itself. Normalize both variants before they reach XML/XT handlers so
+ * transport choice cannot change protocol semantics.
+ */
+const dispatchWebSocketMessage = (client: ClientSocket, raw: string, handler: MessageHandler) => {
+  const packets = raw.split('\0');
+  for (const packet of packets) {
+    if (packet.length > 0) {
+      handler.handle(client, packet);
+    }
+  }
+};
+
 export const setupSocketServer = async (name: string, port: number, handler: MessageHandler): Promise<EffectService<void>> => {
   await new Promise<void>((resolve, reject) => {
-    const wsServer = new WebSocketServer({ noServer: true });
+    // Keep WebSocket ingress bounded to the same order of magnitude as raw TCP.
+    // The ws default is intentionally much larger than Waddle ever needs and can
+    // otherwise allow a single client to allocate excessive memory before game
+    // protocol validation gets a chance to run.
+    const wsServer = new WebSocketServer({
+      noServer: true,
+      maxPayload: maxWebSocketPayloadBytes
+    });
     
-    wsServer.on('connection', (ws, req) => {
+    wsServer.on('connection', (ws) => {
       console.log(`A client has connected to ${name} (WebSocket)`);
 
       const cs: ClientSocket = {
@@ -59,10 +82,11 @@ export const setupSocketServer = async (name: string, port: number, handler: Mes
       }
 
       ws.on('message', (data) => {
-        const str = data.toString();
-        if (!str.startsWith('GET')) {
-          handler.handle(cs, str);
-        }
+        // Once the HTTP Upgrade has completed, a WebSocket message beginning in
+        // "GET" is ordinary application data. The old startsWith('GET') filter
+        // could silently discard a valid packet and was unrelated to upgrade
+        // detection, which is handled on the underlying TCP socket below.
+        dispatchWebSocketMessage(cs, data.toString(), handler);
       });
 
       ws.on('close', () => {
