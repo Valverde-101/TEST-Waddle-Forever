@@ -54,10 +54,10 @@ const createWindow = async (store: Store, clientSettings: GlobalSettings, server
   // important boot-time resource requests never reached diagnostics or DevTools.
   instrumentRuntimeWindow(mainWindow, 'main');
 
-  // The in-game diagnostic panel is also registered before loadURL. It consumes
-  // the same live trace without altering SWF bytes and can export a sanitized
-  // share bundle under .work/diagnostics/share for reproducible support.
-  installWaddleDiagnosticPanel(mainWindow);
+  // Register before loadURL so both the first game document and any later Flash
+  // reloads get the diagnostic controls. createWindow does not return until the
+  // first real renderer proves that all controls and the result bridge exist.
+  const diagnosticPanelReady = installWaddleDiagnosticPanel(mainWindow);
 
   const setFaviconByPlatform: FiveIconByPlatforms = {
     win32: () => {
@@ -82,11 +82,11 @@ const createWindow = async (store: Store, clientSettings: GlobalSettings, server
   });
 
   await loadMain(mainWindow, clientSettings, serverSettings);
+  await diagnosticPanelReady;
 
-  // Presentation is explicit and occurs only after loadURL resolves. center()
-  // resets stale/off-screen coordinates from a previous monitor topology, while
-  // show/maximize/focus make launcher success correspond to a window the user
-  // can actually see instead of merely a live renderer process.
+  // Presentation is explicit and occurs only after loadURL and the in-game
+  // diagnostic panel both resolve. This makes main-window-ready downstream imply
+  // that the visible support UI was actually injected, not merely compiled.
   if (mainWindow.isMinimized()) {
     mainWindow.restore();
   }
