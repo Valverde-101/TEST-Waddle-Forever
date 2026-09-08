@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { BrowserWindow, shell } from 'electron';
+import type { WaddleLiveTraceEvent } from '@common/live-trace';
 import { writeRuntimeDiagnostic } from './runtime-diagnostics';
 
 const workRoot = path.join(process.cwd(), '.work');
@@ -11,6 +12,40 @@ const consoleHistoryLimit = 600;
 
 const recentConsoleMessages: Array<Record<string, unknown>> = [];
 
+type JsonRecord = Record<string, unknown>;
+type ManifestEntry = JsonRecord & { sha256?: string; path?: string };
+type MissingSwfEntry = JsonRecord & { leaf?: string; reference?: string; source?: string };
+type DependencyEdge = JsonRecord & { reference?: string; target?: string; source?: string };
+type FfdecHit = { dump: string; sha256: string; source_paths: string[] };
+
+type FailureStaticEvidence = {
+  requested_leaf: string;
+  manifest_matches: ManifestEntry[];
+  missing_reference_matches: MissingSwfEntry[];
+  dependency_matches: DependencyEdge[];
+  requested_by_candidates: string[];
+  ffdec_text_matches: FfdecHit[];
+  server_file_resolution: WaddleLiveTraceEvent[];
+};
+
+type FailureAnalysis = {
+  schema: 'waddle-failure-analysis/v1';
+  found: boolean;
+  classification: string;
+  confidence: string;
+  message?: string;
+  generated_utc?: string;
+  explanation?: string;
+  recommended_action?: string;
+  failure?: WaddleLiveTraceEvent;
+  request_chain?: WaddleLiveTraceEvent[];
+  context?: WaddleLiveTraceEvent[];
+  preceding_protocol_event?: WaddleLiveTraceEvent | null;
+  static?: FailureStaticEvidence;
+  likely_requester?: string | null;
+  file_resolution?: WaddleLiveTraceEvent | null;
+};
+
 type DiagnosticPanelVerification = {
   toggle: boolean;
   panel: boolean;
@@ -19,16 +54,39 @@ type DiagnosticPanelVerification = {
   resultBridge: boolean;
 };
 
-const asArray = (value: unknown): any[] => {
-  if (Array.isArray(value)) return value;
-  if (value === undefined || value === null) return [];
-  return [value];
+const validTracePhases = new Set(['request', 'response', 'handled', 'error', 'state']);
+const sensitiveDiagnosticKey = /^(?:pass|password|passwd|token|authorization|auth|session|secret|cookie|api[_-]?key|body|payload)$/i;
+const structuredBodyKey = /^(?:request|response|raw|message)(?:body|payload)$/i;
+const delimitedBodyKey = /(?:^|[_-])(?:body|payload)$/i;
+const unsafeObjectKey = /^(?:__proto__|prototype|constructor)$/;
+const maxSanitizeArrayLength = 2000;
+const maxSanitizeDepth = 10;
+
+const isRecord = (value: unknown): value is JsonRecord => (
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+);
+
+const isWaddleLiveTraceEvent = (value: unknown): value is WaddleLiveTraceEvent => {
+  if (!isRecord(value)) return false;
+  return value.schema === 'waddle-live-trace/v1'
+    && typeof value.sequence === 'number'
+    && typeof value.utc === 'string'
+    && typeof value.category === 'string'
+    && typeof value.phase === 'string'
+    && validTracePhases.has(value.phase)
+    && typeof value.source === 'string';
 };
 
-const readJsonSafe = (filePath: string, fallback: unknown = null): any => {
+const asRecordArray = <T extends JsonRecord>(value: unknown): T[] => {
+  if (Array.isArray(value)) return value.filter(isRecord).map(item => item as T);
+  if (isRecord(value)) return [value as T];
+  return [];
+};
+
+const readJsonSafe = (filePath: string, fallback: unknown = null): unknown => {
   try {
     if (!fs.existsSync(filePath)) return fallback;
-    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    return JSON.parse(fs.readFileSync(filePath, 'utf8')) as unknown;
   } catch {
     return fallback;
   }
@@ -59,18 +117,43 @@ const sanitizeDiagnosticText = (value: unknown) => {
   return text.length > 16000 ? `${text.slice(0, 16000)}...[truncated]` : text;
 };
 
-const sanitizeValue = (value: any, keyName = ''): any => {
-  if (/pass|password|passwd|token|authorization|auth|session|secret|cookie|api.?key/i.test(keyName)) {
-    return '[redacted]';
+const isSensitiveDiagnosticKey = (keyName: string) => (
+  sensitiveDiagnosticKey.test(keyName) || structuredBodyKey.test(keyName) || delimitedBodyKey.test(keyName)
+);
+
+const sanitizeValue = <T>(
+  value: T,
+  keyName = '',
+  depth = 0,
+  seen: WeakSet<object> = new WeakSet<object>()
+): T => {
+  if (isSensitiveDiagnosticKey(keyName)) return '[redacted]' as unknown as T;
+  if (value === null || value === undefined || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (typeof value === 'string') return sanitizeDiagnosticText(value) as unknown as T;
+  if (typeof value === 'bigint') return value.toString() as unknown as T;
+  if (typeof value === 'function' || typeof value === 'symbol') return `[${typeof value}]` as unknown as T;
+  if (depth >= maxSanitizeDepth) return '[max-depth]' as unknown as T;
+
+  if (typeof value === 'object') {
+    const objectValue = value as object;
+    if (seen.has(objectValue)) return '[circular]' as unknown as T;
+    seen.add(objectValue);
+
+    if (Array.isArray(value)) {
+      return value
+        .slice(0, maxSanitizeArrayLength)
+        .map(item => sanitizeValue(item, '', depth + 1, seen)) as unknown as T;
+    }
+
+    const out = Object.create(null) as JsonRecord;
+    for (const [key, child] of Object.entries(value as JsonRecord)) {
+      if (unsafeObjectKey.test(key)) continue;
+      out[key] = sanitizeValue(child, key, depth + 1, seen);
+    }
+    return out as unknown as T;
   }
-  if (typeof value === 'string') return sanitizeDiagnosticText(value);
-  if (Array.isArray(value)) return value.map(item => sanitizeValue(item));
-  if (value && typeof value === 'object') {
-    const out: Record<string, unknown> = {};
-    for (const [key, child] of Object.entries(value)) out[key] = sanitizeValue(child, key);
-    return out;
-  }
-  return value;
+
+  return sanitizeDiagnosticText(String(value)) as unknown as T;
 };
 
 const findLatestRuntimeLog = () => {
@@ -90,11 +173,12 @@ const findLatestRuntimeLog = () => {
   }
 };
 
-const isFailureEvent = (event: any) => {
-  if (!event || typeof event !== 'object') return false;
-  const phase = String(event.phase || '').toLowerCase();
+const isFailureEvent = (event: WaddleLiveTraceEvent) => {
+  const phase = event.phase.toLowerCase();
   const statusCode = Number(event.statusCode || 0);
   const status = String(event.status || '').toLowerCase();
+  const error = String(event.error || '').toUpperCase();
+  if (status === 'aborted' || error.includes('ERR_ABORTED')) return false;
   if (phase === 'error' || statusCode >= 400) return true;
   return [
     'unhandled-action',
@@ -107,20 +191,20 @@ const isFailureEvent = (event: any) => {
   ].includes(status);
 };
 
-const findLastFailure = (trace: any[]) => {
+const findLastFailure = (trace: WaddleLiveTraceEvent[]) => {
   for (let i = trace.length - 1; i >= 0; i -= 1) {
     if (isFailureEvent(trace[i])) return trace[i];
   }
   return null;
 };
 
-const searchFfdecText = (leaf: string, manifest: any[]) => {
-  if (!leaf) return [] as any[];
+const searchFfdecText = (leaf: string, manifest: ManifestEntry[]): FfdecHit[] => {
+  if (!leaf) return [];
   const dumpRoot = path.join(swfAnalysisRoot, 'ffdec');
   try {
     if (!fs.existsSync(dumpRoot)) return [];
     const needle = leaf.toLowerCase();
-    const hits: Array<Record<string, unknown>> = [];
+    const hits: FfdecHit[] = [];
     for (const name of fs.readdirSync(dumpRoot).filter(name => /\.(?:as2|as3)\.txt$/i.test(name)).slice(0, 1500)) {
       if (hits.length >= 20) break;
       const fullPath = path.join(dumpRoot, name);
@@ -131,9 +215,9 @@ const searchFfdecText = (leaf: string, manifest: any[]) => {
       if (!text.toLowerCase().includes(needle)) continue;
       const hash = name.split('.')[0].toLowerCase();
       const sourcePaths = manifest
-        .filter(item => String(item?.sha256 || '').toLowerCase() === hash)
+        .filter(item => String(item.sha256 || '').toLowerCase() === hash)
         .map(item => item.path)
-        .filter(Boolean)
+        .filter((sourcePath): sourcePath is string => Boolean(sourcePath))
         .slice(0, 10);
       hits.push({ dump: name, sha256: hash, source_paths: sourcePaths });
     }
@@ -143,7 +227,10 @@ const searchFfdecText = (leaf: string, manifest: any[]) => {
   }
 };
 
-const buildFailureAnalysis = (failure: any, trace: any[]) => {
+const buildFailureAnalysis = (
+  failure: WaddleLiveTraceEvent | null,
+  trace: WaddleLiveTraceEvent[]
+): FailureAnalysis => {
   if (!failure) {
     return {
       schema: 'waddle-failure-analysis/v1',
@@ -155,44 +242,52 @@ const buildFailureAnalysis = (failure: any, trace: any[]) => {
   }
 
   const sequence = Number(failure.sequence || 0);
-  const index = Math.max(0, trace.findIndex(event => Number(event?.sequence || 0) === sequence));
+  const foundIndex = trace.findIndex(event => Number(event.sequence || 0) === sequence);
+  const index = foundIndex < 0 ? trace.length - 1 : foundIndex;
   const context = trace.slice(Math.max(0, index - 18), Math.min(trace.length, index + 9));
   const requestId = failure.requestId;
   const requestChain = requestId === undefined
     ? []
-    : trace.filter(event => String(event?.requestId ?? '') === String(requestId)).slice(-20);
+    : trace.filter(event => String(event.requestId ?? '') === String(requestId)).slice(-20);
   const precedingProtocol = context.slice(0, Math.max(0, context.length - 1)).reverse().find(event => {
-    const category = String(event?.category || '').toUpperCase();
+    const category = event.category.toUpperCase();
     return category === 'XT' || category === 'XML';
   }) || null;
 
-  const category = String(failure.category || '').toUpperCase();
+  const category = failure.category.toUpperCase();
   const action = String(failure.action || '');
   const leaf = leafName(action || failure.url || '');
   const statusCode = Number(failure.statusCode || 0);
 
-  const manifest = asArray(readJsonSafe(path.join(swfAnalysisRoot, 'manifest.json'), []));
-  const missing = asArray(readJsonSafe(path.join(swfAnalysisRoot, 'missing-swfs.json'), []));
-  const edges = asArray(readJsonSafe(path.join(swfAnalysisRoot, 'dependency-graph.json'), []));
+  const manifest = asRecordArray<ManifestEntry>(readJsonSafe(path.join(swfAnalysisRoot, 'manifest.json'), []));
+  const missing = asRecordArray<MissingSwfEntry>(readJsonSafe(path.join(swfAnalysisRoot, 'missing-swfs.json'), []));
+  const edges = asRecordArray<DependencyEdge>(readJsonSafe(path.join(swfAnalysisRoot, 'dependency-graph.json'), []));
 
   const manifestMatches = category === 'SWF' && leaf
-    ? manifest.filter(item => leafName(item?.path) === leaf).slice(0, 30)
+    ? manifest.filter(item => leafName(item.path) === leaf).slice(0, 30)
     : [];
   const missingMatches = category === 'SWF' && leaf
-    ? missing.filter(item => leafName(item?.leaf || item?.reference) === leaf).slice(0, 30)
+    ? missing.filter(item => leafName(item.leaf || item.reference) === leaf).slice(0, 30)
     : [];
   const edgeMatches = category === 'SWF' && leaf
-    ? edges.filter(item => leafName(item?.reference) === leaf || leafName(item?.target) === leaf).slice(0, 50)
+    ? edges.filter(item => leafName(item.reference) === leaf || leafName(item.target) === leaf).slice(0, 50)
     : [];
+  const serverFileResolution = leaf
+    ? trace.filter(event => event.category.toUpperCase() === 'FILE' && leafName(event.action || event.url || '') === leaf).slice(-30)
+    : [];
+  const fileResolution = [...serverFileResolution].reverse().find(event => event.phase === 'error')
+    || [...serverFileResolution].reverse().find(event => Boolean(event.status))
+    || null;
+  const fileResolutionStatus = String(fileResolution?.status || '').toLowerCase();
 
   const requestedByCandidates = Array.from(new Set([
-    ...missingMatches.map(item => String(item?.source || '')),
-    ...edgeMatches.map(item => String(item?.source || ''))
+    ...missingMatches.map(item => String(item.source || '')),
+    ...edgeMatches.map(item => String(item.source || ''))
   ].filter(Boolean))).slice(0, 20);
   const ffdecTextMatches = category === 'SWF' && leaf ? searchFfdecText(leaf, manifest) : [];
   for (const hit of ffdecTextMatches) {
-    for (const sourcePath of asArray(hit.source_paths)) {
-      if (sourcePath && !requestedByCandidates.includes(String(sourcePath))) requestedByCandidates.push(String(sourcePath));
+    for (const sourcePath of hit.source_paths) {
+      if (sourcePath && !requestedByCandidates.includes(sourcePath)) requestedByCandidates.push(sourcePath);
     }
   }
 
@@ -202,7 +297,12 @@ const buildFailureAnalysis = (failure: any, trace: any[]) => {
   let recommendedAction = 'Revisar el contexto y los eventos correlacionados.';
 
   if (category === 'SWF' && statusCode === 404) {
-    if (manifestMatches.length > 0) {
+    if (/^(?:unsafe-|read-failed|serve-failed)/.test(fileResolutionStatus)) {
+      classification = 'SWF_LOCAL_RESOLUTION_FAILURE';
+      confidence = 'high';
+      explanation = `El SWF ${leaf} devolvió 404 y el resolvedor local reportó ${fileResolutionStatus}.`;
+      recommendedAction = 'Revisar el target/resolver mostrado por el panel antes de copiar archivos; la falla está en resolución/lectura local.';
+    } else if (manifestMatches.length > 0) {
       classification = 'SWF_ROUTE_OR_VERSION_MISMATCH';
       confidence = 'high';
       explanation = `El servidor devolvió 404 para ${leaf}, pero existe al menos una copia con ese nombre en el inventario SWF.`;
@@ -214,9 +314,9 @@ const buildFailureAnalysis = (failure: any, trace: any[]) => {
       recommendedAction = 'Abrir primero los SWF de requested_by_candidates en FFDec y revisar cómo construyen/cargan el nombre antes de agregar un asset.';
     } else {
       classification = 'SWF_MISSING_OR_DYNAMIC_REFERENCE';
-      confidence = 'medium';
-      explanation = `${leaf} devolvió 404 y todavía no aparece como archivo ni referencia estática conocida.`;
-      recommendedAction = 'Usar el contexto XT/XML y los eventos anteriores para localizar la ruta dinámica, idioma, sala o timeline que construyó la solicitud.';
+      confidence = fileResolutionStatus === 'not-found' ? 'high' : 'medium';
+      explanation = `${leaf} devolvió 404 y el resolvedor local no encontró un asset utilizable ni una referencia estática conocida.`;
+      recommendedAction = 'Usar el contexto XT/XML, la ruta del resolvedor FILE y los eventos anteriores para localizar idioma, sala o timeline que construyó la solicitud.';
     }
   } else if (category === 'SWF' && statusCode >= 500) {
     classification = 'SWF_SERVER_FAILURE';
@@ -228,6 +328,12 @@ const buildFailureAnalysis = (failure: any, trace: any[]) => {
     confidence = 'high';
     explanation = `La carga de ${leaf} falló antes de recibir una respuesta HTTP válida.`;
     recommendedAction = 'Revisar servidor local, socket, cierre de conexión y ruta solicitada.';
+  } else if (category === 'FILE') {
+    const status = String(failure.status || failure.phase || 'failure').toUpperCase().replace(/[^A-Z0-9]+/g, '_');
+    classification = `LOCAL_FILE_${status}`;
+    confidence = 'high';
+    explanation = `El resolvedor local reportó ${failure.status || failure.phase} para ${action || '(ruta desconocida)'}.`;
+    recommendedAction = 'Revisar resolver, target, timeline/mod y el evento SWF/HTTP correlacionado en el mismo contexto.';
   } else if (category === 'XT' || category === 'XML') {
     classification = `SERVER_${String(failure.status || failure.phase || 'ACTION_FAILURE').toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`;
     confidence = 'high';
@@ -235,7 +341,7 @@ const buildFailureAnalysis = (failure: any, trace: any[]) => {
     recommendedAction = 'Revisar el handler, contexto, firma de argumentos y respuesta asociada en el servidor Waddle.';
   }
 
-  return sanitizeValue({
+  return sanitizeValue<FailureAnalysis>({
     schema: 'waddle-failure-analysis/v1',
     found: true,
     generated_utc: new Date().toISOString(),
@@ -253,22 +359,24 @@ const buildFailureAnalysis = (failure: any, trace: any[]) => {
       missing_reference_matches: missingMatches,
       dependency_matches: edgeMatches,
       requested_by_candidates: requestedByCandidates,
-      ffdec_text_matches: ffdecTextMatches
+      ffdec_text_matches: ffdecTextMatches,
+      server_file_resolution: serverFileResolution
     },
-    likely_requester: requestedByCandidates[0] || precedingProtocol?.action || null
+    likely_requester: requestedByCandidates[0] || precedingProtocol?.action || null,
+    file_resolution: fileResolution
   });
 };
 
-const getRendererTrace = async (window: BrowserWindow) => {
-  if (window.isDestroyed() || window.webContents.isDestroyed()) return [] as any[];
+const getRendererTrace = async (window: BrowserWindow): Promise<WaddleLiveTraceEvent[]> => {
+  if (window.isDestroyed() || window.webContents.isDestroyed()) return [];
   try {
-    const value = await window.webContents.executeJavaScript(
+    const value: unknown = await window.webContents.executeJavaScript(
       'Array.isArray(window.__WADDLE_LIVE_TRACE__) ? window.__WADDLE_LIVE_TRACE__.slice(-1500) : []',
       true
     );
-    return asArray(value);
+    return Array.isArray(value) ? value.filter(isWaddleLiveTraceEvent) : [];
   } catch {
-    return [] as any[];
+    return [];
   }
 };
 
@@ -286,9 +394,10 @@ const collectShareBundle = async (window: BrowserWindow) => {
   const failure = findLastFailure(trace);
   const failureAnalysis = buildFailureAnalysis(failure, trace);
   const runtimeLog = findLatestRuntimeLog();
+  const fileResolutionEvents = trace.filter(event => event.category.toUpperCase() === 'FILE').slice(-300);
 
   const bundle = sanitizeValue({
-    schema: 'waddle-share-diagnostics/v1',
+    schema: 'waddle-share-diagnostics/v2',
     generated_utc: new Date().toISOString(),
     versions: {
       electron: process.versions.electron || null,
@@ -298,6 +407,7 @@ const collectShareBundle = async (window: BrowserWindow) => {
     current_url: window.webContents.getURL(),
     last_failure_analysis: failureAnalysis,
     live_trace: trace,
+    file_resolution: fileResolutionEvents,
     renderer_console: recentConsoleMessages.slice(-500),
     runtime_log_name: runtimeLog ? path.basename(runtimeLog) : null,
     runtime_log_tail: tailTextFile(runtimeLog, 1400),
@@ -305,6 +415,8 @@ const collectShareBundle = async (window: BrowserWindow) => {
       summary: readJsonSafe(path.join(diagnosticsRoot, 'latest', 'summary.json')),
       issues: readJsonSafe(path.join(diagnosticsRoot, 'latest', 'issues.json'), []),
       resource_failures: readJsonSafe(path.join(diagnosticsRoot, 'latest', 'resource-failures.json'), []),
+      file_resolution: readJsonSafe(path.join(diagnosticsRoot, 'latest', 'file-resolution.json'), []),
+      file_resolution_errors: readJsonSafe(path.join(diagnosticsRoot, 'latest', 'file-resolution-errors.json'), []),
       slow_resources: readJsonSafe(path.join(diagnosticsRoot, 'latest', 'slow-resources.json'), []),
       report: tailTextFile(path.join(diagnosticsRoot, 'latest', 'report.txt'), 400)
     },
@@ -312,7 +424,7 @@ const collectShareBundle = async (window: BrowserWindow) => {
       summary: readJsonSafe(path.join(swfAnalysisRoot, 'summary.json')),
       runtime_priority: readJsonSafe(path.join(swfAnalysisRoot, 'runtime-priority.json'), []),
       runtime_trace: readJsonSafe(path.join(swfAnalysisRoot, 'runtime-trace.json')),
-      last_failure_static: failureAnalysis?.static || null
+      last_failure_static: failureAnalysis.static ?? null
     }
   });
 
@@ -323,17 +435,19 @@ const collectShareBundle = async (window: BrowserWindow) => {
   const latestJson = path.join(shareRoot, 'waddle-share-latest.json');
   const latestTxt = path.join(shareRoot, 'waddle-share-latest.txt');
 
-  const analysis = bundle.last_failure_analysis || {};
+  const analysis = bundle.last_failure_analysis;
   const summaryLines = [
     'WADDLE DIAGNOSTIC SHARE',
     `Generated UTC: ${bundle.generated_utc}`,
     `Classification: ${analysis.classification || 'NO_FAILURE_OBSERVED'}`,
     `Confidence: ${analysis.confidence || 'n/a'}`,
     `Failure: ${analysis.failure?.category || ''} ${analysis.failure?.action || ''} status=${analysis.failure?.statusCode || analysis.failure?.status || ''}`.trim(),
+    `Local resolver: ${analysis.file_resolution?.status || 'n/a'} ${analysis.file_resolution?.resolver || ''} ${analysis.file_resolution?.target || ''}`.trim(),
     `Likely requester: ${analysis.likely_requester || 'unknown'}`,
-    `Explanation: ${analysis.explanation || ''}`,
+    `Explanation: ${analysis.explanation || analysis.message || ''}`,
     `Recommended action: ${analysis.recommended_action || ''}`,
     `Live trace events: ${trace.length}`,
+    `File resolution events: ${fileResolutionEvents.length}`,
     `Renderer console events: ${recentConsoleMessages.length}`,
     '',
     'Share the JSON file for full evidence. The TXT file is a compact summary.'
@@ -414,7 +528,7 @@ const installPanelIntoRenderer = (window: BrowserWindow): Promise<DiagnosticPane
     const panel = document.createElement('div');
     panel.id = 'waddle-diagnostic-panel';
     panel.innerHTML = '<div class="wd-head"><div class="wd-title">Waddle - Diagnóstico en vivo</div><button class="wd-close" title="Cerrar">×</button></div>' +
-      '<div class="wd-help">Rastrea errores SWF/HTTP/XT/XML y genera un paquete sanitizado con consola, live trace y análisis para compartir.</div>' +
+      '<div class="wd-help">Rastrea errores SWF/HTTP/FILE/XT/XML y genera un paquete sanitizado con consola, live trace y análisis para compartir.</div>' +
       '<div class="wd-stats"><div class="wd-stat"><span id="wd-errors" class="wd-num wd-error">0</span><span class="wd-label">FALLAS</span></div><div class="wd-stat"><span id="wd-swf" class="wd-num">0</span><span class="wd-label">SWF</span></div><div class="wd-stat"><span id="wd-events" class="wd-num">0</span><span class="wd-label">EVENTOS</span></div></div>' +
       '<button id="wd-collect" class="wd-primary">RECOPILAR PARA COMPARTIR</button>' +
       '<button id="wd-trace" class="wd-secondary">RASTREAR ÚLTIMA FALLA</button>' +
@@ -432,8 +546,10 @@ const installPanelIntoRenderer = (window: BrowserWindow): Promise<DiagnosticPane
       lines.push('Clasificación: ' + (payload.classification || 'n/a'));
       lines.push('Confianza: ' + (payload.confidence || 'n/a'));
       if (payload.failure) lines.push('Falla: ' + (payload.failure.category || '') + ' ' + (payload.failure.action || '') + ' status=' + (payload.failure.statusCode || payload.failure.status || ''));
+      if (payload.file_resolution) lines.push('Resolvedor local: ' + (payload.file_resolution.status || '') + ' via=' + (payload.file_resolution.resolver || '') + ' target=' + (payload.file_resolution.target || ''));
       if (payload.likely_requester) lines.push('Probable solicitante: ' + payload.likely_requester);
       if (payload.explanation) lines.push('Causa probable: ' + payload.explanation);
+      if (payload.message && !payload.explanation) lines.push(payload.message);
       if (payload.recommended_action) lines.push('Siguiente paso: ' + payload.recommended_action);
       const sources = payload.static && payload.static.requested_by_candidates || [];
       if (sources.length) lines.push('Referencias encontradas:' + NL + ' - ' + sources.slice(0, 8).join(NL + ' - '));
@@ -443,7 +559,7 @@ const installPanelIntoRenderer = (window: BrowserWindow): Promise<DiagnosticPane
 
     const updateStats = () => {
       const trace = Array.isArray(window.__WADDLE_LIVE_TRACE__) ? window.__WADDLE_LIVE_TRACE__ : [];
-      const failures = trace.filter(e => e && (String(e.phase || '').toLowerCase() === 'error' || Number(e.statusCode || 0) >= 400 || ['unhandled-action','unhandled-context','invalid-signature','send-failed','handler-threw','network-error','http-error'].includes(String(e.status || '').toLowerCase())));
+      const failures = trace.filter(e => e && String(e.status || '').toLowerCase() !== 'aborted' && !String(e.error || '').toUpperCase().includes('ERR_ABORTED') && (String(e.phase || '').toLowerCase() === 'error' || Number(e.statusCode || 0) >= 400 || ['unhandled-action','unhandled-context','invalid-signature','send-failed','handler-threw','network-error','http-error'].includes(String(e.status || '').toLowerCase())));
       const swfFailures = failures.filter(e => String(e.category || '').toUpperCase() === 'SWF');
       panel.querySelector('#wd-errors').textContent = String(failures.length);
       panel.querySelector('#wd-swf').textContent = String(swfFailures.length);
@@ -455,7 +571,7 @@ const installPanelIntoRenderer = (window: BrowserWindow): Promise<DiagnosticPane
     toggle.addEventListener('click', () => { panel.style.display = panel.style.display === 'block' ? 'none' : 'block'; updateStats(); });
     panel.querySelector('.wd-close').addEventListener('click', () => { panel.style.display = 'none'; });
     panel.querySelector('#wd-trace').addEventListener('click', () => { result.textContent = 'Rastreando última falla...'; console.log('[WADDLE-DIAG-ACTION]trace-last'); });
-    panel.querySelector('#wd-collect').addEventListener('click', () => { result.textContent = 'Recopilando consola, live trace, runtime logs y análisis SWF...'; console.log('[WADDLE-DIAG-ACTION]collect-share'); });
+    panel.querySelector('#wd-collect').addEventListener('click', () => { result.textContent = 'Recopilando consola, live trace, resolución local, runtime logs y análisis SWF...'; console.log('[WADDLE-DIAG-ACTION]collect-share'); });
     console.log('[WADDLE-DIAG][READY] Diagnostic panel installed');
     return verify();
   })()`;
@@ -515,6 +631,8 @@ export const installWaddleDiagnosticPanel = (window: BrowserWindow): Promise<Dia
 
   window.webContents.on('console-message', (_event, level, message, line, sourceId) => {
     const text = String(message || '');
+    if (text.startsWith('[WADDLE-DIAG][READY]')) return;
+
     if (!text.startsWith('[WADDLE-DIAG-ACTION]')) {
       recentConsoleMessages.push(sanitizeValue({ utc: new Date().toISOString(), level, message: text, line, sourceId }));
       if (recentConsoleMessages.length > consoleHistoryLimit) recentConsoleMessages.splice(0, recentConsoleMessages.length - consoleHistoryLimit);

@@ -23,7 +23,7 @@ const getLatestLauncherStderr = (): string | undefined => {
     }
 
     const candidates = fs.readdirSync(runtimeLogDirectory)
-      .filter(name => /^client-\d{8}-\d{6}\.stderr\.log$/.test(name))
+      .filter(name => /^client-(?:.+-)?\d{8}-\d{6}\.stderr\.log$/i.test(name))
       .map(name => {
         const fullPath = path.join(runtimeLogDirectory, name);
         return { path: fullPath, mtime: fs.statSync(fullPath).mtimeMs };
@@ -271,14 +271,20 @@ const bootstrapLiveTraceConsole = (window: BrowserWindow) => {
       const category = String(event.category || 'TRACE').toUpperCase();
       const phase = String(event.phase || 'state').toUpperCase();
       const parts = [];
+      if (event.requestId !== undefined && event.requestId !== null) parts.push('req=' + event.requestId);
       if (event.action) parts.push('action=' + event.action);
       if (event.method) parts.push('method=' + event.method);
       if (event.statusCode !== undefined && event.statusCode !== null) parts.push('status=' + event.statusCode);
       if (event.status) parts.push('result=' + event.status);
       if (event.durationMs !== undefined && event.durationMs !== null) parts.push('time=' + event.durationMs + 'ms');
       if (event.fromCache) parts.push('cache=yes');
+      if (event.resolver) parts.push('resolver=' + event.resolver);
+      if (event.target) parts.push('target=' + event.target);
+      if (event.error) parts.push('error=' + event.error);
       if (event.url) parts.push(event.url);
-      console.log('[WADDLE-LIVE][' + category + '][' + phase + '] #' + event.sequence, parts.join(' '), event);
+      const prefix = '[WADDLE-LIVE][' + category + '][' + phase + '] #' + event.sequence;
+      if (phase === 'ERROR') console.error(prefix, parts.join(' '), event);
+      else console.log(prefix, parts.join(' '), event);
     };
     console.log('[WADDLE-LIVE][READY] Real-time SWF/HTTP/XT/XML tracing enabled. Filter the Console with WADDLE-LIVE. History: window.__WADDLE_LIVE_TRACE__');
     const replay = ${serializeForRenderer(replay)};
@@ -381,6 +387,7 @@ const instrumentSession = (session: Session) => {
   instrumentedSessions.add(session);
 
   const requests = new Map<number, RequestTiming>();
+  let requestTimingEvictions = 0;
 
   session.webRequest.onBeforeRequest((details, callback) => {
     const resourceType = String(details.resourceType || 'unknown');
@@ -399,8 +406,16 @@ const instrumentSession = (session: Session) => {
     });
 
     if (requests.size > 20000) {
-      requests.clear();
-      writeRuntimeDiagnostic('resource-timing-reset', { reason: 'request_map_limit' });
+      const oldest = requests.keys().next();
+      if (!oldest.done) requests.delete(oldest.value);
+      requestTimingEvictions += 1;
+      if (requestTimingEvictions === 1 || requestTimingEvictions % 1000 === 0) {
+        writeRuntimeDiagnostic('resource-timing-eviction', {
+          reason: 'request_map_limit',
+          evictions: requestTimingEvictions,
+          retained: requests.size
+        });
+      }
     }
 
     if (interesting) {
@@ -485,6 +500,7 @@ const instrumentSession = (session: Session) => {
     const category = request?.category || getResourceKind(url, resourceType);
     const durationMs = request === undefined ? null : Math.max(0, Date.now() - request.startedAt);
     const error = trimText(details.error, 2048);
+    const aborted = /ERR_ABORTED/i.test(error);
 
     writeRuntimeDiagnostic('resource-load-failed', {
       requestId: details.id,
@@ -492,22 +508,24 @@ const instrumentSession = (session: Session) => {
       resourceType,
       url,
       error,
-      durationMs
+      durationMs,
+      aborted
     });
 
     publishWaddleLiveTrace({
       category,
-      phase: 'error',
+      phase: aborted ? 'state' : 'error',
       source: 'electron-webrequest',
       action,
       requestId: details.id,
       method: details.method,
       resourceType,
       url,
-      status: 'network-error',
+      status: aborted ? 'aborted' : 'network-error',
       error,
       durationMs,
-      direction: 'in'
+      direction: 'in',
+      benign: aborted
     });
   });
 
@@ -546,7 +564,11 @@ export const instrumentRuntimeWindow = (window: BrowserWindow, label: string) =>
   });
 
   window.webContents.on('console-message', (_event, level, message, line, sourceId) => {
-    if (message.startsWith('[WADDLE-LIVE]')) {
+    if (
+      message.startsWith('[WADDLE-LIVE]')
+      || message.startsWith('[WADDLE-DIAG]')
+      || message.startsWith('[WADDLE-DIAG-ACTION]')
+    ) {
       return;
     }
     if (level < 1 && !/(?:error|warn|fail|missing|exception|timeout)/i.test(message)) {

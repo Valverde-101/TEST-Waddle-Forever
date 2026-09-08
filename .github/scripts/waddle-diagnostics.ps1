@@ -62,6 +62,13 @@ function Get-LatestRuntimeLog {
   return $null
 }
 
+function Get-LeafFromPathLikeValue {
+  param([string]$Value)
+  if ([string]::IsNullOrWhiteSpace($Value)) { return '' }
+  try { return [IO.Path]::GetFileName(([Uri]$Value).AbsolutePath).ToLowerInvariant() }
+  catch { return [IO.Path]::GetFileName(($Value.Split('?')[0].Replace('/',[IO.Path]::DirectorySeparatorChar))).ToLowerInvariant() }
+}
+
 $runtimeLogPath = Get-LatestRuntimeLog
 $events = New-Object System.Collections.Generic.List[object]
 if ($runtimeLogPath) {
@@ -81,6 +88,8 @@ $resourceFailures = New-Object System.Collections.Generic.List[object]
 $slowResources = New-Object System.Collections.Generic.List[object]
 $liveTraceEvents = New-Object System.Collections.Generic.List[object]
 $liveTraceErrors = New-Object System.Collections.Generic.List[object]
+$fileResolutionEvents = New-Object System.Collections.Generic.List[object]
+$fileResolutionErrors = New-Object System.Collections.Generic.List[object]
 
 function Add-Issue {
   param([ValidateSet('critical','error','warning','info')][string]$Severity,[string]$Code,[string]$Message,[string]$Source,[object]$Evidence=$null)
@@ -104,9 +113,10 @@ $criticalEvents = @(
   'runtime-lease-acquire-failed',
   'diagnostic-panel-bootstrap-failed'
 )
-$warningEvents = @('window-unresponsive','mods-failed','runtime-lease-heartbeat-failed','renderer-console-warning')
+$warningEvents = @('window-unresponsive','mods-failed','runtime-lease-heartbeat-failed')
 $criticalRendererReasons = @('abnormal-exit','crashed','oom','launch-failed','integrity-failure')
 $actionTraceErrorStatuses = @('unhandled-action','unhandled-context','invalid-signature','send-failed','handler-threw')
+$fatalFileResolutionStatuses = @('unsafe-mod-route','unsafe-mod-target','unsafe-game-data-target','unsafe-website-root','invalid-route','read-failed','serve-failed')
 
 foreach ($event in $events) {
   $name = [string](Get-PropertyValue -Object $event -Name 'event' -Default '')
@@ -114,6 +124,17 @@ foreach ($event in $events) {
     Add-Issue -Severity critical -Code $name -Message "Critical runtime event: $name" -Source 'runtime' -Evidence $event
   } elseif ($warningEvents -contains $name) {
     Add-Issue -Severity warning -Code $name -Message "Runtime warning event: $name" -Source 'runtime' -Evidence $event
+  }
+
+  if ($name -eq 'renderer-console-warning') {
+    $rendererMessage = [string](Get-PropertyValue -Object $event -Name 'message' -Default '')
+    # Internal Waddle diagnostic/control markers can be emitted at Electron's
+    # warning console level even though they are deliberate status messages.
+    # Preserve real game warnings, but never turn our own readiness/control
+    # markers into a false WARN result.
+    if ($rendererMessage -notmatch '^\[WADDLE-(?:LIVE|DIAG)') {
+      Add-Issue -Severity warning -Code 'renderer-console-warning' -Message 'Renderer console emitted a warning.' -Source 'runtime' -Evidence $event
+    }
   }
 
   if ($name -eq 'renderer-console-error') {
@@ -135,6 +156,17 @@ foreach ($event in $events) {
       $phase = [string](Get-PropertyValue -Object $trace -Name 'phase' -Default '')
       $category = [string](Get-PropertyValue -Object $trace -Name 'category' -Default '')
       $traceStatus = [string](Get-PropertyValue -Object $trace -Name 'status' -Default '')
+
+      if ($category -eq 'FILE') {
+        $fileResolutionEvents.Add($trace)
+        if ($phase -eq 'error') {
+          $fileResolutionErrors.Add($trace)
+          if ($fatalFileResolutionStatuses -contains $traceStatus) {
+            Add-Issue -Severity error -Code ('file-resolution-' + $traceStatus) -Message "Local file resolver failed: $traceStatus" -Source 'file-resolution' -Evidence $trace
+          }
+        }
+      }
+
       if ($phase -eq 'error') {
         $liveTraceErrors.Add($trace)
         if (($category -eq 'XT' -or $category -eq 'XML') -and $actionTraceErrorStatuses -contains $traceStatus) {
@@ -193,6 +225,8 @@ $resourceFailureArray = $resourceFailures.ToArray()
 $slowResourceArray = $slowResources.ToArray()
 $liveTraceArray = $liveTraceEvents.ToArray()
 $liveTraceErrorArray = $liveTraceErrors.ToArray()
+$fileResolutionArray = $fileResolutionEvents.ToArray()
+$fileResolutionErrorArray = $fileResolutionErrors.ToArray()
 
 $bootCount = @($eventArray | Where-Object { [string](Get-PropertyValue -Object $_ -Name 'event' -Default '') -eq 'main-process-boot' }).Count
 $readyCount = @($eventArray | Where-Object { [string](Get-PropertyValue -Object $_ -Name 'event' -Default '') -eq 'main-window-ready' }).Count
@@ -241,11 +275,27 @@ if ($null -eq $swfSummary) {
 $networkFailuresByLeaf = @{}
 foreach ($failure in $resourceFailureArray) {
   $url = [string](Get-PropertyValue -Object $failure -Name 'url' -Default '')
-  if (-not $url) { continue }
-  try { $leaf = [IO.Path]::GetFileName(([Uri]$url).AbsolutePath).ToLowerInvariant() }
-  catch { $leaf = [IO.Path]::GetFileName(($url.Split('?')[0])).ToLowerInvariant() }
+  $leaf = Get-LeafFromPathLikeValue -Value $url
   if ($leaf) { $networkFailuresByLeaf[$leaf] = $failure }
 }
+
+$fileErrorsByLeaf = @{}
+foreach ($fileEvent in $fileResolutionErrorArray) {
+  $action = [string](Get-PropertyValue -Object $fileEvent -Name 'action' -Default '')
+  $leaf = Get-LeafFromPathLikeValue -Value $action
+  if ($leaf) { $fileErrorsByLeaf[$leaf] = $fileEvent }
+}
+
+foreach ($leaf in $networkFailuresByLeaf.Keys) {
+  if (-not $fileErrorsByLeaf.ContainsKey($leaf)) { continue }
+  $fileEvent = $fileErrorsByLeaf[$leaf]
+  $fileStatus = [string](Get-PropertyValue -Object $fileEvent -Name 'status' -Default 'unknown')
+  Add-Issue -Severity error -Code 'resource-file-resolution-correlation' -Message "Resource $leaf failed and the local file resolver reported $fileStatus." -Source 'correlation' -Evidence ([pscustomobject]@{
+    runtime=$networkFailuresByLeaf[$leaf]
+    file_resolution=$fileEvent
+  })
+}
+
 foreach ($missing in $missingSwfs) {
   $leaf = [string](Get-PropertyValue -Object $missing -Name 'leaf' -Default '')
   if ($leaf -and $networkFailuresByLeaf.ContainsKey($leaf.ToLowerInvariant())) {
@@ -285,6 +335,8 @@ $summary = [ordered]@{
   live_trace_event_count=$liveTraceArray.Count
   live_trace_error_count=$liveTraceErrorArray.Count
   live_trace_categories=$liveTraceCategories
+  file_resolution_event_count=$fileResolutionArray.Count
+  file_resolution_error_count=$fileResolutionErrorArray.Count
   resource_failure_count=$resourceFailureArray.Count
   slow_resource_count=$slowResourceArray.Count
   severity=$severityCounts
@@ -300,6 +352,7 @@ $report.Add("SHA: $gitSha")
 $report.Add("Runtime log: $runtimeLogPath")
 $report.Add("Runtime events: $($eventArray.Count); main ready: $readyCount; flash ready: $flashReadyCount; diagnostic panel ready: $diagnosticPanelReadyCount")
 $report.Add("Live trace: console ready=$liveTraceConsoleReadyCount events=$($liveTraceArray.Count) errors=$($liveTraceErrorArray.Count) categories=$($liveTraceCategories -join ',')")
+$report.Add("File resolution: events=$($fileResolutionArray.Count) errors=$($fileResolutionErrorArray.Count)")
 $report.Add("Resource failures: $($resourceFailureArray.Count); slow resources: $($slowResourceArray.Count); unresolved SWF refs: $($missingSwfs.Count)")
 $report.Add("Issues: critical=$($severityCounts.critical) error=$($severityCounts.error) warning=$($severityCounts.warning) info=$($severityCounts.info)")
 $report.Add('')
@@ -313,6 +366,8 @@ Write-JsonFile -Value $issueArray -Path (Join-Path $runRoot 'issues.json') -Dept
 Write-JsonFile -Value $eventArray -Path (Join-Path $runRoot 'runtime-events.json') -Depth 20
 Write-JsonFile -Value $liveTraceArray -Path (Join-Path $runRoot 'live-trace.json') -Depth 20
 Write-JsonFile -Value $liveTraceErrorArray -Path (Join-Path $runRoot 'live-trace-errors.json') -Depth 20
+Write-JsonFile -Value $fileResolutionArray -Path (Join-Path $runRoot 'file-resolution.json') -Depth 20
+Write-JsonFile -Value $fileResolutionErrorArray -Path (Join-Path $runRoot 'file-resolution-errors.json') -Depth 20
 Write-JsonFile -Value $resourceFailureArray -Path (Join-Path $runRoot 'resource-failures.json') -Depth 20
 Write-JsonFile -Value $slowResourceArray -Path (Join-Path $runRoot 'slow-resources.json') -Depth 20
 Write-JsonFile -Value $missingSwfs -Path (Join-Path $runRoot 'swf-unresolved.json') -Depth 20
@@ -324,6 +379,6 @@ foreach ($file in Get-ChildItem -LiteralPath $runRoot -File) {
 Get-ChildItem -LiteralPath $diagnosticRoot -Directory -Filter 'run-*' -ErrorAction SilentlyContinue |
   Sort-Object Name -Descending | Select-Object -Skip 3 | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
-Write-Host "WADDLE_DIAGNOSTICS=$status sha=$gitSha events=$($eventArray.Count) live_trace=$($liveTraceArray.Count) live_console=$liveTraceConsoleReadyCount live_errors=$($liveTraceErrorArray.Count) diagnostic_panel=$diagnosticPanelReadyCount critical=$($severityCounts.critical) errors=$($severityCounts.error) warnings=$($severityCounts.warning) resource_failures=$($resourceFailureArray.Count) slow_resources=$($slowResourceArray.Count) unresolved_swfs=$($missingSwfs.Count) report=$latestRoot"
+Write-Host "WADDLE_DIAGNOSTICS=$status sha=$gitSha events=$($eventArray.Count) live_trace=$($liveTraceArray.Count) live_console=$liveTraceConsoleReadyCount live_errors=$($liveTraceErrorArray.Count) diagnostic_panel=$diagnosticPanelReadyCount file_resolution=$($fileResolutionArray.Count) file_errors=$($fileResolutionErrorArray.Count) critical=$($severityCounts.critical) errors=$($severityCounts.error) warnings=$($severityCounts.warning) resource_failures=$($resourceFailureArray.Count) slow_resources=$($slowResourceArray.Count) unresolved_swfs=$($missingSwfs.Count) report=$latestRoot"
 if ($FailOnCritical -and [int]$severityCounts.critical -gt 0) { exit 2 }
 exit 0
