@@ -2,6 +2,7 @@ import { ArgumentsIndicator, parseArgs } from "@server/socket-server/arg-parser"
 import { ClientSocket } from "./socket-server";
 import { WorldContext } from "@server/socket-server/handlers/handlers";
 import { getBlueString, getRedString, logverbose } from "@server/logger";
+import { publishWaddleLiveTrace } from "@common/live-trace";
 
 const parseXtMessage = (message: string): [string, string[]] => {
   const values = message.split('%');
@@ -61,6 +62,13 @@ class CallbackManager<Ctx extends WorldContext> {
 
       if (last !== undefined && last + this._cooldown > Date.now()) {
         console.log('Rate limited');
+        publishWaddleLiveTrace({
+          category: 'XT',
+          phase: 'handled',
+          source: 'xt-handler',
+          status: 'rate-limited',
+          argCount: args.length
+        });
         return;
       }
     }
@@ -68,6 +76,13 @@ class CallbackManager<Ctx extends WorldContext> {
     if (this._once) {
       if (this._handled.get(client)) {
         console.log('Already handled');
+        publishWaddleLiveTrace({
+          category: 'XT',
+          phase: 'handled',
+          source: 'xt-handler',
+          status: 'already-handled',
+          argCount: args.length
+        });
         return;
       }
     }
@@ -91,6 +106,16 @@ export class XtHandler {
 
   public handle(client: ClientSocket, context: WorldContext, message: string) {
     const [name, args] = parseXtMessage(message);
+
+    publishWaddleLiveTrace({
+      category: 'XT',
+      phase: 'request',
+      source: 'xt-handler',
+      action: name,
+      direction: 'in',
+      argCount: args.length,
+      messageLength: message.length
+    });
     
     if ('penguin' in context) {
       logverbose(getBlueString(`incoming XT [${context.penguin.name}]: `), name, args);
@@ -102,6 +127,16 @@ export class XtHandler {
       const callbackInfo = callbacks.find(([[contextTester, guard]]) => contextTester(context) ? guard(context) : false);
       if (callbackInfo === undefined) {
         logverbose(getRedString('unhandled XT for given context: ' + Object.keys(context).join(';')));
+        publishWaddleLiveTrace({
+          category: 'XT',
+          phase: 'error',
+          source: 'xt-handler',
+          action: name,
+          direction: 'in',
+          status: 'unhandled-context',
+          argCount: args.length,
+          contextKeys: Object.keys(context)
+        });
         return;
       }
 
@@ -109,11 +144,51 @@ export class XtHandler {
       const parsedArgs = parseArgs(args, signature);
       if (parsedArgs === null) {
         logverbose(getRedString('incorrect type signature: ' + name));
+        publishWaddleLiveTrace({
+          category: 'XT',
+          phase: 'error',
+          source: 'xt-handler',
+          action: name,
+          direction: 'in',
+          status: 'invalid-signature',
+          argCount: args.length
+        });
       } else {
-        callback.call(client, context, ...parsedArgs);
+        publishWaddleLiveTrace({
+          category: 'XT',
+          phase: 'handled',
+          source: 'xt-handler',
+          action: name,
+          direction: 'in',
+          status: 'handler-dispatched',
+          argCount: parsedArgs.length
+        });
+        try {
+          callback.call(client, context, ...parsedArgs);
+        } catch (error) {
+          publishWaddleLiveTrace({
+            category: 'XT',
+            phase: 'error',
+            source: 'xt-handler',
+            action: name,
+            direction: 'in',
+            status: 'handler-threw',
+            error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+          });
+          throw error;
+        }
       }
     } else {
       logverbose(getRedString('unhandled XT: ' + name));
+      publishWaddleLiveTrace({
+        category: 'XT',
+        phase: 'error',
+        source: 'xt-handler',
+        action: name,
+        direction: 'in',
+        status: 'unhandled-action',
+        argCount: args.length
+      });
     }
   }
 

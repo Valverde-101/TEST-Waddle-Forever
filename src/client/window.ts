@@ -5,6 +5,7 @@ import { checkUpdates } from "./update";
 import { GlobalSettings } from '../common/utils';
 import { SettingsManager } from '../server/settings';
 import { getSiteUrl } from './views/multiplayer/multiplayer';
+import { instrumentRuntimeWindow } from './runtime-diagnostics';
 
 export const toggleFullScreen = (store: Store, mainWindow: BrowserWindow) => {
   const fullScreen = !store.private.get("fullScreen");
@@ -46,6 +47,11 @@ const createWindow = async (store: Store, clientSettings: GlobalSettings, server
       plugins: true,
     },
   });
+
+  // Instrument before loadURL. Attaching after createWindow returned meant the
+  // initial Club Penguin HTML/SWF/XML burst had already completed, so the most
+  // important boot-time resource requests never reached diagnostics or DevTools.
+  instrumentRuntimeWindow(mainWindow, 'main');
 
   const setFaviconByPlatform: FiveIconByPlatforms = {
     win32: () => {
