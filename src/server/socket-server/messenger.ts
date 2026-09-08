@@ -33,16 +33,29 @@ export class PenguinMessenger {
   }
 
   private async write(ps: WorldPenguin | ClientSocket | Array<ClientSocket | WorldPenguin>, message: string): Promise<void> {
-    if (!Array.isArray(ps)) {
-      ps = [ps];
-    }
+    const recipients = Array.isArray(ps) ? ps : [ps];
+    const clients = recipients.map(recipient => {
+      if (!(recipient instanceof WorldPenguin)) {
+        return recipient;
+      }
 
-    await Promise.all(ps.map(p => (p instanceof WorldPenguin ? this._clients.get(p) : p)?.write(message)));
+      const client = this._clients.get(recipient);
+      if (client === undefined) {
+        // Optional chaining here used to turn a missing binding into `undefined`
+        // inside Promise.all(), which resolves successfully. The caller would
+        // then emit status=sent even though the packet was silently discarded.
+        throw new Error('No client socket bound to penguin');
+      }
+      return client;
+    });
+
+    await Promise.all(clients.map(client => client.write(message)));
   }
 
   public async send(penguins: WorldPenguin | ClientSocket | Array<ClientSocket | WorldPenguin>, message: string, ...args: Array<string | number>): Promise<void> {
     logverbose(getGreenString('sending XT: '), message, args);
     const startedAt = Date.now();
+    const recipientCount = Array.isArray(penguins) ? penguins.length : 1;
     try {
       await this.write(penguins, getXtMessage(message, ...args));
       publishWaddleLiveTrace({
@@ -53,6 +66,7 @@ export class PenguinMessenger {
         direction: 'out',
         status: 'sent',
         argCount: args.length,
+        recipientCount,
         durationMs: Date.now() - startedAt
       });
     } catch (error) {
@@ -64,6 +78,7 @@ export class PenguinMessenger {
         direction: 'out',
         status: 'send-failed',
         argCount: args.length,
+        recipientCount,
         durationMs: Date.now() - startedAt,
         error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
       });
@@ -86,6 +101,7 @@ export class PenguinMessenger {
         direction: 'out',
         status: 'sent',
         bodyLength: body.length,
+        recipientCount: 1,
         durationMs: Date.now() - startedAt
       });
     } catch (error) {
@@ -97,6 +113,7 @@ export class PenguinMessenger {
         direction: 'out',
         status: 'send-failed',
         bodyLength: body.length,
+        recipientCount: 1,
         durationMs: Date.now() - startedAt,
         error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
       });
