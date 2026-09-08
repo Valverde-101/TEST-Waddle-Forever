@@ -377,7 +377,7 @@ try {
 if (-not $process -or $process.Id -le 0) { throw 'WADDLE_PLAY=FAIL process_id_missing' }
 
 $state = [ordered]@{
-  schema='waddle-client-state/v12'; status='STARTING'; platform='windows-x64'; machine=$machine; pid=$process.Id; source_sha=$sha
+  schema='waddle-client-state/v11'; status='STARTING'; platform='windows-x64'; machine=$machine; pid=$process.Id; source_sha=$sha
   repo_root=$repo; work_root=$work; state_path=$statePath; dependency_build_root=$modulesCanonical; dependency_fingerprint=$fingerprint
   dependency_mode='reused'; dependency_mutation_while_running=$false; stdio_mode='win32_detached_no_inherited_handles'
   managed_node_home='NOT_REQUIRED_FOR_PLAY'; managed_node_exe='NOT_REQUIRED_FOR_PLAY'; runtime_mode='repo_local_direct'
