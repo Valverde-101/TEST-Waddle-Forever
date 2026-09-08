@@ -56,7 +56,7 @@ class CallbackManager<Ctx extends WorldContext> {
     }
   }
 
-  call(client: ClientSocket, ctx: Ctx, ...args: Array<string | number>) {
+  call(client: ClientSocket, ctx: Ctx, action: string, ...args: Array<string | number>) {
     if (this._cooldown !== null) {
       const last = this._timestamps.get(client);
 
@@ -66,6 +66,7 @@ class CallbackManager<Ctx extends WorldContext> {
           category: 'XT',
           phase: 'handled',
           source: 'xt-handler',
+          action,
           status: 'rate-limited',
           argCount: args.length
         });
@@ -80,6 +81,7 @@ class CallbackManager<Ctx extends WorldContext> {
           category: 'XT',
           phase: 'handled',
           source: 'xt-handler',
+          action,
           status: 'already-handled',
           argCount: args.length
         });
@@ -87,7 +89,7 @@ class CallbackManager<Ctx extends WorldContext> {
       }
     }
 
-    this._callback(ctx, ...args);
+    return this._callback(ctx, ...args);
   }
 }
 
@@ -164,7 +166,29 @@ export class XtHandler {
           argCount: parsedArgs.length
         });
         try {
-          callback.call(client, context, ...parsedArgs);
+          const result = callback.call(client, context, name, ...parsedArgs);
+          void Promise.resolve(result).then(() => {
+            publishWaddleLiveTrace({
+              category: 'XT',
+              phase: 'handled',
+              source: 'xt-handler',
+              action: name,
+              direction: 'in',
+              status: 'handler-complete',
+              argCount: parsedArgs.length
+            });
+          }).catch(error => {
+            publishWaddleLiveTrace({
+              category: 'XT',
+              phase: 'error',
+              source: 'xt-handler',
+              action: name,
+              direction: 'in',
+              status: 'handler-rejected',
+              error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+            });
+            throw error;
+          });
         } catch (error) {
           publishWaddleLiveTrace({
             category: 'XT',
