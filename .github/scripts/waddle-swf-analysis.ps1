@@ -64,6 +64,18 @@ function Test-CurrentCacheItem {
   return [string]$statusProperty.Value -eq 'ANALYZED'
 }
 
+function Get-OptionalPropertyValue {
+  param(
+    [object]$Object,
+    [Parameter(Mandatory)][string]$Name,
+    [object]$Default = $null
+  )
+  if ($null -eq $Object) { return $Default }
+  $property = $Object.PSObject.Properties[$Name]
+  if ($null -eq $property) { return $Default }
+  return $property.Value
+}
+
 function Invoke-FFDecDump {
   param(
     [Parameter(Mandatory)][string]$FFDec,
@@ -94,9 +106,6 @@ if (-not $FFDecPath) {
 if (-not $FFDecPath -or -not (Test-Path -LiteralPath $FFDecPath -PathType Leaf)) { throw "WADDLE_SWF_ANALYSIS=FAIL ffdec_missing path=$FFDecPath" }
 $FFDecPath = [IO.Path]::GetFullPath($FFDecPath)
 
-# Hashing tens of thousands of archive paths on every source-only commit was
-# unnecessarily expensive. Reuse a SHA-256 only when path, size and exact UTC
-# mtime are unchanged; any mismatch falls back to a real content hash.
 $previousHashIndex = @{}
 if (Test-Path -LiteralPath $hashIndexPath -PathType Leaf) {
   try {
@@ -159,10 +168,6 @@ foreach ($file in $swfFiles) {
 }
 $newHashIndex | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $hashIndexPath -Encoding UTF8
 
-# Analyze each unique SWF byte sequence once. Large archives commonly contain
-# identical SWFs at many timeline paths; selecting by path caused the same SHA
-# to be decompiled repeatedly and made a two-item budget unexpectedly expensive.
-# A hash cache now fans one analysis result out to every duplicate path.
 $analysisByHash = @{}
 $staleCacheCount = 0
 $uniqueGroups = New-Object System.Collections.Generic.List[object]
@@ -201,6 +206,7 @@ foreach ($hash in @($byHash.Keys | Sort-Object)) {
 
 $runtimeSwfByLeaf = @{}
 $runtimePrioritySource = $null
+$runtimeMalformedTraceCount = 0
 $runtimeLogRoot = Join-Path $WorkRoot 'logs\runtime'
 if (Test-Path -LiteralPath $runtimeLogRoot -PathType Container) {
   $runtimeLog = Get-ChildItem -LiteralPath $runtimeLogRoot -File -Filter 'client-*.stderr.log' -ErrorAction SilentlyContinue |
@@ -211,14 +217,35 @@ if (Test-Path -LiteralPath $runtimeLogRoot -PathType Container) {
       $text = ([string]$line).Trim()
       if (-not $text.StartsWith('{')) { continue }
       try { $evt = $text | ConvertFrom-Json } catch { continue }
-      if ([string]$evt.event -ne 'live-trace' -or $null -eq $evt.trace -or [string]$evt.trace.category -ne 'SWF') { continue }
-      $leaf = [IO.Path]::GetFileName(([string]$evt.trace.action).Split('?')[0]).ToLowerInvariant()
-      if (-not $leaf) { continue }
-      $phase = [string]$evt.trace.phase
-      $code = if ($null -ne $evt.trace.statusCode) { [int]$evt.trace.statusCode } else { 0 }
+
+      $eventName = [string](Get-OptionalPropertyValue -Object $evt -Name 'event' -Default '')
+      if ($eventName -ne 'live-trace') { continue }
+      $trace = Get-OptionalPropertyValue -Object $evt -Name 'trace'
+      if ($null -eq $trace) { $runtimeMalformedTraceCount++; continue }
+      $category = [string](Get-OptionalPropertyValue -Object $trace -Name 'category' -Default '')
+      if ($category -ne 'SWF') { continue }
+
+      $action = [string](Get-OptionalPropertyValue -Object $trace -Name 'action' -Default '')
+      $url = [string](Get-OptionalPropertyValue -Object $trace -Name 'url' -Default '')
+      $phase = ([string](Get-OptionalPropertyValue -Object $trace -Name 'phase' -Default '')).ToLowerInvariant()
+      $statusValue = Get-OptionalPropertyValue -Object $trace -Name 'statusCode' -Default 0
+      $code = 0
+      if ($null -ne $statusValue -and [string]$statusValue -match '^\d+$') { $code = [int]$statusValue }
+
+      $identity = if ($action) { $action } else { $url }
+      $leaf = [IO.Path]::GetFileName(([string]$identity).Split('?')[0]).ToLowerInvariant()
+      if (-not $leaf -or $leaf -notmatch '\.swf$') { $runtimeMalformedTraceCount++; continue }
+
       $rank = if ($phase -eq 'error' -or $code -ge 400) { 0 } elseif ($phase -eq 'request') { 1 } else { 2 }
       if (-not $runtimeSwfByLeaf.ContainsKey($leaf) -or $rank -lt [int]$runtimeSwfByLeaf[$leaf].rank) {
-        $runtimeSwfByLeaf[$leaf] = [pscustomobject]@{ leaf=$leaf; rank=$rank; phase=$phase; status_code=$code; action=[string]$evt.trace.action; url=[string]$evt.trace.url }
+        $runtimeSwfByLeaf[$leaf] = [pscustomobject]@{
+          leaf=$leaf
+          rank=$rank
+          phase=$phase
+          status_code=$code
+          action=$action
+          url=$url
+        }
       }
     }
   }
@@ -379,6 +406,7 @@ $summary = [ordered]@{
   deep_selected_unique_hashes=$selectedGroups.Count
   runtime_priority_source=$runtimePrioritySource
   runtime_observed_swf_count=$runtimeSwfByLeaf.Count
+  runtime_malformed_trace_count=$runtimeMalformedTraceCount
   runtime_prioritized_unique_hash_count=$runtimePrioritizedHashes.Count
   runtime_selected_unique_hash_count=@($selectedGroups | Where-Object { [int]$_.runtime_rank -lt 9 }).Count
   analyzed_unique_hash_count=$analyzedUnique
@@ -402,4 +430,4 @@ $missing | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $analys
 $runtimeTrace | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $analysisRoot 'runtime-trace.json') -Encoding UTF8
 @($runtimeSwfByLeaf.Values | Sort-Object rank,leaf) | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $analysisRoot 'runtime-priority.json') -Encoding UTF8
 $summary | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $analysisRoot 'summary.json') -Encoding UTF8
-Write-Host "WADDLE_SWF_ANALYSIS=PASS paths=$($inventory.Count) unique=$uniqueCount duplicates=$($inventory.Count-$uniqueCount) hash_reused=$hashCacheReused hash_recomputed=$hashRecomputed analyzed_unique=$analyzedUnique pending_unique=$($uniqueCount-$analyzedUnique) analyzed_paths=$analyzedPaths selected_unique=$($selectedGroups.Count) stale_cache=$staleCacheCount edges=$($edges.Count) missing=$($missing.Count) urls=$($allUrls.Count) runtime_observed_swfs=$($runtimeSwfByLeaf.Count) runtime_prioritized_hashes=$($runtimePrioritizedHashes.Count) runtime_selected=$(@($selectedGroups | Where-Object { [int]$_.runtime_rank -lt 9 }).Count) runtime_trace=$($runtimeTrace.available) source_mutation=false root=$analysisRoot"
+Write-Host "WADDLE_SWF_ANALYSIS=PASS paths=$($inventory.Count) unique=$uniqueCount duplicates=$($inventory.Count-$uniqueCount) hash_reused=$hashCacheReused hash_recomputed=$hashRecomputed analyzed_unique=$analyzedUnique pending_unique=$($uniqueCount-$analyzedUnique) analyzed_paths=$analyzedPaths selected_unique=$($selectedGroups.Count) stale_cache=$staleCacheCount edges=$($edges.Count) missing=$($missing.Count) urls=$($allUrls.Count) runtime_observed_swfs=$($runtimeSwfByLeaf.Count) runtime_malformed_traces=$runtimeMalformedTraceCount runtime_prioritized_hashes=$($runtimePrioritizedHashes.Count) runtime_selected=$(@($selectedGroups | Where-Object { [int]$_.runtime_rank -lt 9 }).Count) runtime_trace=$($runtimeTrace.available) source_mutation=false root=$analysisRoot"
