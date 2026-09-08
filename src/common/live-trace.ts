@@ -11,7 +11,13 @@ export type WaddleLiveTraceEvent = {
   [key: string]: unknown;
 };
 
-export type WaddleLiveTraceInput = Omit<WaddleLiveTraceEvent, 'schema' | 'sequence' | 'utc'>;
+export type WaddleLiveTraceInput = {
+  category: string;
+  phase: WaddleLiveTracePhase;
+  source: string;
+  action?: string;
+  [key: string]: unknown;
+};
 
 type WaddleLiveTraceListener = (event: WaddleLiveTraceEvent) => void;
 
@@ -19,12 +25,11 @@ const listeners = new Set<WaddleLiveTraceListener>();
 let sequence = 0;
 
 export const publishWaddleLiveTrace = (input: WaddleLiveTraceInput): WaddleLiveTraceEvent => {
-  const event: WaddleLiveTraceEvent = {
-    schema: 'waddle-live-trace/v1',
+  const event = Object.assign({
+    schema: 'waddle-live-trace/v1' as const,
     sequence: ++sequence,
-    utc: new Date().toISOString(),
-    ...input
-  };
+    utc: new Date().toISOString()
+  }, input) as WaddleLiveTraceEvent;
 
   for (const listener of listeners) {
     try {
