@@ -7,16 +7,18 @@ $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..')).TrimEnd('\')
 $work = Join-Path $repo '.work'
 $stateDir = Join-Path $work 'state'
+$clientStateDir = Join-Path $stateDir 'clients'
+$legacyStatePath = Join-Path $stateDir 'waddle-client.json'
 $runtimeLogs = Join-Path $work 'logs\runtime'
-$statePath = Join-Path $stateDir 'waddle-client.json'
 $electronCanonical = Join-Path $repo 'node_modules\electron\dist\electron.exe'
 $electronManifest = Join-Path $repo 'node_modules\electron\package.json'
 $entryCanonical = Join-Path $repo 'compiled\client\main.js'
 $flashCanonical = Join-Path $repo 'assets\flash\pepflashplayer64_32_0_0_303.dll'
 $modulesCanonical = Join-Path $repo 'node_modules'
 $machine = if ([string]::IsNullOrWhiteSpace($env:COMPUTERNAME)) { 'unknown-machine' } else { [string]$env:COMPUTERNAME }
+$safeMachine = $machine -replace '[^A-Za-z0-9_.-]','_'
 
-New-Item -ItemType Directory -Force -Path $stateDir,$runtimeLogs | Out-Null
+New-Item -ItemType Directory -Force -Path $stateDir,$clientStateDir,$runtimeLogs | Out-Null
 
 $nativeProcessScript = Join-Path $PSScriptRoot 'waddle-win32-process.ps1'
 if (-not (Test-Path -LiteralPath $nativeProcessScript -PathType Leaf)) {
@@ -64,15 +66,16 @@ function Stop-WaddleOwnedProcess {
 }
 
 function Stop-WaddlePriorState {
-  if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) { return }
+  param([Parameter(Mandatory)][string]$Path)
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return }
   try {
-    $prior = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json -ErrorAction Stop
+    $prior = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json -ErrorAction Stop
     $pidProp = $prior.PSObject.Properties['pid']
     if (-not $pidProp) { return }
 
     $machineProp = $prior.PSObject.Properties['machine']
     if (-not $machineProp -or [string]::IsNullOrWhiteSpace([string]$machineProp.Value)) {
-      Write-Host "WADDLE_PLAY_CLEANUP=SKIP pid=$($pidProp.Value) reason=legacy_shared_state_has_no_machine current_machine=$machine"
+      Write-Host "WADDLE_PLAY_CLEANUP=SKIP pid=$($pidProp.Value) reason=legacy_state_has_no_machine current_machine=$machine"
       return
     }
     if (-not ([string]$machineProp.Value).Equals($machine,[StringComparison]::OrdinalIgnoreCase)) {
@@ -84,7 +87,7 @@ function Stop-WaddlePriorState {
     $expected = if ($launchProp) { [string]$launchProp.Value } else { $electronCanonical }
     Stop-WaddleOwnedProcess -ProcessId ([int]$pidProp.Value) -ExpectedExecutable $expected -Reason 'replace_previous_client'
   } catch {
-    Write-Host "WADDLE_PLAY_CLEANUP=WARN reason=state_parse_or_cleanup error=$($_.Exception.Message)"
+    Write-Host "WADDLE_PLAY_CLEANUP=WARN reason=state_parse_or_cleanup path=$Path error=$($_.Exception.Message)"
   }
 }
 
@@ -120,11 +123,26 @@ function Get-WaddleDependencyFingerprint {
   try { return ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','') } finally { $sha.Dispose() }
 }
 
+function Get-WaddleStableToken {
+  param([Parameter(Mandatory)][string]$Value,[int]$Length = 24)
+  $bytes = [Text.Encoding]::UTF8.GetBytes($Value)
+  $sha = [Security.Cryptography.SHA256]::Create()
+  try {
+    $valueHash = ([BitConverter]::ToString($sha.ComputeHash($bytes))).Replace('-','').ToLowerInvariant()
+    if ($Length -lt 8) { $Length = 8 }
+    if ($Length -gt $valueHash.Length) { $Length = $valueHash.Length }
+    return $valueHash.Substring(0,$Length)
+  } finally {
+    $sha.Dispose()
+  }
+}
+
 function Get-WaddleNetworkMapping {
   param([string]$Path)
   $full = [IO.Path]::GetFullPath($Path)
   if ($full.StartsWith('\\')) {
-    return [pscustomobject]@{ source_root=[IO.Path]::GetPathRoot($full); provider_root=[IO.Path]::GetPathRoot($full) }
+    $root = [IO.Path]::GetPathRoot($full)
+    return [pscustomobject]@{ source_root=$root; provider_root=$root.TrimEnd('\') }
   }
   $sourceRoot = [IO.Path]::GetPathRoot($full)
   if ([string]::IsNullOrWhiteSpace($sourceRoot)) { return $null }
@@ -146,43 +164,115 @@ function Resolve-WaddleLaunchRoot {
   }
 
   $provider = [string]$mapping.provider_root
-  $sourceRoot = [string]$mapping.source_root
+  $server = ''
   $match = [regex]::Match($provider.TrimEnd('\'),'^\\\\([^\\]+)\\([^\\]+)')
-  if (-not $match.Success) {
-    Write-Host "WADDLE_SMB_ALIAS=WARN provider=$provider reason=provider_parse fallback=direct_mapped_path"
-    return [pscustomobject]@{ repo=$RepoRoot; network_backed=$true; mode='mapped_direct'; provider=$provider; host='' }
+  if ($match.Success) { $server = [string]$match.Groups[1].Value }
+
+  # Do not translate a valid mapped/UNC path through NetBIOS aliases. The prior
+  # alias hunt was nondeterministic for IP-based SMB shares and could report WARN
+  # even after CreateProcessW had proved the mapping itself was usable.
+  Write-Host "WADDLE_SMB_PATH=PASS provider=$provider server=$server launch_repo=$RepoRoot mode=direct_existing_mapping alias_required=false"
+  return [pscustomobject]@{ repo=$RepoRoot; network_backed=$true; mode='direct_existing_mapping'; provider=$provider; host=$server }
+}
+
+function Get-WaddleLocalElectronRuntime {
+  param(
+    [Parameter(Mandatory)][string]$SourceElectron,
+    [Parameter(Mandatory)][string]$ElectronVersion,
+    [Parameter(Mandatory)][string]$DependencyFingerprint,
+    [Parameter(Mandatory)][bool]$NetworkBacked
+  )
+
+  $sourceExe = [IO.Path]::GetFullPath($SourceElectron)
+  if (-not $NetworkBacked) {
+    return [pscustomobject]@{ executable=$sourceExe; mode='repo_direct'; copied=$false; cache_root=''; identity='' }
   }
 
-  $server = [string]$match.Groups[1].Value
-  $share = [string]$match.Groups[2].Value
-  $relativeRepo = ([IO.Path]::GetFullPath($RepoRoot)).Substring($sourceRoot.Length).TrimStart('\')
-  $candidates = New-Object System.Collections.Generic.List[string]
+  $sourceDist = Split-Path -Parent $sourceExe
+  foreach ($relative in @('electron.exe','icudtl.dat','resources.pak')) {
+    $required = Join-Path $sourceDist $relative
+    if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+      throw "WADDLE_ELECTRON_CACHE=FAIL source_missing=$required"
+    }
+  }
 
-  if ($server -notmatch '^\d{1,3}(\.\d{1,3}){3}$') { $candidates.Add($server) }
-  if ($server -match '^\d{1,3}(\.\d{1,3}){3}$') {
+  $sourceInfo = Get-Item -LiteralPath $sourceExe -Force
+  $identity = Get-WaddleStableToken -Value ("$ElectronVersion|$DependencyFingerprint|$($sourceInfo.Length)|$($sourceInfo.LastWriteTimeUtc.Ticks)") -Length 32
+  $localBase = [string]$env:LOCALAPPDATA
+  if ([string]::IsNullOrWhiteSpace($localBase)) { $localBase = [IO.Path]::GetTempPath() }
+  $versionRoot = Join-Path $localBase ("WaddleForever\electron-cache\$ElectronVersion")
+  $target = Join-Path $versionRoot $identity
+  $runtimeExe = Join-Path $target 'electron.exe'
+  $marker = Join-Path $target 'cache.json'
+  New-Item -ItemType Directory -Force -Path $versionRoot | Out-Null
+
+  $valid = $false
+  if ((Test-Path -LiteralPath $marker -PathType Leaf) -and (Test-Path -LiteralPath $runtimeExe -PathType Leaf)) {
     try {
-      $nbt = & nbtstat.exe -A $server 2>$null
-      $global:LASTEXITCODE = 0
-      foreach ($line in @($nbt)) {
-        if ([string]$line -match '^\s*([^\s<]{1,15})\s+<00>\s+UNIQUE') {
-          $candidate = [string]$Matches[1]
-          if (-not [string]::IsNullOrWhiteSpace($candidate) -and -not $candidates.Contains($candidate)) { $candidates.Add($candidate) }
+      $state = Get-Content -LiteralPath $marker -Raw | ConvertFrom-Json -ErrorAction Stop
+      $runtimeInfo = Get-Item -LiteralPath $runtimeExe -Force
+      $valid = ([string]$state.identity -eq $identity) -and
+        ([string]$state.electron_version -eq $ElectronVersion) -and
+        ([string]$state.dependency_fingerprint -eq $DependencyFingerprint) -and
+        ([int64]$runtimeInfo.Length -eq [int64]$sourceInfo.Length)
+      if ($valid) {
+        foreach ($relative in @('icudtl.dat','resources.pak')) {
+          if (-not (Test-Path -LiteralPath (Join-Path $target $relative) -PathType Leaf)) { $valid = $false; break }
         }
       }
-    } catch {}
+    } catch { $valid = $false }
   }
 
-  foreach ($hostName in $candidates) {
-    $aliasRoot = "\\$hostName\$share"
-    if (-not (Test-Path -LiteralPath $aliasRoot -PathType Container)) { continue }
-    $aliasRepo = if ([string]::IsNullOrWhiteSpace($relativeRepo)) { $aliasRoot } else { Join-Path $aliasRoot $relativeRepo }
-    if (-not (Test-Path -LiteralPath $aliasRepo -PathType Container)) { continue }
-    Write-Host "WADDLE_SMB_ALIAS=PASS provider=$provider host=$hostName launch_repo=$aliasRepo mode=optional_hostname_alias"
-    return [pscustomobject]@{ repo=[IO.Path]::GetFullPath($aliasRepo); network_backed=$true; mode='hostname_alias'; provider=$provider; host=$hostName }
+  if ($valid) {
+    try { Unblock-File -LiteralPath $runtimeExe -ErrorAction Stop } catch {}
+    Write-Host "WADDLE_ELECTRON_CACHE=PASS mode=reused source=$sourceExe runtime=$runtimeExe identity=$identity node_modules_copied=0"
+    return [pscustomobject]@{ executable=$runtimeExe; mode='local_cache_reused'; copied=$false; cache_root=$target; identity=$identity }
   }
 
-  Write-Host "WADDLE_SMB_ALIAS=WARN provider=$provider server=$server candidates=$($candidates -join ',') fallback=direct_existing_mapping create_process=true shell_execute=false"
-  return [pscustomobject]@{ repo=$RepoRoot; network_backed=$true; mode='mapped_or_ip_direct'; provider=$provider; host='' }
+  if (Test-Path -LiteralPath $target) {
+    try { Remove-Item -LiteralPath $target -Recurse -Force -ErrorAction Stop }
+    catch { throw "WADDLE_ELECTRON_CACHE=FAIL stale_cache_locked=$target error=$($_.Exception.Message)" }
+  }
+
+  $staging = Join-Path $versionRoot ('.staging-' + [Guid]::NewGuid().ToString('N'))
+  New-Item -ItemType Directory -Force -Path $staging | Out-Null
+  try {
+    $robocopy = Get-Command robocopy.exe -ErrorAction Stop
+    & $robocopy.Source $sourceDist $staging /E /COPY:DAT /DCOPY:DAT /R:2 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
+    $copyExit = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    if ($copyExit -ge 8) { throw "WADDLE_ELECTRON_CACHE=FAIL copy_exit=$copyExit source=$sourceDist staging=$staging" }
+
+    $stagedExe = Join-Path $staging 'electron.exe'
+    foreach ($relative in @('electron.exe','icudtl.dat','resources.pak')) {
+      $required = Join-Path $staging $relative
+      if (-not (Test-Path -LiteralPath $required -PathType Leaf)) { throw "WADDLE_ELECTRON_CACHE=FAIL staged_missing=$required" }
+    }
+    if ((Get-Item -LiteralPath $stagedExe -Force).Length -ne $sourceInfo.Length) {
+      throw "WADDLE_ELECTRON_CACHE=FAIL staged_size_mismatch source=$($sourceInfo.Length) staged=$((Get-Item -LiteralPath $stagedExe -Force).Length)"
+    }
+
+    [ordered]@{
+      schema='waddle-electron-cache/v1'
+      status='PASS'
+      identity=$identity
+      electron_version=$ElectronVersion
+      dependency_fingerprint=$DependencyFingerprint
+      source_executable=$sourceExe
+      source_length=[int64]$sourceInfo.Length
+      source_last_write_ticks=[int64]$sourceInfo.LastWriteTimeUtc.Ticks
+      created_utc=[DateTime]::UtcNow.ToString('o')
+    } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $staging 'cache.json') -Encoding UTF8
+
+    Move-Item -LiteralPath $staging -Destination $target -Force
+  } finally {
+    if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force -ErrorAction SilentlyContinue }
+  }
+
+  if (-not (Test-Path -LiteralPath $runtimeExe -PathType Leaf)) { throw "WADDLE_ELECTRON_CACHE=FAIL runtime_missing=$runtimeExe" }
+  try { Unblock-File -LiteralPath $runtimeExe -ErrorAction Stop } catch {}
+  Write-Host "WADDLE_ELECTRON_CACHE=PASS mode=created source=$sourceExe runtime=$runtimeExe identity=$identity node_modules_copied=0"
+  return [pscustomobject]@{ executable=$runtimeExe; mode='local_cache_created'; copied=$true; cache_root=$target; identity=$identity }
 }
 
 function Get-WaddleRuntimeEvents {
@@ -222,28 +312,43 @@ $manifest = Get-Content -LiteralPath $electronManifest -Raw | ConvertFrom-Json -
 if ([string]$manifest.version -ne '10.4.7') { throw "WADDLE_PLAY=FAIL electron_expected=10.4.7 actual=$($manifest.version)" }
 if ((Get-Item -LiteralPath $flashCanonical).Length -lt 1048576) { throw "WADDLE_PLAY=FAIL flash_invalid=$flashCanonical" }
 
-Stop-WaddlePriorState
-
 $launchRoot = Resolve-WaddleLaunchRoot -RepoRoot $repo
 $launchRepo = [string]$launchRoot.repo
-$launchElectron = Join-Path $launchRepo 'node_modules\electron\dist\electron.exe'
+$statePath = if ($launchRoot.network_backed) { Join-Path $clientStateDir "$safeMachine.json" } else { $legacyStatePath }
+Stop-WaddlePriorState -Path $statePath
+
+$sourceLaunchElectron = Join-Path $launchRepo 'node_modules\electron\dist\electron.exe'
 $launchEntry = Join-Path $launchRepo 'compiled\client\main.js'
 $launchFlash = Join-Path $launchRepo 'assets\flash\pepflashplayer64_32_0_0_303.dll'
 $launchModules = Join-Path $launchRepo 'node_modules'
-foreach ($required in @($launchElectron,$launchEntry,$launchFlash,$launchModules)) {
+foreach ($required in @($sourceLaunchElectron,$launchEntry,$launchFlash,$launchModules)) {
   if (-not (Test-Path -LiteralPath $required)) { throw "WADDLE_PLAY=FAIL launch_path_missing=$required mode=$($launchRoot.mode)" }
 }
 
-try { Unblock-File -LiteralPath $launchElectron -ErrorAction Stop } catch {}
+$sha = Get-WaddleCurrentSha
+$fingerprint = Get-WaddleDependencyFingerprint
+if ([string]::IsNullOrWhiteSpace($fingerprint)) { throw 'WADDLE_PLAY=FAIL dependency_fingerprint_missing' }
+$electronRuntime = Get-WaddleLocalElectronRuntime -SourceElectron $sourceLaunchElectron -ElectronVersion '10.4.7' -DependencyFingerprint $fingerprint -NetworkBacked ([bool]$launchRoot.network_backed)
+$launchElectron = [string]$electronRuntime.executable
 
 $portableUserData = Join-Path $repo 'user-data'
-$profileRoot = Join-Path $work ("runtime-profiles\$machine")
+if ($launchRoot.network_backed) {
+  $localBase = [string]$env:LOCALAPPDATA
+  if ([string]::IsNullOrWhiteSpace($localBase)) { $localBase = [IO.Path]::GetTempPath() }
+  $profileToken = Get-WaddleStableToken -Value (([string]$launchRoot.provider) + '|' + $repo) -Length 24
+  $profileRoot = Join-Path $localBase ("WaddleForever\runtime-profiles\$profileToken")
+  $profileMode = 'local_per_machine_smb'
+} else {
+  $profileRoot = Join-Path $work ("runtime-profiles\$safeMachine")
+  $profileMode = 'repo_work_local_drive'
+}
 $chromiumProfile = Join-Path $profileRoot 'chromium'
 New-Item -ItemType Directory -Force -Path $portableUserData,$chromiumProfile | Out-Null
+Write-Host "WADDLE_CHROMIUM_PROFILE=PASS mode=$profileMode path=$chromiumProfile network_backed=$($launchRoot.network_backed)"
 
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$stdout = Join-Path $runtimeLogs "client-$machine-$stamp.stdout.log"
-$stderr = Join-Path $runtimeLogs "client-$machine-$stamp.stderr.log"
+$stdout = Join-Path $runtimeLogs "client-$safeMachine-$stamp.stdout.log"
+$stderr = Join-Path $runtimeLogs "client-$safeMachine-$stamp.stderr.log"
 Set-Content -LiteralPath $stdout -Encoding UTF8 -Value 'WADDLE_RUNTIME_STDIO=DETACHED stream=stdout source=play'
 Set-Content -LiteralPath $stderr -Encoding UTF8 -Value 'WADDLE_RUNTIME_STDIO=DETACHED stream=stderr source=play'
 
@@ -261,30 +366,29 @@ $env:WADDLE_PPAPI_FLASH_VERSION = '32.0.0.303'
 $env:WADDLE_RUNTIME_DIAGNOSTIC_LOG = $stderr
 Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
 
-$sha = Get-WaddleCurrentSha
-$fingerprint = Get-WaddleDependencyFingerprint
 $launchWatch = [Diagnostics.Stopwatch]::StartNew()
 $process = $null
 try {
   $processId = Start-WaddleWin32DetachedProcess -FilePath $launchElectron -ArgumentList @("--user-data-dir=$chromiumProfile",$launchEntry) -WorkingDirectory $repo
   $process = Get-Process -Id $processId -ErrorAction Stop
 } catch {
-  throw "WADDLE_PLAY=FAIL process_start executable=$launchElectron mode=$($launchRoot.mode) shell_execute=false inherit_handles=false error=$($_.Exception.Message)"
+  throw "WADDLE_PLAY=FAIL process_start executable=$launchElectron source=$sourceLaunchElectron mode=$($launchRoot.mode) shell_execute=false inherit_handles=false error=$($_.Exception.Message)"
 }
 if (-not $process -or $process.Id -le 0) { throw 'WADDLE_PLAY=FAIL process_id_missing' }
 
 $state = [ordered]@{
-  schema='waddle-client-state/v11'; status='STARTING'; platform='windows-x64'; machine=$machine; pid=$process.Id; source_sha=$sha
-  repo_root=$repo; work_root=$work; dependency_build_root=$modulesCanonical; dependency_fingerprint=$fingerprint
+  schema='waddle-client-state/v12'; status='STARTING'; platform='windows-x64'; machine=$machine; pid=$process.Id; source_sha=$sha
+  repo_root=$repo; work_root=$work; state_path=$statePath; dependency_build_root=$modulesCanonical; dependency_fingerprint=$fingerprint
   dependency_mode='reused'; dependency_mutation_while_running=$false; stdio_mode='win32_detached_no_inherited_handles'
   managed_node_home='NOT_REQUIRED_FOR_PLAY'; managed_node_exe='NOT_REQUIRED_FOR_PLAY'; runtime_mode='repo_local_direct'
   runtime_home=$repo; runtime_root=$repo; runtime_current_root=$repo; runtime_manifest=(Join-Path $stateDir 'runtime-snapshot.json')
-  runtime_app_entry=$entryCanonical; runtime_node_modules=$modulesCanonical; electron_source_executable=$electronCanonical
-  electron_executable=$electronCanonical; electron_launch_executable=$launchElectron; electron_version='10.4.7'
-  electron_launch_mode='repo_direct_start_process'; electron_network_backed=[bool]$launchRoot.network_backed; launcher_return_ms=0
+  runtime_app_entry=$entryCanonical; runtime_node_modules=$modulesCanonical; electron_source_executable=$sourceLaunchElectron
+  electron_executable=$launchElectron; electron_launch_executable=$launchElectron; electron_version='10.4.7'
+  electron_launch_mode=[string]$electronRuntime.mode; electron_cache_root=[string]$electronRuntime.cache_root; electron_cache_identity=[string]$electronRuntime.identity; electron_cache_copied=[bool]$electronRuntime.copied
+  electron_network_backed=[bool]$launchRoot.network_backed; launcher_return_ms=0
   smb_launch_mode=[string]$launchRoot.mode; smb_provider=[string]$launchRoot.provider; ppapi_flash_source_path=$flashCanonical
   ppapi_flash_path=$flashCanonical; ppapi_flash_version='32.0.0.303'; ffdec_path='NOT_REQUIRED_FOR_PLAY'
-  portable_user_data=$portableUserData; chromium_profile=$chromiumProfile; stdout=$stdout; stderr=$stderr; started_utc=[DateTime]::UtcNow.ToString('o')
+  portable_user_data=$portableUserData; chromium_profile=$chromiumProfile; chromium_profile_mode=$profileMode; stdout=$stdout; stderr=$stderr; started_utc=[DateTime]::UtcNow.ToString('o')
 }
 $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
 
@@ -308,7 +412,7 @@ try {
       $url = if ($ready[0].PSObject.Properties['url']) { [string]$ready[0].url } else { '' }
       $state['status']='RUNNING'; $state['ready_utc']=[DateTime]::UtcNow.ToString('o'); $state['launcher_return_ms']=[int64]$launchWatch.ElapsedMilliseconds; $state['main_window_url']=$url
       $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
-      Write-Host "WADDLE_PLAY=PASS pid=$($process.Id) machine=$machine electron=10.4.7 event=main-window-ready url=$url launch_ms=$($launchWatch.ElapsedMilliseconds) runtime=$repo node_modules=$modulesCanonical flash=$flashCanonical network_backed=$($launchRoot.network_backed) smb_mode=$($launchRoot.mode) shell_execute=false inherit_handles=false files_copied=0 local_install=0"
+      Write-Host "WADDLE_PLAY=PASS pid=$($process.Id) machine=$machine electron=10.4.7 event=main-window-ready url=$url launch_ms=$($launchWatch.ElapsedMilliseconds) runtime=$repo node_modules=$modulesCanonical electron_source=$sourceLaunchElectron electron_runtime=$launchElectron electron_cache=$($electronRuntime.mode) flash=$flashCanonical network_backed=$($launchRoot.network_backed) smb_mode=$($launchRoot.mode) profile_mode=$profileMode state=$statePath shell_execute=false inherit_handles=false node_modules_copied=0 local_install=0"
       exit 0
     }
   } while ([DateTime]::UtcNow -lt $deadline)
