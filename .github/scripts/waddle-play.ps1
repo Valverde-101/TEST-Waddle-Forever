@@ -185,7 +185,7 @@ function Get-WaddleLocalElectronRuntime {
 
   $sourceExe = [IO.Path]::GetFullPath($SourceElectron)
   if (-not $NetworkBacked) {
-    return [pscustomobject]@{ executable=$sourceExe; mode='repo_direct'; copied=$false; cache_root=''; identity='' }
+    return [pscustomobject]@{ executable=$sourceExe; mode='repo_direct_start_process'; copied=$false; cache_root=''; identity='' }
   }
 
   $sourceDist = Split-Path -Parent $sourceExe
