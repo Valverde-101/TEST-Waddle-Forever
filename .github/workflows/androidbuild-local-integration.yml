@@ -146,11 +146,16 @@ jobs:
           Write-Host "WADDLE_SWF_ANALYSIS_EXACT_HEAD=PASS sha=$env:WADDLE_EXPECTED_SHA"
 
       - name: Correlate runtime and SWF diagnostics
+        if: always()
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           Set-StrictMode -Version Latest
           $repo=$env:WADDLE_CANONICAL_REPO
+          if([string]::IsNullOrWhiteSpace($repo) -or -not(Test-Path -LiteralPath $repo -PathType Container)){
+            Write-Host 'WADDLE_DIAGNOSTICS=SKIP reason=canonical_repo_unavailable'
+            exit 0
+          }
           $diagnoser=Join-Path $repo '.github\scripts\waddle-diagnostics.ps1'
           if(-not(Test-Path -LiteralPath $diagnoser -PathType Leaf)){throw "WADDLE_DIAGNOSTICS=FAIL script_missing=$diagnoser"}
           & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $diagnoser `
