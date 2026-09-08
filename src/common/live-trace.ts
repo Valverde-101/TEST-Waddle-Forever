@@ -43,10 +43,17 @@ const listeners = new Set<WaddleLiveTraceListener>();
 let sequence = 0;
 
 const sensitiveTraceKey = /^(?:pass|password|passwd|token|authorization|auth|session|secret|cookie|api[_-]?key|body|payload)$/i;
+const structuredBodyKey = /^(?:request|response|raw|message)(?:body|payload)$/i;
+const delimitedBodyKey = /(?:^|[_-])(?:body|payload)$/i;
 const sensitiveQueryKey = /^(?:pass|password|passwd|token|authorization|auth|session|secret|key|api[_-]?key)$/i;
+const unsafeObjectKey = /^(?:__proto__|prototype|constructor)$/;
 const maxTraceStringLength = 4096;
 const maxTraceArrayLength = 200;
 const maxTraceDepth = 8;
+
+const isSensitiveTraceKey = (keyName: string) => (
+  sensitiveTraceKey.test(keyName) || structuredBodyKey.test(keyName) || delimitedBodyKey.test(keyName)
+);
 
 const sanitizeTraceString = (value: string) => {
   let text = value;
@@ -79,7 +86,7 @@ const sanitizeTraceValue = (
   depth = 0,
   seen: WeakSet<object> = new WeakSet<object>()
 ): unknown => {
-  if (sensitiveTraceKey.test(keyName)) return '[redacted]';
+  if (isSensitiveTraceKey(keyName)) return '[redacted]';
   if (value === null || value === undefined || typeof value === 'number' || typeof value === 'boolean') return value;
   if (typeof value === 'string') return sanitizeTraceString(value);
   if (typeof value === 'bigint') return value.toString();
@@ -94,8 +101,12 @@ const sanitizeTraceValue = (
       return value.slice(0, maxTraceArrayLength).map(item => sanitizeTraceValue(item, '', depth + 1, seen));
     }
 
-    const output: Record<string, unknown> = {};
+    // A null-prototype object prevents special keys from changing the prototype
+    // while sanitizing untrusted diagnostic metadata. Dangerous object-shape keys
+    // are omitted entirely because they have no legitimate tracing purpose.
+    const output = Object.create(null) as Record<string, unknown>;
     for (const [key, child] of Object.entries(value)) {
+      if (unsafeObjectKey.test(key)) continue;
       output[key] = sanitizeTraceValue(child, key, depth + 1, seen);
     }
     return output;
@@ -110,11 +121,16 @@ const sanitizeTraceInput = (input: WaddleLiveTraceInput): WaddleLiveTraceInput =
 
 export const publishWaddleLiveTrace = (input: WaddleLiveTraceInput): WaddleLiveTraceEvent => {
   const safeInput = sanitizeTraceInput(input);
-  const event = Object.assign({
+
+  // The producer controls diagnostic metadata, never the envelope. Put the
+  // authoritative fields last so even a buggy producer passing schema/sequence/utc
+  // through the open metadata signature cannot forge ordering or schema identity.
+  const event = {
+    ...safeInput,
     schema: 'waddle-live-trace/v1' as const,
     sequence: ++sequence,
     utc: new Date().toISOString()
-  }, safeInput) as WaddleLiveTraceEvent;
+  } as WaddleLiveTraceEvent;
 
   for (const listener of listeners) {
     try {
