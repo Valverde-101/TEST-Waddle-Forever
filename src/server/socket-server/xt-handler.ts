@@ -160,15 +160,16 @@ export class XtHandler {
 
   public handle(client: ClientSocket, context: WorldContext, message: string) {
     const parsedMessage = parseXtMessage(message);
-    if (!parsedMessage.ok) {
-      logverbose(getRedString(`malformed XT: ${parsedMessage.reason}`));
+    if (parsedMessage.ok === false) {
+      const reason = parsedMessage.reason;
+      logverbose(getRedString(`malformed XT: ${reason}`));
       publishWaddleLiveTrace({
         category: 'XT',
         phase: 'error',
         source: 'xt-handler',
         direction: 'in',
         status: 'malformed-message',
-        reason: parsedMessage.reason,
+        reason,
         messageLength: message.length
       });
       return;
