@@ -107,12 +107,27 @@ jobs:
           Set-StrictMode -Version Latest
           $repo=$env:WADDLE_CANONICAL_REPO
           $analyzer=Join-Path $repo '.github\scripts\waddle-swf-analysis.ps1'
-          $clientStatePath=Join-Path $repo '.work\state\waddle-client.json'
           if(-not(Test-Path -LiteralPath $analyzer -PathType Leaf)){throw "WADDLE_SWF_ANALYSIS=FAIL analyzer_missing=$analyzer"}
-          if(-not(Test-Path -LiteralPath $clientStatePath -PathType Leaf)){throw "WADDLE_SWF_ANALYSIS=FAIL client_state_missing=$clientStatePath"}
-          $clientState=Get-Content -LiteralPath $clientStatePath -Raw | ConvertFrom-Json
-          $ffdec=[string]$clientState.ffdec_path
-          if([string]::IsNullOrWhiteSpace($ffdec) -or -not(Test-Path -LiteralPath $ffdec -PathType Leaf)){throw "WADDLE_SWF_ANALYSIS=FAIL certified_ffdec_missing=$ffdec"}
+
+          # FFDec is build/analysis tooling, not a runtime dependency. Resolve it
+          # from the managed .env produced by Setup instead of coupling Play to
+          # AndroidBuild tooling through waddle-client.json.
+          $ffdec=''
+          $envPath=Join-Path $repo '.env'
+          if(Test-Path -LiteralPath $envPath -PathType Leaf){
+            foreach($raw in Get-Content -LiteralPath $envPath){
+              $line=[string]$raw
+              if($line -match '^\s*FFDEC_PATH\s*=\s*(.+?)\s*$'){
+                $ffdec=([string]$Matches[1]).Trim().Trim('"')
+                break
+              }
+            }
+          }
+          if([string]::IsNullOrWhiteSpace($ffdec) -or -not(Test-Path -LiteralPath $ffdec -PathType Leaf)){
+            throw "WADDLE_SWF_ANALYSIS=FAIL setup_ffdec_missing=$ffdec env=$envPath"
+          }
+          Write-Host "WADDLE_SWF_ANALYSIS_FFDEC=PASS source=setup_env path=$ffdec"
+
           # Keep the PR gate bounded. The analyzer is hash-cached and therefore
           # advances deep coverage across runs rather than rescanning the whole
           # archive on every source commit. boots.swf remains first priority.
