@@ -14,12 +14,20 @@ export interface ClientSocket {
   buffer: string;
 }
 
+const maxBufferedPacketChars = 4 * 1024 * 1024;
+const httpHeaderTerminator = Buffer.from('\r\n\r\n', 'ascii');
+
 const parseHeaders = (data: string): Record<string, string> => {
   const lines = data.split('\r\n');
-  const entries = lines.slice(1)
-    .map(line => line.split(': '))
-    .filter(([key, value]) => key && value)
-    .map(([key, value]) => [key.toLowerCase(), value]);
+  const entries: Array<[string, string]> = [];
+
+  for (const line of lines.slice(1)) {
+    const separator = line.indexOf(':');
+    if (separator <= 0) continue;
+    const key = line.slice(0, separator).trim().toLowerCase();
+    const value = line.slice(separator + 1).trim();
+    if (key && value) entries.push([key, value]);
+  }
   
   return Object.fromEntries(entries);
 }
@@ -51,14 +59,15 @@ export const setupSocketServer = async (name: string, port: number, handler: Mes
       ws.on('message', (data) => {
         const str = data.toString();
         if (!str.startsWith('GET')) {
-          handler.handle(cs, data.toString());
+          handler.handle(cs, str);
         }
       });
 
       ws.on('close', () => {
-        handler.disconnect(cs).then(() => {
-          cs.end()
+        void handler.disconnect(cs).then(() => {
           console.log('A client has disconnected (WebSocket)');
+        }).catch(error => {
+          console.error('WebSocket disconnect handler failed', error);
         });
       });
 
@@ -67,27 +76,32 @@ export const setupSocketServer = async (name: string, port: number, handler: Mes
   
     net.createServer((socket) => {
       socket.once('data', (buffer) => {
-        const dataStr = buffer.toString()
+        const looksLikeHttp = buffer.length >= 3 && buffer.subarray(0, 3).toString('ascii') === 'GET';
 
-        if (dataStr.startsWith('GET')) {
-          const headerEnd = dataStr.indexOf('\r\n\r\n');
+        if (looksLikeHttp) {
+          // Keep the post-header WebSocket "head" as the exact original bytes.
+          // Converting the entire TCP packet to UTF-8 and reconstructing it with
+          // a single-byte encoding corrupts binary frame bytes when an eager
+          // client sends its first WebSocket frame in the same packet as the
+          // HTTP upgrade request.
+          const headerEnd = buffer.indexOf(httpHeaderTerminator);
           if (headerEnd === -1) {
             socket.destroy();
             return;
           }
 
-          const requestText = dataStr.slice(0, headerEnd + 4);
-          const head = Buffer.from(dataStr.slice(headerEnd + 4), 'binary');
+          const bodyOffset = headerEnd + httpHeaderTerminator.length;
+          const requestText = buffer.subarray(0, bodyOffset).toString('utf8');
+          const head = buffer.subarray(bodyOffset);
+          const headers = parseHeaders(requestText);
 
-          // This is a websocket connection.
-          // Only the bytes after the HTTP upgrade headers belong in the ws "head" buffer.
           wsServer.handleUpgrade({
-            headers: parseHeaders(requestText),
+            headers,
             method: 'GET',
             socket,
             url: '/',
           }, socket, head, (ws) => {
-            wsServer.emit('connection', ws, { headers: parseHeaders(requestText), method: 'GET' });
+            wsServer.emit('connection', ws, { headers, method: 'GET' });
           });
         } else {
           socket.setEncoding('utf8')
@@ -99,6 +113,7 @@ export const setupSocketServer = async (name: string, port: number, handler: Mes
                 socket.write(message + '\0', (err) => {
                   if (err) {
                     reject(err);
+                    return;
                   }
                   resolve();
                 });
@@ -118,6 +133,12 @@ export const setupSocketServer = async (name: string, port: number, handler: Mes
             const packets = (cs.buffer + data.toString()).split('\0');
             cs.buffer = packets.pop() ?? '';
 
+            if (cs.buffer.length > maxBufferedPacketChars) {
+              console.error(`${name} client exceeded pending packet buffer limit`);
+              socket.destroy(new Error('Socket packet buffer limit exceeded'));
+              return;
+            }
+
             for (const packet of packets) {
               if (packet.length > 0) {
                 handler.handle(cs, packet);
@@ -126,13 +147,14 @@ export const setupSocketServer = async (name: string, port: number, handler: Mes
           });
 
           socket.on('close', () => {
-            handler.disconnect(cs).then(() => {
-              cs.end();
+            void handler.disconnect(cs).then(() => {
               console.log('A client has disconnected');
+            }).catch(error => {
+              console.error('TCP disconnect handler failed', error);
             });
           });
 
-          // Re-emit the data so the TCP handler gets the first packet too
+          // Re-emit the data so the TCP handler gets the first packet too.
           socket.emit('data', buffer);
 
           socket.on('error', console.error);
