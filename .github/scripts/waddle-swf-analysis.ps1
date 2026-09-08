@@ -199,9 +199,48 @@ foreach ($hash in @($byHash.Keys | Sort-Object)) {
   })
 }
 
+$runtimeSwfByLeaf = @{}
+$runtimePrioritySource = $null
+$runtimeLogRoot = Join-Path $WorkRoot 'logs\runtime'
+if (Test-Path -LiteralPath $runtimeLogRoot -PathType Container) {
+  $runtimeLog = Get-ChildItem -LiteralPath $runtimeLogRoot -File -Filter 'client-*.stderr.log' -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+  if ($runtimeLog) {
+    $runtimePrioritySource = $runtimeLog.FullName
+    foreach ($line in Get-Content -LiteralPath $runtimeLog.FullName -ErrorAction SilentlyContinue) {
+      $text = ([string]$line).Trim()
+      if (-not $text.StartsWith('{')) { continue }
+      try { $evt = $text | ConvertFrom-Json } catch { continue }
+      if ([string]$evt.event -ne 'live-trace' -or $null -eq $evt.trace -or [string]$evt.trace.category -ne 'SWF') { continue }
+      $leaf = [IO.Path]::GetFileName(([string]$evt.trace.action).Split('?')[0]).ToLowerInvariant()
+      if (-not $leaf) { continue }
+      $phase = [string]$evt.trace.phase
+      $code = if ($null -ne $evt.trace.statusCode) { [int]$evt.trace.statusCode } else { 0 }
+      $rank = if ($phase -eq 'error' -or $code -ge 400) { 0 } elseif ($phase -eq 'request') { 1 } else { 2 }
+      if (-not $runtimeSwfByLeaf.ContainsKey($leaf) -or $rank -lt [int]$runtimeSwfByLeaf[$leaf].rank) {
+        $runtimeSwfByLeaf[$leaf] = [pscustomobject]@{ leaf=$leaf; rank=$rank; phase=$phase; status_code=$code; action=[string]$evt.trace.action; url=[string]$evt.trace.url }
+      }
+    }
+  }
+}
+
+$runtimePrioritizedHashes = New-Object 'System.Collections.Generic.HashSet[string]' -ArgumentList ([StringComparer]::OrdinalIgnoreCase)
+foreach ($group in $uniqueGroups) {
+  $runtimeRank = 9
+  foreach ($pathItem in @($byHash[$group.sha256])) {
+    $leaf = [IO.Path]::GetFileName([string]$pathItem.path).ToLowerInvariant()
+    if ($runtimeSwfByLeaf.ContainsKey($leaf)) {
+      $candidateRank = [int]$runtimeSwfByLeaf[$leaf].rank
+      if ($candidateRank -lt $runtimeRank) { $runtimeRank = $candidateRank }
+    }
+  }
+  if ($runtimeRank -lt 9) { [void]$runtimePrioritizedHashes.Add([string]$group.sha256) }
+  Add-Member -InputObject $group -NotePropertyName runtime_rank -NotePropertyValue $runtimeRank -Force
+}
+
 $deepCandidates = @($uniqueGroups |
   Where-Object { -not $_.cached } |
-  Sort-Object @{Expression={ if ($_.has_boots) {0} else {1} }}, @{Expression={ $_.representative.path }})
+  Sort-Object @{Expression={ [int]$_.runtime_rank }}, @{Expression={ if ($_.has_boots) {0} else {1} }}, @{Expression={ $_.representative.path }})
 $selectedGroups = @($deepCandidates | Select-Object -First $DeepBudget)
 
 foreach ($group in $selectedGroups) {
@@ -338,6 +377,10 @@ $summary = [ordered]@{
   hash_recomputed=$hashRecomputed
   deep_budget_unique_hashes=$DeepBudget
   deep_selected_unique_hashes=$selectedGroups.Count
+  runtime_priority_source=$runtimePrioritySource
+  runtime_observed_swf_count=$runtimeSwfByLeaf.Count
+  runtime_prioritized_unique_hash_count=$runtimePrioritizedHashes.Count
+  runtime_selected_unique_hash_count=@($selectedGroups | Where-Object { [int]$_.runtime_rank -lt 9 }).Count
   analyzed_unique_hash_count=$analyzedUnique
   pending_unique_hash_count=($uniqueCount-$analyzedUnique)
   analyzed_path_count=$analyzedPaths
@@ -357,5 +400,6 @@ $edges | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $analysis
 @($allUrls | Sort-Object) | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $analysisRoot 'urls.json') -Encoding UTF8
 $missing | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $analysisRoot 'missing-swfs.json') -Encoding UTF8
 $runtimeTrace | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $analysisRoot 'runtime-trace.json') -Encoding UTF8
+@($runtimeSwfByLeaf.Values | Sort-Object rank,leaf) | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $analysisRoot 'runtime-priority.json') -Encoding UTF8
 $summary | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $analysisRoot 'summary.json') -Encoding UTF8
-Write-Host "WADDLE_SWF_ANALYSIS=PASS paths=$($inventory.Count) unique=$uniqueCount duplicates=$($inventory.Count-$uniqueCount) hash_reused=$hashCacheReused hash_recomputed=$hashRecomputed analyzed_unique=$analyzedUnique pending_unique=$($uniqueCount-$analyzedUnique) analyzed_paths=$analyzedPaths selected_unique=$($selectedGroups.Count) stale_cache=$staleCacheCount edges=$($edges.Count) missing=$($missing.Count) urls=$($allUrls.Count) runtime_trace=$($runtimeTrace.available) source_mutation=false root=$analysisRoot"
+Write-Host "WADDLE_SWF_ANALYSIS=PASS paths=$($inventory.Count) unique=$uniqueCount duplicates=$($inventory.Count-$uniqueCount) hash_reused=$hashCacheReused hash_recomputed=$hashRecomputed analyzed_unique=$analyzedUnique pending_unique=$($uniqueCount-$analyzedUnique) analyzed_paths=$analyzedPaths selected_unique=$($selectedGroups.Count) stale_cache=$staleCacheCount edges=$($edges.Count) missing=$($missing.Count) urls=$($allUrls.Count) runtime_observed_swfs=$($runtimeSwfByLeaf.Count) runtime_prioritized_hashes=$($runtimePrioritizedHashes.Count) runtime_selected=$(@($selectedGroups | Where-Object { [int]$_.runtime_rank -lt 9 }).Count) runtime_trace=$($runtimeTrace.available) source_mutation=false root=$analysisRoot"
