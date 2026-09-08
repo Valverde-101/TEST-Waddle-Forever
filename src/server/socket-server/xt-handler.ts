@@ -5,17 +5,48 @@ import { getBlueString, getRedString, logverbose } from "@server/logger";
 import { publishWaddleLiveTrace } from "@common/live-trace";
 import { getXtCompatibilityRule, isNoResponseClientPacket } from "./handlers/protocol";
 
-const parseXtMessage = (message: string): [string, string[]] => {
-  const values = message.split('%');
-  if (values[1] !== 'xt') {
-    throw new Error(`Invalid XT message: ${message}`);
+type ParsedXtMessage = {
+  name: string;
+  args: string[];
+};
+
+type XtParseResult =
+  | { ok: true; value: ParsedXtMessage }
+  | { ok: false; reason: string };
+
+const parseXtMessage = (message: string): XtParseResult => {
+  // XT is a percent-delimited protocol with both a leading and trailing '%'.
+  // Never let malformed client traffic throw out of the socket event callback:
+  // reject the frame explicitly and preserve a diagnostic instead.
+  if (!message.startsWith('%xt%')) {
+    return { ok: false, reason: 'missing-xt-prefix' };
+  }
+  if (!message.endsWith('%')) {
+    return { ok: false, reason: 'missing-frame-terminator' };
   }
 
-  const name = values.slice(2, 4).join('%');
-  const args = values.slice(5, values.length - 1); // last is empty
+  const values = message.split('%');
+  // Minimum legal frame: %xt%<extension>%<code>%<room>%
+  if (values.length < 6 || values[0] !== '' || values[1] !== 'xt' || values[values.length - 1] !== '') {
+    return { ok: false, reason: 'invalid-frame-shape' };
+  }
 
-  return [name, args];
-}
+  const extension = values[2];
+  const code = values[3];
+  if (extension.length === 0 || code.length === 0) {
+    return { ok: false, reason: 'missing-action' };
+  }
+
+  return {
+    ok: true,
+    value: {
+      name: `${extension}%${code}`,
+      // values[4] is the room/internal request id and is intentionally handled by
+      // the protocol layer rather than passed to individual gameplay handlers.
+      args: values.slice(5, values.length - 1)
+    }
+  };
+};
 
 type CtxGuard<Ctx extends WorldContext> = [(ctx: WorldContext) => ctx is Ctx,
   (ctx: Ctx) => boolean];
@@ -45,8 +76,11 @@ export type XtParams = {
 class CallbackManager<Ctx extends WorldContext> {
   private _cooldown: number | null = null;
   private _once: boolean = false;
-  private _handled = new Map<ClientSocket, boolean>();
-  private _timestamps = new Map<ClientSocket, number>();
+  // Callback managers live for the whole server lifetime. WeakMaps ensure a
+  // disconnected ClientSocket can be garbage-collected instead of being retained
+  // forever by once/cooldown bookkeeping.
+  private _handled = new WeakMap<ClientSocket, boolean>();
+  private _timestamps = new WeakMap<ClientSocket, number>();
 
   constructor(private _callback: (ctx: Ctx, ...args: Array<string | number>) => Promise<void> | void, params?: XtParams) {
     if (params?.cooldown !== undefined) {
@@ -125,7 +159,22 @@ export class XtHandler {
   }
 
   public handle(client: ClientSocket, context: WorldContext, message: string) {
-    const [name, args] = parseXtMessage(message);
+    const parsedMessage = parseXtMessage(message);
+    if (!parsedMessage.ok) {
+      logverbose(getRedString(`malformed XT: ${parsedMessage.reason}`));
+      publishWaddleLiveTrace({
+        category: 'XT',
+        phase: 'error',
+        source: 'xt-handler',
+        direction: 'in',
+        status: 'malformed-message',
+        reason: parsedMessage.reason,
+        messageLength: message.length
+      });
+      return;
+    }
+
+    const { name, args } = parsedMessage.value;
 
     publishWaddleLiveTrace({
       category: 'XT',
