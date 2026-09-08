@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { BrowserWindow, shell } from 'electron';
+import { writeRuntimeDiagnostic } from './runtime-diagnostics';
 
 const workRoot = path.join(process.cwd(), '.work');
 const swfAnalysisRoot = path.join(workRoot, 'swf-analysis');
@@ -9,6 +10,14 @@ const shareRoot = path.join(diagnosticsRoot, 'share');
 const consoleHistoryLimit = 600;
 
 const recentConsoleMessages: Array<Record<string, unknown>> = [];
+
+type DiagnosticPanelVerification = {
+  toggle: boolean;
+  panel: boolean;
+  traceButton: boolean;
+  collectButton: boolean;
+  resultBridge: boolean;
+};
 
 const asArray = (value: unknown): any[] => {
   if (Array.isArray(value)) return value;
@@ -377,11 +386,20 @@ const diagnosticPanelCss = `
 #waddle-diagnostic-panel .wd-help{opacity:.75;line-height:1.35;margin:8px 0}.wd-result{white-space:pre-wrap;word-break:break-word;background:#02080d;border:1px solid #183747;border-radius:7px;padding:8px;min-height:72px;max-height:280px;overflow:auto;margin-top:8px;color:#d7f2ff}.wd-error{color:#ff827c}.wd-ok{color:#79f2a8}
 `;
 
-const installPanelIntoRenderer = (window: BrowserWindow) => {
-  if (window.isDestroyed() || window.webContents.isDestroyed()) return;
+const installPanelIntoRenderer = (window: BrowserWindow): Promise<DiagnosticPanelVerification> => {
+  if (window.isDestroyed() || window.webContents.isDestroyed()) {
+    return Promise.reject(new Error('WADDLE_DIAGNOSTIC_PANEL=FAIL renderer_destroyed'));
+  }
   const css = JSON.stringify(diagnosticPanelCss);
   const script = `(() => {
-    if (document.getElementById('waddle-diagnostic-toggle')) return;
+    const verify = () => ({
+      toggle: Boolean(document.getElementById('waddle-diagnostic-toggle')),
+      panel: Boolean(document.getElementById('waddle-diagnostic-panel')),
+      traceButton: Boolean(document.getElementById('wd-trace')),
+      collectButton: Boolean(document.getElementById('wd-collect')),
+      resultBridge: typeof window.__WADDLE_DIAG_SET_RESULT__ === 'function'
+    });
+    if (document.getElementById('waddle-diagnostic-toggle')) return verify();
     const style = document.createElement('style');
     style.id = 'waddle-diagnostic-style';
     style.textContent = ${css};
@@ -438,12 +456,61 @@ const installPanelIntoRenderer = (window: BrowserWindow) => {
     panel.querySelector('#wd-trace').addEventListener('click', () => { result.textContent = 'Rastreando última falla...'; console.log('[WADDLE-DIAG-ACTION]trace-last'); });
     panel.querySelector('#wd-collect').addEventListener('click', () => { result.textContent = 'Recopilando consola, live trace, runtime logs y análisis SWF...'; console.log('[WADDLE-DIAG-ACTION]collect-share'); });
     console.log('[WADDLE-DIAG][READY] Diagnostic panel installed');
+    return verify();
   })()`;
-  void window.webContents.executeJavaScript(script, true).catch(() => undefined);
+
+  return window.webContents.executeJavaScript(script, true).then((verification: DiagnosticPanelVerification) => {
+    if (!verification || !verification.toggle || !verification.panel || !verification.traceButton || !verification.collectButton || !verification.resultBridge) {
+      throw new Error(`WADDLE_DIAGNOSTIC_PANEL=FAIL incomplete_dom verification=${JSON.stringify(verification)}`);
+    }
+    writeRuntimeDiagnostic('diagnostic-panel-ready', {
+      toggle: verification.toggle,
+      panel: verification.panel,
+      traceButton: verification.traceButton,
+      collectButton: verification.collectButton,
+      resultBridge: verification.resultBridge,
+      url: window.webContents.getURL()
+    });
+    return verification;
+  }).catch(error => {
+    writeRuntimeDiagnostic('diagnostic-panel-bootstrap-failed', {
+      error: sanitizeDiagnosticText(error),
+      url: window.webContents.getURL()
+    });
+    throw error;
+  });
 };
 
-export const installWaddleDiagnosticPanel = (window: BrowserWindow) => {
-  window.webContents.on('did-finish-load', () => installPanelIntoRenderer(window));
+export const installWaddleDiagnosticPanel = (window: BrowserWindow): Promise<DiagnosticPanelVerification> => {
+  let settled = false;
+  let resolveReady: (value: DiagnosticPanelVerification) => void = () => undefined;
+  let rejectReady: (reason?: unknown) => void = () => undefined;
+  const ready = new Promise<DiagnosticPanelVerification>((resolve, reject) => {
+    resolveReady = resolve;
+    rejectReady = reject;
+  });
+  const timeout = setTimeout(() => {
+    if (settled) return;
+    settled = true;
+    rejectReady(new Error('WADDLE_DIAGNOSTIC_PANEL=FAIL readiness_timeout'));
+  }, 10000);
+  timeout.unref();
+
+  window.webContents.on('did-finish-load', () => {
+    void installPanelIntoRenderer(window).then(verification => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timeout);
+        resolveReady(verification);
+      }
+    }).catch(error => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timeout);
+        rejectReady(error);
+      }
+    });
+  });
 
   window.webContents.on('console-message', (_event, level, message, line, sourceId) => {
     const text = String(message || '');
@@ -477,4 +544,13 @@ export const installWaddleDiagnosticPanel = (window: BrowserWindow) => {
         }));
     }
   });
+
+  window.on('closed', () => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timeout);
+    rejectReady(new Error('WADDLE_DIAGNOSTIC_PANEL=FAIL window_closed_before_ready'));
+  });
+
+  return ready;
 };
