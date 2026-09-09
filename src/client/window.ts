@@ -5,7 +5,7 @@ import { checkUpdates } from './update';
 import { GlobalSettings } from '../common/utils';
 import { SettingsManager } from '../server/settings';
 import { getSiteUrl } from './views/multiplayer/multiplayer';
-import { instrumentRuntimeWindow } from './runtime-diagnostics';
+import { instrumentRuntimeWindow, writeRuntimeDiagnostic } from './runtime-diagnostics';
 import { installWaddleDiagnosticPanel } from './diagnostic-panel';
 
 const faviconPaths: Record<string, string> = {
@@ -45,9 +45,28 @@ export const createWindow = async (store: Store, clientSettings: GlobalSettings,
     }
   });
 
-  // Must happen before loadURL so the initial SWF/XML/JSON burst is visible.
+  // Network/live-trace instrumentation remains active before loadURL so the
+  // initial SWF/XML/JSON burst is never lost.
   instrumentRuntimeWindow(mainWindow, 'main');
-  const diagnosticPanelReady = installWaddleDiagnosticPanel(mainWindow);
+
+  // The diagnostic panel used to start its 10s readiness timer immediately at
+  // BrowserWindow construction. On slow SMB/module startup that timer could
+  // expire before the renderer had even reached DOM-ready, producing an
+  // unhandled rejection while loadURL was still legitimately in progress.
+  // Arm panel readiness from the renderer lifecycle instead. The panel still
+  // hooks did-finish-load before it can fire, and the rejection is converted to
+  // a settled result immediately so it cannot become an unhandled Promise.
+  let diagnosticPanelReady: Promise<{ ok: true } | { ok: false; error: unknown }> | null = null;
+  mainWindow.webContents.once('dom-ready', () => {
+    writeRuntimeDiagnostic('diagnostic-panel-install-trigger', {
+      lifecycle: 'dom-ready',
+      url: mainWindow.webContents.getURL()
+    });
+    diagnosticPanelReady = installWaddleDiagnosticPanel(mainWindow).then(
+      () => ({ ok: true as const }),
+      error => ({ ok: false as const, error })
+    );
+  });
 
   const favicon = faviconPaths[process.platform];
   if (favicon !== undefined) {
@@ -62,7 +81,13 @@ export const createWindow = async (store: Store, clientSettings: GlobalSettings,
   });
 
   await loadMain(mainWindow, clientSettings, serverSettings);
-  await diagnosticPanelReady;
+  if (!diagnosticPanelReady) {
+    throw new Error('WADDLE_DIAGNOSTIC_PANEL=FAIL dom_ready_not_observed');
+  }
+  const diagnosticResult = await diagnosticPanelReady;
+  if (!diagnosticResult.ok) {
+    throw diagnosticResult.error;
+  }
 
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.center();
