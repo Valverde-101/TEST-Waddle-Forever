@@ -17,6 +17,7 @@ import { BaseContext, GuardFunction, HandlerFunction, WorldContext } from "@serv
 import { handleAddIgnore, handleGetIgnoreList, handleRemoveIgnore } from "./handlers/buddy";
 import { handleEnterFireGame, handleFireMove, handleLeaveFire, isFireGuard } from "./handlers/fire";
 import { handleFollowPath, handleGetAbTestData, handleIsPlayerIglooOpen } from "./handlers/compatibility";
+import { handleGetActionStatus, handleMapCategorySetting, handlePlayercardOpenedSetting, handleSpecialDance, handleSpecialSnowball, handleSpecialWave } from "./handlers/experience";
 
 type PreProcessCallbackInfo<Ctx extends WorldContext> = [
   [(ctx: WorldContext) => ctx is Ctx,
@@ -215,6 +216,13 @@ export const createWorldXtHandler = (): XtHandler => {
     p.xt('s', 'u#h', [], handleHeartbeat),
     p.xt('s', 'u#gp', ['number'], handleGetPlayer),
     p.xt('s', 'u#gabcms', [], handleGetAbTestData),
+
+    p.xt('s', 'nx#gas', [], handleGetActionStatus, { xt: { once: true } }),
+    p.xt('s', 'nx#mcs', ['number'], handleMapCategorySetting),
+    p.xt('s', 'nx#pcos', [], handlePlayercardOpenedSetting, { xt: { once: true } }),
+    p.xt('s', 'nx#swave', [], handleSpecialWave, { xt: { once: true } }),
+    p.xt('s', 'nx#sdance', [], handleSpecialDance, { xt: { once: true } }),
+    p.xt('s', 'nx#ssnowball', [], handleSpecialSnowball, { xt: { once: true } }),
     
     r.xt('s', 'm#sm', ['string', 'string'], handleSendMessage),
     
