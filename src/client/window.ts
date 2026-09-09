@@ -85,7 +85,11 @@ export const createWindow = async (store: Store, clientSettings: GlobalSettings,
     throw new Error('WADDLE_DIAGNOSTIC_PANEL=FAIL dom_ready_not_observed');
   }
   const diagnosticResult = await diagnosticPanelReady;
-  if (!diagnosticResult.ok) {
+  // Use property-existence narrowing instead of boolean-discriminant narrowing.
+  // The build intentionally validates with TypeScript 7, whose control-flow
+  // analysis around a Promise assigned from an Electron lifecycle callback did
+  // not narrow the union reliably at this site.
+  if ('error' in diagnosticResult) {
     throw diagnosticResult.error;
   }
 
