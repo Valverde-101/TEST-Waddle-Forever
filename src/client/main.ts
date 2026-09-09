@@ -189,7 +189,7 @@ app.once('ready', async () => {
     log.initialize();
     console.log = log.log;
 
-    const electronIsDev = loadBootModule('electron-is-dev', () => (require('electron-is-dev') as typeof import('electron-is-dev')).default);
+    const electronIsDev = loadBootModule('electron-is-dev', () => require('electron-is-dev') as typeof import('electron-is-dev'));
     writeRuntimeDiagnostic('electron-environment-ready', { electronIsDev });
 
     const createStore = loadBootModule('./store', () => (require('./store') as typeof import('./store')).default);
