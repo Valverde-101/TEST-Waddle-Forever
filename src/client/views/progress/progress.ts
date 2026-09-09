@@ -1,7 +1,7 @@
 import path from 'path'
 import { app, BrowserWindow, dialog } from "electron";
 
-function createProgressBarWindow(prompt: string) {
+export async function createProgressBarWindow() {
   const progressBarWindow = new BrowserWindow({
       width: 300,
       height: 200,
@@ -36,13 +36,15 @@ function createProgressBarWindow(prompt: string) {
     }
   })
 
-  progressBarWindow.loadFile(path.join(__dirname, 'progress.html'));
-  
-  progressBarWindow.on('ready-to-show', () => {
-    progressBarWindow.webContents.send('prompt-name', prompt)
-  })
+  await progressBarWindow.loadFile(path.join(__dirname, 'progress.html'));
 
   return progressBarWindow
+}
+
+export function setPrompt(prompt: string, window: BrowserWindow) {
+  if (window && !window.isDestroyed()) {
+    window.webContents.send('prompt-name', prompt);
+  }
 }
 
 function setProgress(value: number, window: BrowserWindow) {
@@ -53,33 +55,13 @@ function setProgress(value: number, window: BrowserWindow) {
 
 export type ProgressCallback = (progress: number) => void
 
-export async function showProgress(message: string, task: (progress: ProgressCallback, end: () => void) => Promise<boolean>): Promise<boolean> {
-  const progressWin = createProgressBarWindow(message)
+export async function showProgress(progressWin: BrowserWindow, task: (progress: ProgressCallback, end: () => void) => Promise<boolean>): Promise<boolean> {
   let lastUpdate = Date.now();
-  let ended = false;
-
-  const end = () => {
-    if (ended) {
-      return;
+  return await task((progress: number) => {
+    const cur = Date.now();
+    if (cur > lastUpdate + 1000) {
+      lastUpdate = cur
+      setProgress(progress, progressWin)
     }
-    ended = true;
-    // destroy, not close, otherwise we'll trigger the confirmation popup.
-    if (!progressWin.isDestroyed()) {
-      progressWin.destroy();
-    }
-  };
-
-  try {
-    return await task((progress: number) => {
-      const cur = Date.now();
-      if (cur > lastUpdate + 1000) {
-        lastUpdate = cur
-        setProgress(progress, progressWin)
-      }
-    }, end)
-  } finally {
-    // A failed HTTP request, file-system error or unzip exception must never
-    // strand the progress window and block the first-run flow.
-    end();
-  }
+  }, () => {})
 }

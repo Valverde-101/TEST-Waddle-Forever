@@ -6,7 +6,7 @@ import { MODS_DIRECTORY } from '@common/paths';
 import { FileGenerator, getGeneratorsMap, postGeneratorsMap } from '@server/file-generators';
 import { MEDIA_DIRECTORY, readFile, toForwardSlash } from '@common/utils';
 import { SettingsManager } from '@server/settings';
-import { FileOverrider, OVERRIDERS } from './overriders';
+import { FileOverrider, OVERRIDERS, REGEX_OVERRIDERS } from './overriders';
 import { getYellowString, logverbose } from '@server/logger';
 import { publishWaddleLiveTrace } from '@common/live-trace';
 
@@ -14,10 +14,6 @@ const normalizeRequestRoute = (rawRoute: string): string | undefined => {
   if (rawRoute.includes('\0')) return undefined;
 
   const route = toForwardSlash(rawRoute);
-  // Express normally removes the leading slash from req.params[0], but reject
-  // absolute/UNC/drive-qualified inputs here as a second boundary. Reject dot
-  // segments instead of normalizing them so traversal attempts are observable
-  // failures rather than aliases for a different file.
   if (route.startsWith('/') || /^[A-Za-z]:\//.test(route)) return undefined;
   const segments = route.split('/');
   if (segments.some(segment => segment === '.' || segment === '..')) return undefined;
@@ -57,26 +53,20 @@ const traceFileResolution = (
 
 /** Server that serves files to the game webpage and files in the game */
 export class FileServer {
-  /** Maps file route -> name of the mod that is using this route */
   private modFiles = new Map<string, string>();
-
   private overrider: FileOverrider;
-
-  private dynamicFiles: Map<string, FileGenerator>
-
-  private postGenerators: Map<string, FileGenerator>
+  private dynamicFiles: Map<string, FileGenerator>;
+  private postGenerators: Map<string, FileGenerator>;
 
   constructor(private gameData: GameData, private settings: SettingsManager) {
     this.dynamicFiles = getGeneratorsMap();
     this.postGenerators = postGeneratorsMap();
 
     this.updateModFiles();
-    settings.mods.addListener(() => {
-      this.updateModFiles();
-    });
+    settings.mods.addListener(() => this.updateModFiles());
 
-    // todo remove global state
-    this.overrider = new FileOverrider(gameData, settings, OVERRIDERS);
+    // Upstream regex overriders are required for chat[n].swf 30-FPS handling.
+    this.overrider = new FileOverrider(gameData, settings, OVERRIDERS, REGEX_OVERRIDERS);
   }
 
   private updateModFiles() {
@@ -90,13 +80,14 @@ export class FileServer {
           return;
         }
         this.modFiles.set(route, mod.getName());
-      })
+      });
     }
   }
 
   private async getFile(route: string): Promise<Buffer | string | undefined> {
     let filePath: string | undefined;
     const modName = this.modFiles.get(route);
+
     if (modName !== undefined) {
       logverbose(getYellowString(`requesting ${route}, sending MODDED file`));
       filePath = resolveWithinRoot(MODS_DIRECTORY, modName, route);
@@ -157,6 +148,7 @@ export class FileServer {
       });
       throw new Error(`Website root escaped media directory: ${this.gameData.getWebsite()}`);
     }
+
     const websiteFile = resolveWithinRoot(websiteRoot, route);
     if (websiteFile !== undefined && fs.existsSync(websiteFile) && fs.statSync(websiteFile).isFile()) {
       traceFileResolution(route, 'handled', 'resolved-website', {
@@ -177,7 +169,6 @@ export class FileServer {
   public getExpressRouter(): Router {
     const router = Router();
 
-    // generic files (swfs, json, etc.)
     router.get('/*', async (req: Request, res, next) => {
       let route: string | undefined;
       try {
@@ -195,12 +186,8 @@ export class FileServer {
         }
 
         const split = route.split('.');
-        // if less than 1, then there was no file extension
-        // route with no file extension -> a GET request for an HTML file
         const type = split.length < 2 ? '.html' : split.pop();
-        if (type === undefined) {
-          throw new Error('Split somehow returned empty list');
-        }
+        if (type === undefined) throw new Error('Split somehow returned empty list');
 
         const value = await this.overrider.override(route, binary);
         res.status(200).type(type).send(value);
@@ -214,6 +201,7 @@ export class FileServer {
         next(error);
       }
     });
+
     router.post('/*', (req: Request, res, next) => {
       const route = normalizeRequestRoute(req.params[0]);
       if (route === undefined) {
@@ -227,7 +215,10 @@ export class FileServer {
         traceFileResolution(route, 'error', 'post-generator-not-found', { method: 'POST' });
         next();
       } else {
-        traceFileResolution(route, 'handled', 'resolved-post-generator', { method: 'POST', resolver: 'post-generator' });
+        traceFileResolution(route, 'handled', 'resolved-post-generator', {
+          method: 'POST',
+          resolver: 'post-generator'
+        });
         res.send(generator(this.gameData, this.settings));
       }
     });

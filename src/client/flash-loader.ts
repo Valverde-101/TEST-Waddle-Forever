@@ -1,8 +1,8 @@
-import { App } from "electron";
-import fs from "fs";
-import path = require("path");
-import os = require("os");
-import crypto = require("crypto");
+import { App } from 'electron';
+import fs from 'fs';
+import path = require('path');
+import os = require('os');
+import crypto = require('crypto');
 
 const DEFAULT_FLASH_VERSION = '32.0.0.303';
 
@@ -13,20 +13,19 @@ const getPluginName = () => {
     case 'win32':
       switch (process.arch) {
         case 'ia32':
-          pluginName = 'assets/flash/pepflashplayer32_32_0_0_303.dll';
+          pluginName = 'pepflashplayer32_32_0_0_303.dll';
           break;
-
         default:
         case 'x64':
-          pluginName = 'assets/flash/pepflashplayer64_32_0_0_303.dll';
+          pluginName = 'pepflashplayer64_32_0_0_303.dll';
           break;
       }
       break;
     case 'darwin':
-      pluginName = 'assets/flash/PepperFlashPlayer.plugin';
+      pluginName = 'PepperFlashPlayer.plugin';
       break;
     case 'linux':
-      pluginName = 'assets/flash/libpepflashplayer.so';
+      pluginName = 'libpepflashplayer.so';
       break;
     default:
       throw new Error(`Unsupported OS for flash: ${process.platform}`);
@@ -37,16 +36,11 @@ const getPluginName = () => {
 
 const getPluginPath = () => {
   const override = process.env.WADDLE_PPAPI_FLASH_PATH?.trim();
-  if (override) {
-    return path.resolve(override);
-  }
-  return path.join(__dirname, '..', getPluginName());
+  if (override) return path.resolve(override);
+  return path.join(__dirname, '..', 'assets', 'flash', getPluginName());
 };
 
 const hashFile = (filePath: string) => {
-  // latin1 maps every code unit 1:1 to the original byte value. Using a string
-  // here avoids the incompatible Buffer/BinaryLike declarations introduced by
-  // the project's mixed Electron-10 and modern TypeScript type packages.
   const bytes = fs.readFileSync(filePath, { encoding: 'latin1' });
   return crypto.createHash('sha256').update(bytes, 'latin1').digest('hex').toUpperCase();
 };
@@ -60,11 +54,6 @@ const getWindowsFlashCacheRoot = () => {
 const prepareRuntimePlugin = (sourcePath: string, flashVersion: string) => {
   const sourceHash = hashFile(sourcePath);
 
-  // Chromium/Electron can execute the application itself from a mapped SMB
-  // repository while still refusing to load a PPAPI DLL from that network
-  // location. Keep the repository DLL authoritative, but stage exactly that
-  // one binary into a hash-addressed local cache before Chromium starts.
-  // Electron, node_modules, compiled JS, SWFs and media remain in the repo.
   if (process.platform !== 'win32') {
     return {
       sourcePath,
@@ -99,9 +88,7 @@ const prepareRuntimePlugin = (sourcePath: string, flashVersion: string) => {
       if (temporaryHash !== sourceHash) {
         throw new Error(`Pepper Flash cache verification failed: source=${sourceHash} staged=${temporaryHash}`);
       }
-      if (fs.existsSync(runtimePath)) {
-        fs.unlinkSync(runtimePath);
-      }
+      if (fs.existsSync(runtimePath)) fs.unlinkSync(runtimePath);
       fs.renameSync(temporaryPath, runtimePath);
       copied = true;
     } finally {

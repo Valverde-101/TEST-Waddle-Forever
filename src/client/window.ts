@@ -1,28 +1,28 @@
 import path from 'path';
-import { BrowserWindow, shell } from "electron";
-import { Store } from "./store";
-import { checkUpdates } from "./update";
+import { BrowserWindow, shell } from 'electron';
+import { Store } from './store';
+import { checkUpdates } from './update';
 import { GlobalSettings } from '../common/utils';
 import { SettingsManager } from '../server/settings';
 import { getSiteUrl } from './views/multiplayer/multiplayer';
 import { instrumentRuntimeWindow } from './runtime-diagnostics';
 import { installWaddleDiagnosticPanel } from './diagnostic-panel';
 
+const faviconPaths: Record<string, string> = {
+  win32: '../assets/favicon.ico',
+  darwin: '../assets/icon.png',
+  linux: '../assets/icon.png'
+};
+
 export const toggleFullScreen = (store: Store, mainWindow: BrowserWindow) => {
-  const fullScreen = !store.private.get("fullScreen");
-
-  store.private.set("fullScreen", fullScreen);
-
+  const fullScreen = !store.private.get('fullScreen');
+  store.private.set('fullScreen', fullScreen);
   mainWindow.setFullScreen(fullScreen);
 };
 
 export const loadMain = async (window: BrowserWindow, settings: GlobalSettings, serverSettings: SettingsManager): Promise<void> => {
   await window.loadURL(getSiteUrl(settings, serverSettings));
-}
-
-interface FiveIconByPlatforms {
-  [key: string]: () => void;
-}
+};
 
 const isInternalNavigation = (url: string, clientSettings: GlobalSettings, serverSettings: SettingsManager) => {
   try {
@@ -34,49 +34,29 @@ const isInternalNavigation = (url: string, clientSettings: GlobalSettings, serve
   }
 };
 
-const createWindow = async (store: Store, clientSettings: GlobalSettings, serverSettings: SettingsManager) => {
-  // Keep the game window hidden only while its local page is loading. On SMB
-  // clients Chromium can otherwise create a nominal BrowserWindow while the
-  // renderer/profile is still settling, leaving a background/off-screen window
-  // even though the launcher later observes a healthy Flash object.
+export const createWindow = async (store: Store, clientSettings: GlobalSettings, serverSettings: SettingsManager) => {
   const mainWindow = new BrowserWindow({
     width: 1280,
     height: 720,
     show: false,
-    title: "Loading...",
+    title: 'Loading...',
     webPreferences: {
-      plugins: true,
-    },
+      plugins: true
+    }
   });
 
-  // Instrument before loadURL. Attaching after createWindow returned meant the
-  // initial Club Penguin HTML/SWF/XML burst had already completed, so the most
-  // important boot-time resource requests never reached diagnostics or DevTools.
+  // Must happen before loadURL so the initial SWF/XML/JSON burst is visible.
   instrumentRuntimeWindow(mainWindow, 'main');
-
-  // Register before loadURL so both the first game document and any later Flash
-  // reloads get the diagnostic controls. createWindow does not return until the
-  // first real renderer proves that all controls and the result bridge exist.
   const diagnosticPanelReady = installWaddleDiagnosticPanel(mainWindow);
 
-  const setFaviconByPlatform: FiveIconByPlatforms = {
-    win32: () => {
-      mainWindow.setIcon(path.join(__dirname, "../assets/favicon.ico"));
-    },
-    darwin: () => {
-      mainWindow.setIcon(path.join(__dirname, "../assets/icon.png"));
-    },
-    linux: () => {
-      mainWindow.setIcon(path.join(__dirname, "../assets/icon.png"));
-    },
-  };
-  
-  setFaviconByPlatform[process.platform]();
-  
+  const favicon = faviconPaths[process.platform];
+  if (favicon !== undefined) {
+    mainWindow.setIcon(path.join(__dirname, favicon));
+  }
+
   mainWindow.setMenu(null);
 
-  // Update discovery is advisory. Network/API cleanup errors must never become
-  // an unhandled rejection that destabilizes an otherwise fully offline boot.
+  // Update discovery is advisory. Offline/API errors must not destabilize boot.
   void checkUpdates(mainWindow, serverSettings).catch(error => {
     console.warn('Update check failed:', error);
   });
@@ -84,12 +64,7 @@ const createWindow = async (store: Store, clientSettings: GlobalSettings, server
   await loadMain(mainWindow, clientSettings, serverSettings);
   await diagnosticPanelReady;
 
-  // Presentation is explicit and occurs only after loadURL and the in-game
-  // diagnostic panel both resolve. This makes main-window-ready downstream imply
-  // that the visible support UI was actually injected, not merely compiled.
-  if (mainWindow.isMinimized()) {
-    mainWindow.restore();
-  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.center();
   mainWindow.show();
   mainWindow.maximize();
@@ -100,16 +75,8 @@ const createWindow = async (store: Store, clientSettings: GlobalSettings, server
   }
   console.log(`WADDLE_MAIN_WINDOW_PRESENTATION=PASS visible=${mainWindow.isVisible()} focused=${mainWindow.isFocused()} minimized=${mainWindow.isMinimized()}`);
 
-  // Only the exact Waddle server origin is allowed to navigate inside the
-  // privileged Electron window. The previous substring check required a URL to
-  // contain both "localhost" and targetIP (normally 127.0.0.1), so legitimate
-  // internal navigation was frequently misclassified as external. Exact origin
-  // comparison also avoids treating attacker-controlled hostnames that merely
-  // contain a trusted substring as internal.
   const guardNavigation = (event: Electron.Event, url: string) => {
-    if (isInternalNavigation(url, clientSettings, serverSettings)) {
-      return;
-    }
+    if (isInternalNavigation(url, clientSettings, serverSettings)) return;
 
     event.preventDefault();
     try {

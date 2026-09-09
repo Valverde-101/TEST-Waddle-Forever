@@ -1,67 +1,69 @@
-import { BrowserWindow, ipcMain } from "electron";
-import electronIsDev from "electron-is-dev";
-import path from "path";
+import { BrowserWindow, ipcMain } from 'electron';
+import electronIsDev from 'electron-is-dev';
+import path from 'path';
 import fs from 'fs';
-import { downloadMediaFolder } from "@client/media";
-import { MEDIA_DIRECTORY } from "@common/utils";
-import { getPopupCreator } from "@client/popups";
-import { SettingsManager } from "@server/settings";
-import { WorldServer } from "@server/socket-server/world-server";
+import { destroyProgressWindow, downloadMediaFolder } from '@client/media';
+import { MEDIA_DIRECTORY } from '@common/utils';
+import { getPopupCreator } from '@client/popups';
+import { SettingsManager } from '@server/settings';
+import { WorldServer } from '@server/socket-server/world-server';
 
-export const createSettingsWindow = getPopupCreator('settings', ['download-package', 'delete-package', 'reload-window', 'clear-cache', 'reload-cache', 'update-settings'], (mainWindow: BrowserWindow, settings: SettingsManager, server: WorldServer) => {
-  const settingsWindow = new BrowserWindow({
-    width: 500,
-    height: 500,
-    title: "Settings",
-    webPreferences: {
-      preload: path.join(__dirname, 'settings-preload.js')
-    },
-    resizable: false
-  });
-
-  settingsWindow.setMenu(null);
-
-  settingsWindow.loadFile(path.join(__dirname, 'settings.html'));
-
-  ipcMain.on('download-package', (_e, arg) => {
-    void downloadMediaFolder(arg, () => {
-      settingsWindow.webContents.send('finish-download', arg)
-    }, () => {
-      settingsWindow.webContents.send('download-fail')
+export const createSettingsWindow = getPopupCreator(
+  'settings',
+  ['download-package', 'delete-package', 'reload-window', 'clear-cache', 'reload-cache', 'update-settings'],
+  (mainWindow: BrowserWindow, settings: SettingsManager, server: WorldServer) => {
+    const settingsWindow = new BrowserWindow({
+      width: 500,
+      height: 500,
+      title: 'Settings',
+      webPreferences: {
+        preload: path.join(__dirname, 'settings-preload.js')
+      },
+      resizable: false
     });
-  })
 
-  ipcMain.on('delete-package', (_e, arg) => {
-    // must not remove packages in development, as that would greatly disturb git
-    if (!electronIsDev) {
-      fs.rmdirSync(path.join(MEDIA_DIRECTORY, arg), { recursive: true })
-    }
-    settingsWindow.webContents.send('finish-deleting', arg)
-  })
+    settingsWindow.setMenu(null);
+    void settingsWindow.loadFile(path.join(__dirname, 'settings.html'));
 
-  ipcMain.on('reload-window', () => {
-    mainWindow.reload();
-  })
+    ipcMain.on('download-package', (_e, arg) => {
+      void downloadMediaFolder(arg, () => {
+        destroyProgressWindow();
+        if (!settingsWindow.isDestroyed()) settingsWindow.webContents.send('finish-download', arg);
+      }, () => {
+        destroyProgressWindow();
+        if (!settingsWindow.isDestroyed()) settingsWindow.webContents.send('download-fail');
+      });
+    });
 
-  ipcMain.on('clear-cache', () => {
-    void mainWindow.webContents.session.clearCache();
-  })
+    ipcMain.on('delete-package', (_e, arg) => {
+      if (!electronIsDev) {
+        fs.rmSync(path.join(MEDIA_DIRECTORY, arg), { recursive: true, force: true });
+      }
+      if (!settingsWindow.isDestroyed()) settingsWindow.webContents.send('finish-deleting', arg);
+    });
 
-  ipcMain.on('reload-cache', () => {
-    mainWindow.webContents.reloadIgnoringCache();
-  })
+    ipcMain.on('reload-window', () => {
+      mainWindow.reload();
+    });
 
-  ipcMain.on('update-settings', (_, arg) => {
-    const { settings: s, reset } = arg;
-    if (reset === true) {
-      server.reset();
-    }
-    settings.updateSettings(s);
-  });
+    ipcMain.on('clear-cache', () => {
+      void mainWindow.webContents.session.clearCache();
+    });
 
-  settingsWindow.webContents.on('did-finish-load', () => {
-    settingsWindow.webContents.send('get-settings', settings.settings);
-  });
+    ipcMain.on('reload-cache', () => {
+      mainWindow.webContents.reloadIgnoringCache();
+    });
 
-  return settingsWindow;
-});
+    ipcMain.on('update-settings', (_, arg) => {
+      const { settings: nextSettings, reset } = arg;
+      if (reset === true) server.reset();
+      settings.updateSettings(nextSettings);
+    });
+
+    settingsWindow.webContents.on('did-finish-load', () => {
+      settingsWindow.webContents.send('get-settings', settings.settings);
+    });
+
+    return settingsWindow;
+  }
+);
