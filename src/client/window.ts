@@ -45,28 +45,9 @@ export const createWindow = async (store: Store, clientSettings: GlobalSettings,
     }
   });
 
-  // Network/live-trace instrumentation remains active before loadURL so the
+  // Network/live-trace instrumentation remains active before navigation so the
   // initial SWF/XML/JSON burst is never lost.
   instrumentRuntimeWindow(mainWindow, 'main');
-
-  // The diagnostic panel used to start its 10s readiness timer immediately at
-  // BrowserWindow construction. On slow SMB/module startup that timer could
-  // expire before the renderer had even reached DOM-ready, producing an
-  // unhandled rejection while loadURL was still legitimately in progress.
-  // Arm panel readiness from the renderer lifecycle instead. The panel still
-  // hooks did-finish-load before it can fire, and the rejection is converted to
-  // a settled result immediately so it cannot become an unhandled Promise.
-  let diagnosticPanelReady: Promise<{ ok: true } | { ok: false; error: unknown }> | null = null;
-  mainWindow.webContents.once('dom-ready', () => {
-    writeRuntimeDiagnostic('diagnostic-panel-install-trigger', {
-      lifecycle: 'dom-ready',
-      url: mainWindow.webContents.getURL()
-    });
-    diagnosticPanelReady = installWaddleDiagnosticPanel(mainWindow).then(
-      () => ({ ok: true as const }),
-      error => ({ ok: false as const, error })
-    );
-  });
 
   const favicon = faviconPaths[process.platform];
   if (favicon !== undefined) {
@@ -75,35 +56,8 @@ export const createWindow = async (store: Store, clientSettings: GlobalSettings,
 
   mainWindow.setMenu(null);
 
-  // Update discovery is advisory. Offline/API errors must not destabilize boot.
-  void checkUpdates(mainWindow, serverSettings).catch(error => {
-    console.warn('Update check failed:', error);
-  });
-
-  await loadMain(mainWindow, clientSettings, serverSettings);
-  if (!diagnosticPanelReady) {
-    throw new Error('WADDLE_DIAGNOSTIC_PANEL=FAIL dom_ready_not_observed');
-  }
-  const diagnosticResult = await diagnosticPanelReady;
-  // Use property-existence narrowing instead of boolean-discriminant narrowing.
-  // The build intentionally validates with TypeScript 7, whose control-flow
-  // analysis around a Promise assigned from an Electron lifecycle callback did
-  // not narrow the union reliably at this site.
-  if ('error' in diagnosticResult) {
-    throw diagnosticResult.error;
-  }
-
-  if (mainWindow.isMinimized()) mainWindow.restore();
-  mainWindow.center();
-  mainWindow.show();
-  mainWindow.maximize();
-  mainWindow.focus();
-
-  if (!mainWindow.isVisible()) {
-    throw new Error('WADDLE_MAIN_WINDOW_PRESENTATION=FAIL window_not_visible_after_show');
-  }
-  console.log(`WADDLE_MAIN_WINDOW_PRESENTATION=PASS visible=${mainWindow.isVisible()} focused=${mainWindow.isFocused()} minimized=${mainWindow.isMinimized()}`);
-
+  // Navigation protection must be in place before the first load starts. This
+  // keeps the early-return startup path just as strict as the old awaited path.
   const guardNavigation = (event: Electron.Event, url: string) => {
     if (isInternalNavigation(url, clientSettings, serverSettings)) return;
 
@@ -120,6 +74,69 @@ export const createWindow = async (store: Store, clientSettings: GlobalSettings,
 
   mainWindow.webContents.on('will-navigate', guardNavigation);
   mainWindow.webContents.on('will-redirect', guardNavigation);
+
+  // The legacy Flash page can keep Electron's loadURL()/did-finish-load
+  // lifecycle pending for a long time even though the local HTTP server is
+  // already serving the document successfully. On SMB that previously left
+  // BrowserWindow hidden behind show:false, createWindow never returned, and
+  // the external Play watchdog killed a healthy Electron process after 90s.
+  //
+  // Presentation is therefore decoupled from full document completion. The
+  // authoritative startup gate remains in main.ts: main-window-ready is emitted
+  // only after waitForFlashRuntime confirms the PPAPI plugin, MIME type and SWF
+  // object. Returning here early cannot turn a broken Flash runtime into PASS.
+  void loadMain(mainWindow, clientSettings, serverSettings).then(() => {
+    writeRuntimeDiagnostic('main-navigation-complete', {
+      url: mainWindow.webContents.getURL()
+    });
+  }).catch(error => {
+    writeRuntimeDiagnostic('main-navigation-failed', {
+      error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+      url: mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()
+        ? ''
+        : mainWindow.webContents.getURL()
+    });
+  });
+
+  // Diagnostics must never be allowed to prevent the game window from opening.
+  // Arm the panel when a renderer DOM exists, but keep installation strictly
+  // best-effort. The panel's own 10s did-finish-load readiness timeout is useful
+  // evidence, not a prerequisite for presenting or validating the game.
+  mainWindow.webContents.once('dom-ready', () => {
+    writeRuntimeDiagnostic('renderer-dom-ready', {
+      url: mainWindow.webContents.getURL()
+    });
+    void installWaddleDiagnosticPanel(mainWindow).catch(error => {
+      writeRuntimeDiagnostic('diagnostic-panel-nonblocking-failure', {
+        error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+        url: mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()
+          ? ''
+          : mainWindow.webContents.getURL()
+      });
+    });
+  });
+
+  // Update discovery is advisory. Offline/API errors must not destabilize boot.
+  void checkUpdates(mainWindow, serverSettings).catch(error => {
+    console.warn('Update check failed:', error);
+  });
+
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.center();
+  mainWindow.show();
+  mainWindow.maximize();
+  mainWindow.focus();
+
+  if (!mainWindow.isVisible()) {
+    throw new Error('WADDLE_MAIN_WINDOW_PRESENTATION=FAIL window_not_visible_after_show');
+  }
+  console.log(`WADDLE_MAIN_WINDOW_PRESENTATION=PASS visible=${mainWindow.isVisible()} focused=${mainWindow.isFocused()} minimized=${mainWindow.isMinimized()}`);
+  writeRuntimeDiagnostic('main-window-presented', {
+    visible: mainWindow.isVisible(),
+    focused: mainWindow.isFocused(),
+    minimized: mainWindow.isMinimized(),
+    navigationPending: mainWindow.webContents.isLoading()
+  });
 
   return mainWindow;
 };
