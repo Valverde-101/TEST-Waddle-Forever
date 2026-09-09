@@ -2,32 +2,45 @@ import { runtimeDiagnosticPath, writeRuntimeDiagnostic } from './runtime-diagnos
 import '@common/runtime-node-path';
 
 import { app, BrowserWindow, dialog, Menu, shell } from 'electron';
-import log from 'electron-log';
-import { startDiscordRPC } from './discord';
-import loadFlashPlugin from './flash-loader';
-import startMenu from './menu';
-import createStore from './store';
-import { createWindow } from './window';
-import settingsManager from '@server/settings';
-import { showWarning } from './warning';
-import { setLanguageInStore } from './discord/localization/localization';
-import electronIsDev from 'electron-is-dev';
-import { AdminError, destroyProgressWindow, progressWindow, startMedia } from './media';
-import { GlobalSettings } from '@common/utils';
-import { NAME, VERSION, WEBSITE } from '@common/constants';
-import { Popups } from './popups';
-import { WorldServer } from '@server/socket-server/world-server';
-import { startMods, startServices } from '@server/boot';
+import type { GlobalSettings } from '@common/utils';
+import type { Popups } from './popups';
+import type { Store } from './store';
+import type { SettingsManager } from '@server/settings';
+import type { WorldServer } from '@server/socket-server/world-server';
 
-log.initialize();
-console.log = log.log;
+writeRuntimeDiagnostic('diagnostics-ready', { path: runtimeDiagnosticPath, bootstrap: 'staged-module-loading' });
 
-writeRuntimeDiagnostic('diagnostics-ready', { path: runtimeDiagnosticPath });
+const loadBootModule = <T>(name: string, loader: () => T): T => {
+  const started = Date.now();
+  writeRuntimeDiagnostic('boot-module-load-begin', { module: name });
+  try {
+    const loaded = loader();
+    writeRuntimeDiagnostic('boot-module-load-complete', {
+      module: name,
+      durationMs: Date.now() - started
+    });
+    return loaded;
+  } catch (error) {
+    writeRuntimeDiagnostic('boot-module-load-failed', {
+      module: name,
+      durationMs: Date.now() - started,
+      error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+    });
+    throw error;
+  }
+};
 
-const store = createStore();
+// Only the runtime diagnostics, module-path bootstrap and Electron itself are
+// imported eagerly. Everything else is loaded after diagnostics are writable.
+// This is important on SMB: Node 12 can spend a long time traversing a remote
+// module graph, and previously Waddle-Start had no evidence between
+// runtime-lease-acquired and its 90 second health timeout.
+const constants = loadBootModule('@common/constants', () => require('@common/constants') as typeof import('@common/constants'));
+const loadFlashPlugin = loadBootModule('./flash-loader', () => (require('./flash-loader') as typeof import('./flash-loader')).default);
+
+const { NAME, VERSION, WEBSITE } = constants;
 const nonInteractive = process.env.WADDLE_NONINTERACTIVE === '1';
 
-setLanguageInStore(store, 'en');
 app.setName(NAME);
 app.setAboutPanelOptions({
   applicationName: NAME,
@@ -39,7 +52,7 @@ if (process.platform === 'linux') {
   app.commandLine.appendSwitch('no-sandbox');
 }
 
-let server: WorldServer | null = null;
+// Pepper Flash switches must be installed before Electron reaches ready.
 const flashConfig = loadFlashPlugin(app);
 
 type FlashRuntimeStatus = {
@@ -154,8 +167,6 @@ const waitForFlashRuntime = async (window: BrowserWindow, timeoutMs = 25000): Pr
   throw new Error(`Flash runtime did not become usable within ${timeoutMs}ms; status=${JSON.stringify(lastStatus)} lastError=${lastError}`);
 };
 
-let mainWindow: BrowserWindow;
-
 const globalSettings: GlobalSettings = {
   multiplayer: { type: 'local' }
 };
@@ -165,189 +176,230 @@ const popups: Popups = new Map<string, BrowserWindow>();
 app.once('ready', async () => {
   writeRuntimeDiagnostic('electron-ready', {
     nonInteractive,
-    electronIsDev
+    bootstrap: 'staged-module-loading'
   });
 
-  if (process.platform === 'darwin') {
-    // While setup/media work is running, expose only the native app menu.
-    Menu.setApplicationMenu(Menu.buildFromTemplate([{ id: '0', role: 'appMenu' }]));
-  }
+  let store: Store | null = null;
+  let settingsManager: SettingsManager | null = null;
+  let server: WorldServer | null = null;
+  let mainWindow: BrowserWindow | null = null;
 
   try {
-    writeRuntimeDiagnostic('media-start-begin', { electronIsDev });
-    await startMedia();
-    writeRuntimeDiagnostic('media-start-complete', { electronIsDev });
-  } catch (error) {
-    writeRuntimeDiagnostic('media-start-failed', {
-      error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
-    });
+    const log = loadBootModule('electron-log', () => (require('electron-log') as typeof import('electron-log')).default);
+    log.initialize();
+    console.log = log.log;
 
-    if (nonInteractive) {
-      destroyProgressWindow();
+    const electronIsDev = loadBootModule('electron-is-dev', () => (require('electron-is-dev') as typeof import('electron-is-dev')).default);
+    writeRuntimeDiagnostic('electron-environment-ready', { electronIsDev });
+
+    const createStore = loadBootModule('./store', () => (require('./store') as typeof import('./store')).default);
+    store = createStore();
+
+    const localization = loadBootModule('./discord/localization/localization', () => require('./discord/localization/localization') as typeof import('./discord/localization/localization'));
+    localization.setLanguageInStore(store, 'en');
+
+    settingsManager = loadBootModule('@server/settings', () => (require('@server/settings') as typeof import('@server/settings')).default);
+    const media = loadBootModule('./media', () => require('./media') as typeof import('./media'));
+
+    if (process.platform === 'darwin') {
+      Menu.setApplicationMenu(Menu.buildFromTemplate([{ id: '0', role: 'appMenu' }]));
+    }
+
+    try {
+      writeRuntimeDiagnostic('media-start-begin', { electronIsDev });
+      await media.startMedia();
+      writeRuntimeDiagnostic('media-start-complete', { electronIsDev });
+    } catch (error) {
+      writeRuntimeDiagnostic('media-start-failed', {
+        error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+      });
+
+      if (nonInteractive) {
+        media.destroyProgressWindow();
+        app.quit();
+        return;
+      }
+
+      const win = await media.progressWindow();
+      if (error instanceof media.AdminError) {
+        await dialog.showMessageBox(win, {
+          buttons: ['Ok'],
+          title: 'Permission Error',
+          message: 'Waddle Forever could not initiate the files. Please run Waddle Forever as an administrator to fix this issue.'
+        });
+      } else {
+        const message = error instanceof Error ? `${error.name}:${error.message}\n${error.stack}` : 'Unknown';
+        await dialog.showMessageBox(win, {
+          buttons: ['Ok'],
+          title: 'Download Error',
+          message: `It was not possible to finish the installation.\nPlease check your internet connection, and if the problem persists contact the Waddle Forever admins.\n\nShow this to the admins:\n${message}`
+        });
+      }
+      media.destroyProgressWindow();
       app.quit();
       return;
     }
 
-    const win = await progressWindow();
-    if (error instanceof AdminError) {
-      await dialog.showMessageBox(win, {
-        buttons: ['Ok'],
-        title: 'Permission Error',
-        message: 'Waddle Forever could not initiate the files. Please run Waddle Forever as an administrator to fix this issue.'
+    // Load the server graph only after Electron is ready and media has been
+    // validated. On a mapped SMB repository this keeps expensive module graph
+    // traversal observable instead of blocking silently before electron-ready.
+    const serverBoot = loadBootModule('@server/boot', () => require('@server/boot') as typeof import('@server/boot'));
+    const failedMods = serverBoot.startMods();
+    if (failedMods.length > 0) {
+      writeRuntimeDiagnostic('mods-failed', { mods: failedMods.join(',') });
+    }
+
+    try {
+      writeRuntimeDiagnostic('services-start-begin');
+      server = await serverBoot.startServices();
+      writeRuntimeDiagnostic('services-started');
+    } catch (error) {
+      writeRuntimeDiagnostic('services-start-failed', {
+        error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
       });
-    } else {
-      const message = error instanceof Error ? `${error.name}:${error.message}\n${error.stack}` : 'Unknown';
-      await dialog.showMessageBox(win, {
-        buttons: ['Ok'],
-        title: 'Download Error',
-        message: `It was not possible to finish the installation.\nPlease check your internet connection, and if the problem persists contact the Waddle Forever admins.\n\nShow this to the admins:\n${message}`
+
+      if (nonInteractive) {
+        throw error;
+      }
+
+      if (error instanceof Error && error.message.includes('EADDRINUSE')) {
+        const win = await media.progressWindow();
+        const result = await dialog.showMessageBox(win, {
+          type: 'question',
+          buttons: ['Boot Serverless', 'Check out error'],
+          title: 'Server Error',
+          message: `Another process is already using the designated ports.\n\nIf you want, you can boot Waddle Forever without its server, but this is only useful if you have another Waddle Forever client running already.\n\nSelect 'Boot Serverless' to ignore this error, or check out the error to see the details (this option will terminate the program).`,
+          defaultId: 1,
+          cancelId: 0
+        });
+
+        if (result.response === 1) {
+          const warning = loadBootModule('./warning', () => require('./warning') as typeof import('./warning'));
+          await warning.showWarning(win, 'Error', error.message + '\n' + error.stack);
+          media.destroyProgressWindow();
+          app.quit();
+          return;
+        }
+      } else {
+        throw error;
+      }
+    }
+
+    const windowModule = loadBootModule('./window', () => require('./window') as typeof import('./window'));
+    writeRuntimeDiagnostic('main-window-create-begin');
+    mainWindow = await windowModule.createWindow(store, globalSettings, settingsManager);
+
+    media.destroyProgressWindow();
+
+    await mainWindow.webContents.session.clearHostResolverCache();
+
+    try {
+      const flashRuntime = await waitForFlashRuntime(mainWindow);
+      writeRuntimeDiagnostic('flash-runtime-ready', {
+        pluginName: flashRuntime.pluginName,
+        pluginFilename: flashRuntime.pluginFilename,
+        mimeType: flashRuntime.mimeType,
+        objectPresent: flashRuntime.objectPresent,
+        scriptable: flashRuntime.scriptable,
+        sourcePath: flashConfig.sourcePath,
+        runtimePath: flashConfig.runtimePath,
+        sha256: flashConfig.sha256,
+        mode: flashConfig.mode,
+        copied: flashConfig.copied,
+        url: mainWindow.webContents.getURL()
+      });
+    } catch (error) {
+      writeRuntimeDiagnostic('flash-runtime-missing', {
+        error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+        sourcePath: flashConfig.sourcePath,
+        runtimePath: flashConfig.runtimePath,
+        sha256: flashConfig.sha256,
+        mode: flashConfig.mode,
+        copied: flashConfig.copied,
+        url: mainWindow.webContents.getURL()
+      });
+      throw error;
+    }
+
+    writeRuntimeDiagnostic('main-window-ready', {
+      url: mainWindow.webContents.getURL(),
+      flashRuntime: true,
+      flashRuntimePath: flashConfig.runtimePath,
+      flashMode: flashConfig.mode
+    });
+
+    // Menu/Discord pull a broad UI and protocol graph. They are important, but
+    // they are not prerequisites for showing the already healthy game window.
+    // Defer them until after main-window-ready so a slow SMB require cannot make
+    // Waddle appear completely dead or trip the Play health gate.
+    const startMenu = loadBootModule('./menu', () => (require('./menu') as typeof import('./menu')).default);
+    startMenu(store, mainWindow, globalSettings, settingsManager, popups, server);
+    writeRuntimeDiagnostic('main-menu-ready');
+
+    if (!electronIsDev) {
+      const discord = loadBootModule('./discord', () => require('./discord') as typeof import('./discord'));
+      discord.startDiscordRPC(store, mainWindow);
+      writeRuntimeDiagnostic('discord-rpc-started');
+    }
+
+    mainWindow.on('closed', () => {
+      popups.forEach(win => win.close());
+    });
+
+    if (!settingsManager.settings.faq_warning) {
+      if (nonInteractive) {
+        settingsManager.updateSettings({ faq_warning: true });
+        writeRuntimeDiagnostic('first-run-faq-skipped', { reason: 'noninteractive' });
+      } else {
+        const result = await dialog.showMessageBox(mainWindow, {
+          buttons: ['Take me to the FAQ', 'Understood'],
+          title: 'Heads-Up!',
+          message: `Welcome to Waddle Forever! If you know nothing about this client, you might be confused about some things:\n- You don't need to create an account, just log in with any name or password\n- The game is entirely offline\n- You can choose the day in the timeline, use commands, and more through the menu\n\nThese are the most important things, but there is a full list of questions in our FAQ. If you're ever lost, you can read it in our website.`,
+          cancelId: 1
+        });
+
+        if (result.response === 0 || result.response === 1) {
+          if (result.response === 0) void shell.openExternal(`${WEBSITE}/faq`);
+          settingsManager.updateSettings({ faq_warning: true });
+        }
+      }
+    }
+
+    if (failedMods.length > 0 && !nonInteractive) {
+      await dialog.showMessageBox(mainWindow, {
+        buttons: ['OK'],
+        title: 'Error with Mods',
+        message: `The following mods could not be turned on. Please fix them and then try enabling them again:\n\n${failedMods.map(mod => `* ${mod}`).join('\n')}`
       });
     }
-    destroyProgressWindow();
-    app.quit();
-    return;
-  }
 
-  const failedMods = startMods();
-  if (failedMods.length > 0) {
-    writeRuntimeDiagnostic('mods-failed', { mods: failedMods.join(',') });
-  }
+    app.on('window-all-closed', async () => {
+      if (process.platform !== 'darwin') {
+        try {
+          const discordClient = store?.private.get('discordState')?.client;
+          if (discordClient) await discordClient.destroy();
+        } finally {
+          writeRuntimeDiagnostic('window-all-closed');
+          app.quit();
+          process.exit(0);
+        }
+      }
+    });
 
-  try {
-    writeRuntimeDiagnostic('services-start-begin');
-    server = await startServices();
-    writeRuntimeDiagnostic('services-started');
+    app.on('activate', async () => {
+      if (BrowserWindow.getAllWindows().length === 0 && store && settingsManager) {
+        mainWindow = await windowModule.createWindow(store, globalSettings, settingsManager);
+        startMenu(store, mainWindow, globalSettings, settingsManager, popups, server);
+      }
+    });
   } catch (error) {
-    writeRuntimeDiagnostic('services-start-failed', {
+    writeRuntimeDiagnostic('bootstrap-failed', {
       error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
     });
-
-    if (nonInteractive) {
-      throw error;
+    if (!nonInteractive) {
+      const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+      dialog.showErrorBox('Waddle Forever startup failed', `${message}\n\nSee: ${runtimeDiagnosticPath}`);
     }
-
-    if (error instanceof Error && error.message.includes('EADDRINUSE')) {
-      const win = await progressWindow();
-      const result = await dialog.showMessageBox(win, {
-        type: 'question',
-        buttons: ['Boot Serverless', 'Check out error'],
-        title: 'Server Error',
-        message: `Another process is already using the designated ports.\n\nIf you want, you can boot Waddle Forever without its server, but this is only useful if you have another Waddle Forever client running already.\n\nSelect 'Boot Serverless' to ignore this error, or check out the error to see the details (this option will terminate the program).`,
-        defaultId: 1,
-        cancelId: 0
-      });
-
-      if (result.response === 1) {
-        await showWarning(win, 'Error', error.message + '\n' + error.stack);
-        destroyProgressWindow();
-        app.quit();
-        return;
-      }
-    } else {
-      throw error;
-    }
-  }
-
-  writeRuntimeDiagnostic('main-window-create-begin');
-  mainWindow = await createWindow(store, globalSettings, settingsManager);
-
-  // The upstream media flow reuses one setup/progress window for every phase.
-  // Destroy it only after the real game window exists, which also avoids the
-  // Windows behavior where closing the last window can terminate Electron.
-  destroyProgressWindow();
-
-  await mainWindow.webContents.session.clearHostResolverCache();
-  startMenu(store, mainWindow, globalSettings, settingsManager, popups, server);
-
-  if (!electronIsDev) {
-    startDiscordRPC(store, mainWindow);
-  }
-
-  try {
-    const flashRuntime = await waitForFlashRuntime(mainWindow);
-    writeRuntimeDiagnostic('flash-runtime-ready', {
-      pluginName: flashRuntime.pluginName,
-      pluginFilename: flashRuntime.pluginFilename,
-      mimeType: flashRuntime.mimeType,
-      objectPresent: flashRuntime.objectPresent,
-      scriptable: flashRuntime.scriptable,
-      sourcePath: flashConfig.sourcePath,
-      runtimePath: flashConfig.runtimePath,
-      sha256: flashConfig.sha256,
-      mode: flashConfig.mode,
-      copied: flashConfig.copied,
-      url: mainWindow.webContents.getURL()
-    });
-  } catch (error) {
-    writeRuntimeDiagnostic('flash-runtime-missing', {
-      error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
-      sourcePath: flashConfig.sourcePath,
-      runtimePath: flashConfig.runtimePath,
-      sha256: flashConfig.sha256,
-      mode: flashConfig.mode,
-      copied: flashConfig.copied,
-      url: mainWindow.webContents.getURL()
-    });
-    throw error;
-  }
-
-  writeRuntimeDiagnostic('main-window-ready', {
-    url: mainWindow.webContents.getURL(),
-    flashRuntime: true,
-    flashRuntimePath: flashConfig.runtimePath,
-    flashMode: flashConfig.mode
-  });
-
-  mainWindow.on('closed', () => {
-    popups.forEach(win => win.close());
-  });
-
-  // User-facing notices are intentionally shown after the certified game window
-  // is ready so they cannot block Waddle-Start's health gate.
-  if (!settingsManager.settings.faq_warning) {
-    if (nonInteractive) {
-      settingsManager.updateSettings({ faq_warning: true });
-      writeRuntimeDiagnostic('first-run-faq-skipped', { reason: 'noninteractive' });
-    } else {
-      const result = await dialog.showMessageBox(mainWindow, {
-        buttons: ['Take me to the FAQ', 'Understood'],
-        title: 'Heads-Up!',
-        message: `Welcome to Waddle Forever! If you know nothing about this client, you might be confused about some things:\n- You don't need to create an account, just log in with any name or password\n- The game is entirely offline\n- You can choose the day in the timeline, use commands, and more through the menu\n\nThese are the most important things, but there is a full list of questions in our FAQ. If you're ever lost, you can read it in our website.`,
-        cancelId: 1
-      });
-
-      if (result.response === 0 || result.response === 1) {
-        if (result.response === 0) void shell.openExternal(`${WEBSITE}/faq`);
-        settingsManager.updateSettings({ faq_warning: true });
-      }
-    }
-  }
-
-  if (failedMods.length > 0 && !nonInteractive) {
-    await dialog.showMessageBox(mainWindow, {
-      buttons: ['OK'],
-      title: 'Error with Mods',
-      message: `The following mods could not be turned on. Please fix them and then try enabling them again:\n\n${failedMods.map(mod => `* ${mod}`).join('\n')}`
-    });
-  }
-});
-
-app.on('window-all-closed', async () => {
-  if (process.platform !== 'darwin') {
-    try {
-      const discordClient = store.private.get('discordState')?.client;
-      if (discordClient) await discordClient.destroy();
-    } finally {
-      writeRuntimeDiagnostic('window-all-closed');
-      app.quit();
-      process.exit(0);
-    }
-  }
-});
-
-app.on('activate', async () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    mainWindow = await createWindow(store, globalSettings, settingsManager);
-    startMenu(store, mainWindow, globalSettings, settingsManager, popups, server);
+    app.quit();
   }
 });
