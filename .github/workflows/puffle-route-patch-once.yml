@@ -1,0 +1,106 @@
+name: One-shot puffle static route patch
+
+on:
+  push:
+    branches:
+      - fix/runtime-outside-work-20260906
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
+    timeout-minutes: 5
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+
+      - name: Register canonical puffle SWF routes in as3-static.ts
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-StrictMode -Version Latest
+          $file = 'src/server/game-data/as3-static.ts'
+          $text = [IO.File]::ReadAllText($file)
+
+          if ($text.Contains('const PUFFLE_STATIC_FILES: RouteRefMap = {};')) {
+            Write-Host 'PUFFLE_ROUTE_PATCH=SKIP already_present=true'
+            exit 0
+          }
+
+          $importNeedle = 'import { RouteRefMap } from ".";'
+          if (-not $text.Contains($importNeedle)) {
+            throw 'PUFFLE_ROUTE_PATCH=FAIL import_anchor_not_found'
+          }
+
+          $importLines = @(
+            'import path from "path";',
+            'import { DEFAULT_DIRECTORY, getFilesInDirectory } from "@common/utils";',
+            'import { RouteRefMap } from ".";',
+            '',
+            'const PUFFLE_ROUTE_PREFIX = "play/v2/content/global/puffle";',
+            'const PUFFLE_FILE_REF_PREFIX = "svanilla:media/play/v2/content/global/puffle";',
+            'const PUFFLE_DIRECTORY = path.join(',
+            '  DEFAULT_DIRECTORY,',
+            '  "svanilla",',
+            '  "media",',
+            '  "play",',
+            '  "v2",',
+            '  "content",',
+            '  "global",',
+            '  "puffle"',
+            ');',
+            '',
+            '/**',
+            ' * Register every canonical puffle SWF already present in Waddle media.',
+            ' * This stays inside AS3_STATIC_FILES; explicit routes below still win',
+            ' * whenever Waddle needs a special per-file override.',
+            ' */',
+            'const PUFFLE_STATIC_FILES: RouteRefMap = {};',
+            'getFilesInDirectory(PUFFLE_DIRECTORY)',
+            '  .filter((file) => file.toLowerCase().endsWith(".swf"))',
+            '  .forEach((file) => {',
+            '    const normalizedFile = file.replace(/\\/g, "/");',
+            '    PUFFLE_STATIC_FILES[`${PUFFLE_ROUTE_PREFIX}/${normalizedFile}`] =',
+            '      `${PUFFLE_FILE_REF_PREFIX}/${normalizedFile}`;',
+            '  });'
+          ) -join "`n"
+
+          $text = $text.Replace($importNeedle, $importLines)
+
+          $mapNeedle = 'export const AS3_STATIC_FILES: RouteRefMap = {'
+          if (-not $text.Contains($mapNeedle)) {
+            throw 'PUFFLE_ROUTE_PATCH=FAIL map_anchor_not_found'
+          }
+          $text = $text.Replace($mapNeedle, $mapNeedle + "`n  ...PUFFLE_STATIC_FILES,")
+
+          [IO.File]::WriteAllText($file, $text, [Text.UTF8Encoding]::new($false))
+
+          if (git diff --quiet -- $file) {
+            throw 'PUFFLE_ROUTE_PATCH=FAIL no_diff_after_patch'
+          }
+
+          git diff --check -- $file
+          if ($LASTEXITCODE -ne 0) { throw 'PUFFLE_ROUTE_PATCH=FAIL diff_check' }
+
+          Write-Host 'PUFFLE_ROUTE_PATCH=PASS file=src/server/game-data/as3-static.ts mode=canonical_puffle_swf_autoroutes explicit_routes_win=true'
+
+      - name: Commit puffle route registration
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $file = 'src/server/game-data/as3-static.ts'
+          if (git diff --quiet -- $file) {
+            Write-Host 'PUFFLE_ROUTE_COMMIT=SKIP no_changes=true'
+            exit 0
+          }
+          git config user.name 'Valverde-AndroidBuild-Launcher'
+          git config user.email '96694746+Valverde-101@users.noreply.github.com'
+          git add -- $file
+          git commit -m 'fix(puffle): register uploaded SWF routes [puffle-route-patch]'
+          git push origin "HEAD:${{ github.ref_name }}"
+          Write-Host 'PUFFLE_ROUTE_COMMIT=PASS'
