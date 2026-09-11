@@ -1,10 +1,13 @@
 import { addDispatchEventListeners } from '@common/utils';
 import { ipcRenderer } from 'electron';
 
-addDispatchEventListeners(['get-players'], ipcRenderer);
+addDispatchEventListeners(
+  ['get-players', 'command-center-data', 'command-result'],
+  ipcRenderer
+);
 
 (window as any).api = {
   fetchPlayers: () => ipcRenderer.send('get-players'),
-  openCommandsList: () => ipcRenderer.send('open-commands-list'),
-  runCommand: (obj: any) => ipcRenderer.send('run-command', obj)
+  fetchCommandCenterData: () => ipcRenderer.send('get-command-center-data'),
+  runCommand: (obj: { id: number; command: string }) => ipcRenderer.send('run-command', obj)
 };
