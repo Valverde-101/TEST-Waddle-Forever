@@ -1,23 +1,144 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+    />
     <link href="../base.css" rel="stylesheet" type="text/css" media="screen"/>
     <link href="commands.css" rel="stylesheet" type="text/css" media="screen"/>
+    <title>Command Center</title>
   </head>
-  <body>
-    <div class="top-buttons">
-        <button id="refresh-button" title="Refresh the player list">
-          Refresh Player List
-        </button>
-        <button id="commandslist-button" title="See the list of available commands">
-          List of Commands
-        </button>
-    </div>
-    <div>Select the player the command will affect (shows all online players):</div>
-    <select id="player-select" class="select">
-    </select>
-    <input type="text" placeholder="Type command here" id="command-input" />
-    <button id="command-button">RUN COMMAND</button>
+  <body class="command-center">
+    <header class="app-header">
+      <div>
+        <div class="eyebrow">WADDLE FOREVER · ADMIN TOOLS</div>
+        <h1>Command Center</h1>
+        <p>Run game commands without memorizing syntax or item IDs.</p>
+      </div>
+      <div class="header-shortcuts">
+        <span><kbd>Ctrl</kbd> + <kbd>K</kbd> Search</span>
+        <span><kbd>Ctrl</kbd> + <kbd>Enter</kbd> Run</span>
+      </div>
+    </header>
+
+    <section class="player-bar panel">
+      <div class="player-field">
+        <label for="player-select">Target player</label>
+        <select id="player-select" class="select"></select>
+      </div>
+      <button id="refresh-button" class="ghost-button" title="Refresh online players">↻ Refresh</button>
+      <div id="player-state" class="online-state">Waiting for players…</div>
+    </section>
+
+    <main class="workspace">
+      <aside class="command-library panel">
+        <div class="library-header">
+          <div>
+            <div class="section-kicker">COMMAND LIBRARY</div>
+            <strong id="command-count">0 commands</strong>
+          </div>
+        </div>
+
+        <div class="search-box">
+          <span>⌕</span>
+          <input id="command-search" type="text" placeholder="Search command, action or description…" autocomplete="off" />
+          <kbd>Ctrl K</kbd>
+        </div>
+
+        <div id="category-chips" class="category-chips"></div>
+        <div id="commands-list" class="commands-list"></div>
+      </aside>
+
+      <section class="command-workbench">
+        <div class="quick-actions panel">
+          <div class="section-heading">
+            <div>
+              <div class="section-kicker">QUICK ACTIONS</div>
+              <h2>Common tasks</h2>
+            </div>
+          </div>
+          <div class="quick-grid">
+            <button class="quick-card" data-command="ac">
+              <span class="quick-icon">◎</span>
+              <span><strong>Coins</strong><small>Add or subtract coins</small></span>
+            </button>
+            <button class="quick-card" data-command="ai">
+              <span class="quick-icon">◆</span>
+              <span><strong>Items</strong><small>Search clothing by name</small></span>
+            </button>
+            <button class="quick-card" data-command="af">
+              <span class="quick-icon">▣</span>
+              <span><strong>Furniture</strong><small>Search furniture catalog</small></span>
+            </button>
+            <button class="quick-card" data-command="jr">
+              <span class="quick-icon">⌖</span>
+              <span><strong>Teleport</strong><small>Find a room by name</small></span>
+            </button>
+          </div>
+        </div>
+
+        <div class="editor panel">
+          <div class="editor-header">
+            <div>
+              <div id="selected-category" class="section-kicker">SELECT A COMMAND</div>
+              <h2 id="selected-name">Choose an action from the left</h2>
+            </div>
+            <button id="favorite-button" class="icon-button hidden" title="Add to favorites">☆</button>
+          </div>
+
+          <p id="selected-description" class="command-description">
+            Search or select a command. A guided form will be generated here.
+          </p>
+
+          <div id="context-actions" class="context-actions"></div>
+          <form id="guided-form" class="guided-form"></form>
+          <div id="examples" class="examples"></div>
+
+          <div class="preview-box">
+            <div>
+              <span class="preview-label">Command preview</span>
+              <code id="command-preview">—</code>
+            </div>
+            <button id="copy-to-advanced" class="text-button" type="button">Edit raw</button>
+          </div>
+
+          <button id="command-button" class="run-button" disabled>
+            <span>▶</span> RUN COMMAND
+          </button>
+
+          <div id="command-status" class="command-status neutral">
+            Ready. Select a command to begin.
+          </div>
+        </div>
+
+        <details class="advanced panel" id="advanced-panel">
+          <summary>
+            <span><strong>Advanced console</strong><small>Raw command mode for power users</small></span>
+            <span>⌄</span>
+          </summary>
+          <div class="advanced-content">
+            <input type="text" placeholder="Example: ac 10000" id="command-input" autocomplete="off" spellcheck="false" />
+            <button id="advanced-run-button">Run raw command</button>
+          </div>
+        </details>
+
+        <div class="history panel">
+          <div class="section-heading history-heading">
+            <div>
+              <div class="section-kicker">LOCAL HISTORY</div>
+              <h2>Recent commands</h2>
+            </div>
+            <button id="clear-history" class="text-button">Clear</button>
+          </div>
+          <div id="history-list" class="history-list">
+            <div class="empty-state">No commands run in this window yet.</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
     <script>var exports = {};</script>
     <script src="commands-static.js" type="module"></script>
   </body>
