@@ -28,7 +28,7 @@ jobs:
             'X-GitHub-Api-Version' = '2022-11-28'
           }
           $escapedPath = ($file -split '/' | ForEach-Object { [uri]::EscapeDataString($_) }) -join '/'
-          $getUri = "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY/contents/$escapedPath?ref=$env:GITHUB_REF_NAME"
+          $getUri = "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY/contents/${escapedPath}?ref=$env:GITHUB_REF_NAME"
           $response = Invoke-RestMethod -Headers $headers -Uri $getUri -Method Get
           $bytes = [Convert]::FromBase64String(([string]$response.content -replace '\s',''))
           $text = [Text.Encoding]::UTF8.GetString($bytes)
