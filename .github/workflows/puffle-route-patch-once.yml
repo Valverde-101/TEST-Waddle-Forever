@@ -11,21 +11,27 @@ permissions:
 jobs:
   patch:
     runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
-    timeout-minutes: 5
+    timeout-minutes: 3
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-      - name: Checkout branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
-          fetch-depth: 0
-
-      - name: Register canonical puffle SWF routes in as3-static.ts
+      - name: Register canonical puffle SWF routes through GitHub API
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           Set-StrictMode -Version Latest
+
           $file = 'src/server/game-data/as3-static.ts'
-          $text = [IO.File]::ReadAllText($file)
+          $headers = @{
+            Authorization = "Bearer $env:GITHUB_TOKEN"
+            Accept = 'application/vnd.github+json'
+            'X-GitHub-Api-Version' = '2022-11-28'
+          }
+          $escapedPath = ($file -split '/' | ForEach-Object { [uri]::EscapeDataString($_) }) -join '/'
+          $getUri = "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY/contents/$escapedPath?ref=$env:GITHUB_REF_NAME"
+          $response = Invoke-RestMethod -Headers $headers -Uri $getUri -Method Get
+          $bytes = [Convert]::FromBase64String(([string]$response.content -replace '\s',''))
+          $text = [Text.Encoding]::UTF8.GetString($bytes)
 
           if ($text.Contains('const PUFFLE_STATIC_FILES: RouteRefMap = {};')) {
             Write-Host 'PUFFLE_ROUTE_PATCH=SKIP already_present=true'
@@ -71,36 +77,20 @@ jobs:
           ) -join "`n"
 
           $text = $text.Replace($importNeedle, $importLines)
-
           $mapNeedle = 'export const AS3_STATIC_FILES: RouteRefMap = {'
           if (-not $text.Contains($mapNeedle)) {
             throw 'PUFFLE_ROUTE_PATCH=FAIL map_anchor_not_found'
           }
           $text = $text.Replace($mapNeedle, $mapNeedle + "`n  ...PUFFLE_STATIC_FILES,")
 
-          [IO.File]::WriteAllText($file, $text, [Text.UTF8Encoding]::new($false))
+          $newBytes = [Text.UTF8Encoding]::new($false).GetBytes($text)
+          $payload = @{
+            message = 'fix(puffle): register uploaded SWF routes [puffle-route-patch]'
+            content = [Convert]::ToBase64String($newBytes)
+            sha = [string]$response.sha
+            branch = $env:GITHUB_REF_NAME
+          } | ConvertTo-Json -Depth 4
 
-          if (git diff --quiet -- $file) {
-            throw 'PUFFLE_ROUTE_PATCH=FAIL no_diff_after_patch'
-          }
-
-          git diff --check -- $file
-          if ($LASTEXITCODE -ne 0) { throw 'PUFFLE_ROUTE_PATCH=FAIL diff_check' }
-
-          Write-Host 'PUFFLE_ROUTE_PATCH=PASS file=src/server/game-data/as3-static.ts mode=canonical_puffle_swf_autoroutes explicit_routes_win=true'
-
-      - name: Commit puffle route registration
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $file = 'src/server/game-data/as3-static.ts'
-          if (git diff --quiet -- $file) {
-            Write-Host 'PUFFLE_ROUTE_COMMIT=SKIP no_changes=true'
-            exit 0
-          }
-          git config user.name 'Valverde-AndroidBuild-Launcher'
-          git config user.email '96694746+Valverde-101@users.noreply.github.com'
-          git add -- $file
-          git commit -m 'fix(puffle): register uploaded SWF routes [puffle-route-patch]'
-          git push origin "HEAD:${{ github.ref_name }}"
-          Write-Host 'PUFFLE_ROUTE_COMMIT=PASS'
+          $putUri = "$env:GITHUB_API_URL/repos/$env:GITHUB_REPOSITORY/contents/$escapedPath"
+          $result = Invoke-RestMethod -Headers $headers -Uri $putUri -Method Put -Body $payload -ContentType 'application/json'
+          Write-Host "PUFFLE_ROUTE_PATCH=PASS file=$file commit=$($result.commit.sha) explicit_routes_win=true"
