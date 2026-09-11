@@ -11,6 +11,7 @@ import { getIglooOld, handleAddFlooring, handleAddFurniture, handleAddIgloo, han
 import { handleBuyNinjaCards, handleGetFireLevel, handleGetNinjaCards, handleGetNinjaLevel, handleGetNinjaRanks, handleGetWaterLevel, handleJoinFromMatchmake, handleJoinMatchmaking, handleJoinSensei, handleLeaveMatchmake } from "./handlers/ninja";
 import { handleDonateCoins, handleGetBakeryState, handleGetCookieInventory, handleRetrieveMedieval2012, handleSendEnterHopper, handleViewedMedieval2012 } from "./handlers/party";
 import { handleAdoptPuffle, handleAdoptPuffleOld, handleEatPuffleItem, handleGetIglooPuffles, handleGetIglooPufflesOld, handleGetPuffleInventory, handlePuffleBackyardSwap, handlePuffleDigOnCommand, handlePuffleDigRandom, handlePuffleWalk, handleRevealGoldPuffle, isAfterPuffleCreatureGuard, isBeforePuffleCreatureGuard, sendModernPuffleCheck, sendPuffleCheck } from "./handlers/puffle";
+import { handlePuffleTrick } from "./handlers/puffle-trick";
 import { handleGetRainbowQuestData, handleSendRainbowQuestBonusCoins, handleSendRainbowQuestCollectCoins, handleSendRainbowQuestItemCollect, handleSendRainbowTaskComplete } from "./handlers/rainbow";
 import { handleEndSled, handleJoinSled, handleMoveSled, isSledGuard } from "./handlers/sled";
 import { BaseContext, GuardFunction, HandlerFunction, WorldContext } from "@server/socket-server/handlers/handlers";
@@ -248,6 +249,7 @@ export const createWorldXtHandler = (): XtHandler => {
     p.xt('s', 'p#pcn', ['string'], sendPuffleCheck),
     p.xt('s', 'p#pw', ['number', 'number'], handlePuffleWalk),
     p.xt('s', 'p#puffleswap', ['number', 'string'], handlePuffleBackyardSwap),
+    r.xt('s', 'p#puffletrick', ['number'], handlePuffleTrick),
     r.xt('s', 'p#puffledig', ['number'], handlePuffleDigRandom),
     r.xt('s', 'p#puffledigoncommand', [], handlePuffleDigOnCommand),
     p.xt('s', 'p#pcid', ['number', 'number'], handleEatPuffleItem),
