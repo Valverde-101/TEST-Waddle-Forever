@@ -199,7 +199,16 @@ jobs:
           if($LASTEXITCODE -ne 0){throw "WADDLE_DIAGNOSTICS=FAIL exit=$LASTEXITCODE"}
           $summary=Join-Path $repo '.work\diagnostics\latest\summary.json'
           if(-not(Test-Path -LiteralPath $summary -PathType Leaf)){throw "WADDLE_DIAGNOSTICS=FAIL summary_missing=$summary"}
-          Get-Content -LiteralPath $summary -Raw | Write-Host
+          $summaryJson=Get-Content -LiteralPath $summary -Raw
+          $summaryJson | Write-Host
+          $summaryData=$summaryJson | ConvertFrom-Json
+          if([string]$summaryData.status -ne 'PASS'){
+            foreach($relative in @('report.txt','issues.json','resource-failures.json','file-resolution-errors.json')){
+              $detail=Join-Path $repo ('.work\diagnostics\latest\' + $relative)
+              Write-Host "----- diagnostics/$relative -----"
+              if(Test-Path -LiteralPath $detail -PathType Leaf){Get-Content -LiteralPath $detail -Raw | Write-Host}else{Write-Host 'MISSING'}
+            }
+          }
           Import-Module (Join-Path $env:ANDROIDBUILD_ROOT 'Core\Current\AndroidBuild.psd1') -Force -DisableNameChecking
           Test-AndroidBuildExactHead -RepoRoot $repo -ExpectedSha $env:WADDLE_EXPECTED_SHA -AndroidBuildRoot $env:ANDROIDBUILD_ROOT | Out-Null
           Write-Host "WADDLE_DIAGNOSTICS_EXACT_HEAD=PASS sha=$env:WADDLE_EXPECTED_SHA"
