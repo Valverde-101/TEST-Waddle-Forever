@@ -17,32 +17,22 @@ type CommandCenterData = {
   commands: CommandInfo[];
 };
 
-type ActivePenguin = {
-  id: number;
-  name: string;
-};
-
-type CommandCenterState = {
-  online: boolean;
-  player: ActivePenguin | null;
-  onlineCount: number;
-};
-
 type CommandResult = {
   ok: boolean;
   command?: string;
   message: string;
-  player?: ActivePenguin;
 };
+
+type CoinMode = 'add' | 'remove';
 
 const commandsApi = (window as any).api;
 
-const activePenguinName = document.getElementById('active-penguin-name')!;
-const activePenguinMeta = document.getElementById('active-penguin-meta')!;
-const playerStatus = document.getElementById('player-status')!;
-const connectionState = document.getElementById('connection-state')!;
-const refreshButton = document.getElementById('refresh-button')!;
+const actionsButton = document.getElementById('actions-button')!;
+const moreActionsButton = document.getElementById('more-actions-button')!;
 const commandsListButton = document.getElementById('commandslist-button')!;
+const actionDrawer = document.getElementById('action-drawer')!;
+const drawerBackdrop = document.getElementById('drawer-backdrop')!;
+const drawerClose = document.getElementById('drawer-close')!;
 const commandSearch = document.getElementById('command-search')! as HTMLInputElement;
 const categorySelect = document.getElementById('category-select')! as HTMLSelectElement;
 const commandList = document.getElementById('command-list')!;
@@ -64,19 +54,28 @@ const examplesWrap = document.getElementById('examples-wrap')!;
 const examples = document.getElementById('examples')!;
 const historyList = document.getElementById('history-list')!;
 const clearHistoryButton = document.getElementById('clear-history')!;
+const advancedDetails = document.getElementById('advanced-details')! as HTMLDetailsElement;
+const coinControls = document.getElementById('coin-controls')!;
+const coinAmount = document.getElementById('coin-amount')! as HTMLInputElement;
 
-const HISTORY_KEY = 'waddle-command-center-history-v2';
+const HISTORY_KEY = 'waddle-command-center-history-v3';
 const FAVORITES_KEY = 'waddle-command-center-favorites-v1';
 const MAX_HISTORY = 12;
 
 let commandData: CommandCenterData = { commands: [] };
-let activeState: CommandCenterState = { online: false, player: null, onlineCount: 0 };
 let selectedCommand: CommandInfo | null = null;
 let argumentInputs: HTMLInputElement[] = [];
 let commandHistory: string[] = readStringArray(HISTORY_KEY);
 let favorites = new Set(readStringArray(FAVORITES_KEY));
 let catalogSearchTimer: ReturnType<typeof setTimeout> | null = null;
 let catalogRequestSequence = 0;
+let coinMode: CoinMode = 'add';
+
+function clearElement(element: Element) {
+  while (element.firstChild !== null) {
+    element.removeChild(element.firstChild);
+  }
+}
 
 function readStringArray(key: string): string[] {
   try {
@@ -93,6 +92,22 @@ function saveHistory() {
 
 function saveFavorites() {
   localStorage.setItem(FAVORITES_KEY, JSON.stringify(Array.from(favorites)));
+}
+
+function openDrawer() {
+  actionDrawer.classList.remove('hidden');
+  drawerBackdrop.classList.remove('hidden');
+  document.body.classList.add('drawer-open');
+  window.setTimeout(() => {
+    commandSearch.focus();
+    commandSearch.select();
+  }, 0);
+}
+
+function closeDrawer() {
+  actionDrawer.classList.add('hidden');
+  drawerBackdrop.classList.add('hidden');
+  document.body.classList.remove('drawer-open');
 }
 
 function categoryFor(name: string): string {
@@ -137,40 +152,20 @@ function setStatus(message: string, kind: 'neutral' | 'success' | 'error' = 'neu
   commandStatus.classList.add(kind);
 }
 
-function renderActiveState(state: CommandCenterState) {
-  activeState = state;
-  const player = state && state.player;
-
-  if (player) {
-    activePenguinName.textContent = player.name;
-    activePenguinMeta.textContent = `Connected automatically · #${player.id} · no selection required`;
-    playerStatus.textContent = state.onlineCount > 1
-      ? `${state.onlineCount} sessions detected · commands use the active local session`
-      : 'Ready · commands apply automatically to this penguin';
-    connectionState.classList.add('online');
-    return;
-  }
-
-  activePenguinName.textContent = 'No active penguin';
-  activePenguinMeta.textContent = 'Enter the game first. You never need to type a penguin name or ID.';
-  playerStatus.textContent = 'Waiting for an in-game session';
-  connectionState.classList.remove('online');
-}
-
-async function refreshState() {
-  const state = await commandsApi.fetchState();
-  if (state) renderActiveState(state as CommandCenterState);
-}
-
 function renderCategories() {
   const selected = categorySelect.value || 'all';
   const categories = Array.from(new Set(commandData.commands.map(command => categoryFor(command.name)))).sort();
-  categorySelect.replaceChildren();
+  clearElement(categorySelect);
 
   const all = document.createElement('option');
   all.value = 'all';
   all.textContent = 'All categories';
   categorySelect.appendChild(all);
+
+  const favoriteOption = document.createElement('option');
+  favoriteOption.value = 'favorites';
+  favoriteOption.textContent = '★ Favorites';
+  categorySelect.appendChild(favoriteOption);
 
   for (const category of categories) {
     const option = document.createElement('option');
@@ -179,34 +174,35 @@ function renderCategories() {
     categorySelect.appendChild(option);
   }
 
-  categorySelect.value = categories.includes(selected) ? selected : 'all';
+  const valid = selected === 'all' || selected === 'favorites' || categories.includes(selected);
+  categorySelect.value = valid ? selected : 'all';
 }
 
 function renderCommandList() {
   const query = commandSearch.value.trim().toLowerCase();
   const category = categorySelect.value;
-  const sorted = [...commandData.commands].sort((a, b) => {
+  const sorted = commandData.commands.slice().sort((a, b) => {
     const favoriteDelta = Number(favorites.has(b.name)) - Number(favorites.has(a.name));
     if (favoriteDelta !== 0) return favoriteDelta;
     return friendlyName(a).localeCompare(friendlyName(b));
   });
 
   const filtered = sorted.filter(command => {
-    const commandCategoryName = categoryFor(command.name);
-    if (category !== 'all' && commandCategoryName !== category) return false;
+    if (category === 'favorites' && !favorites.has(command.name)) return false;
+    if (category !== 'all' && category !== 'favorites' && categoryFor(command.name) !== category) return false;
     if (!query) return true;
-    return [command.name, friendlyName(command), command.description, commandCategoryName]
+    return [command.name, friendlyName(command), command.description, categoryFor(command.name)]
       .join(' ')
       .toLowerCase()
       .includes(query);
   });
 
-  commandList.replaceChildren();
+  clearElement(commandList);
 
   if (filtered.length === 0) {
     const empty = document.createElement('div');
-    empty.className = 'history-empty';
-    empty.textContent = 'No commands match this search.';
+    empty.className = 'drawer-empty';
+    empty.textContent = category === 'favorites' ? 'No favorite actions yet.' : 'No actions match this search.';
     commandList.appendChild(empty);
     return;
   }
@@ -214,8 +210,9 @@ function renderCommandList() {
   for (const command of filtered) {
     const button = document.createElement('button');
     button.className = 'command-list-item';
-    if (selectedCommand && selectedCommand.name === command.name) button.classList.add('selected');
     button.type = 'button';
+    button.title = command.description.replace(/\s+/g, ' ').trim();
+    if (selectedCommand && selectedCommand.name === command.name) button.classList.add('selected');
 
     const name = document.createElement('strong');
     name.textContent = `${favorites.has(command.name) ? '★ ' : ''}${friendlyName(command)}`;
@@ -224,21 +221,21 @@ function renderCommandList() {
     code.className = 'command-code';
     code.textContent = command.name;
 
-    const description = document.createElement('small');
-    description.textContent = command.description.replace(/\s+/g, ' ').trim();
+    const category = document.createElement('small');
+    category.textContent = categoryFor(command.name);
 
-    button.append(name, code, description);
+    button.append(name, code, category);
     button.addEventListener('click', () => selectCommand(command.name));
     commandList.appendChild(button);
   }
 }
 
 function renderHistory() {
-  historyList.replaceChildren();
+  clearElement(historyList);
   if (commandHistory.length === 0) {
     const empty = document.createElement('span');
     empty.className = 'history-empty';
-    empty.textContent = 'Commands you run will appear here.';
+    empty.textContent = 'No commands run yet.';
     historyList.appendChild(empty);
     return;
   }
@@ -267,19 +264,18 @@ function updateFavoriteButton() {
   favoriteButton.title = active ? 'Remove from favorites' : 'Add to favorites';
 }
 
-function updatePreviewFromArguments() {
-  if (!selectedCommand) return;
-  const args = argumentInputs.map(input => input.value.trim()).filter(value => value !== '');
-  commandInput.value = [selectedCommand.name, ...args].join(' ');
-}
-
 function argumentPlaceholder(command: string, name: string, index: number): string {
   if (command === 'ai' && index === 0) return 'Item ID or all';
   if (command === 'af' && index === 0) return 'Furniture ID';
   if (command === 'af' && index === 1) return 'Quantity (optional)';
   if (command === 'jr' && index === 0) return 'Room ID or name';
-  if (command === 'ac') return 'Amount, e.g. 10000';
   return name || `Argument ${index + 1}`;
+}
+
+function updatePreviewFromArguments() {
+  if (!selectedCommand || selectedCommand.name === 'ac') return;
+  const args = argumentInputs.map(input => input.value.trim()).filter(value => value !== '');
+  commandInput.value = [selectedCommand.name, ...args].join(' ');
 }
 
 function makeArgumentField(name: string, index: number): HTMLInputElement {
@@ -300,6 +296,40 @@ function makeArgumentField(name: string, index: number): HTMLInputElement {
   return input;
 }
 
+function updateCoinModeButtons() {
+  for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-coin-mode]'))) {
+    button.classList.toggle('active', button.dataset.coinMode === coinMode);
+  }
+}
+
+function updateCoinPreview() {
+  if (!selectedCommand || selectedCommand.name !== 'ac') return;
+  const parsed = Math.floor(Math.abs(Number(coinAmount.value)));
+  const amount = Number.isFinite(parsed) ? parsed : 0;
+  const signed = coinMode === 'remove' ? -amount : amount;
+  commandInput.value = `ac ${signed}`;
+  commandButton.textContent = coinMode === 'remove' ? 'Remove coins' : 'Add coins';
+}
+
+function configureCoinEditor(rawCommand?: string) {
+  coinControls.classList.remove('hidden');
+  argumentFields.classList.add('hidden');
+  coinMode = 'add';
+  coinAmount.value = '1000';
+
+  if (rawCommand) {
+    const match = rawCommand.trim().match(/^ac\s+(-?\d+)/);
+    if (match) {
+      const amount = Number(match[1]);
+      coinMode = amount < 0 ? 'remove' : 'add';
+      coinAmount.value = String(Math.abs(amount));
+    }
+  }
+
+  updateCoinModeButtons();
+  updateCoinPreview();
+}
+
 function catalogKindForSelected(): string | null {
   if (!selectedCommand) return null;
   if (selectedCommand.name === 'ai') return 'items';
@@ -309,7 +339,7 @@ function catalogKindForSelected(): string | null {
 }
 
 function renderCatalogResults(entries: CatalogEntry[]) {
-  catalogResults.replaceChildren();
+  clearElement(catalogResults);
 
   if (entries.length === 0) {
     const empty = document.createElement('div');
@@ -337,7 +367,7 @@ function renderCatalogResults(entries: CatalogEntry[]) {
       argumentInputs[0].value = selectedCommand.name === 'jr' ? entry.name : String(entry.id);
       updatePreviewFromArguments();
       catalogSearch.value = entry.name;
-      catalogResults.replaceChildren();
+      clearElement(catalogResults);
       if (argumentInputs.length > 1) argumentInputs[1].focus();
     });
     catalogResults.appendChild(button);
@@ -369,7 +399,7 @@ function renderCatalog() {
   const kind = catalogKindForSelected();
   const enabled = kind !== null;
   catalogSearchWrap.classList.toggle('hidden', !enabled);
-  catalogResults.replaceChildren();
+  clearElement(catalogResults);
   catalogSearch.value = '';
   catalogRequestSequence += 1;
 
@@ -379,11 +409,10 @@ function renderCatalog() {
     : selectedCommand.name === 'af'
       ? 'Find furniture by name or ID'
       : 'Find room by name or ID';
-  scheduleCatalogSearch(true);
 }
 
 function renderExamples(command: CommandInfo) {
-  examples.replaceChildren();
+  clearElement(examples);
   examplesWrap.classList.toggle('hidden', command.examples.length === 0);
   for (const example of command.examples) {
     const chip = document.createElement('button');
@@ -404,27 +433,44 @@ function selectCommand(name: string, rawCommand?: string) {
   editorContent.classList.remove('hidden');
   commandCategory.textContent = categoryFor(command.name);
   commandTitle.textContent = friendlyName(command);
-  commandDescription.textContent = command.description.trim();
-  argumentFields.replaceChildren();
-  argumentInputs = command.argNames.map((argName, index) => makeArgumentField(argName, index));
+  commandDescription.textContent = command.description.replace(/\s+/g, ' ').trim();
+  clearElement(argumentFields);
+  argumentFields.classList.remove('hidden');
+  coinControls.classList.add('hidden');
+  argumentInputs = [];
+  commandButton.textContent = 'Apply';
+  advancedDetails.open = false;
+
+  if (command.name === 'ac') {
+    configureCoinEditor(rawCommand);
+  } else {
+    argumentInputs = command.argNames.map((argName, index) => makeArgumentField(argName, index));
+    const parts = rawCommand ? rawCommand.trim().split(/\s+/) : [];
+    if (parts.length > 0 && parts[0] === command.name) {
+      const args = parts.slice(1);
+      argumentInputs.forEach((input, index) => {
+        input.value = args[index] || '';
+      });
+    }
+    updatePreviewFromArguments();
+    if (rawCommand) commandInput.value = rawCommand.trim();
+  }
+
   updateFavoriteButton();
   renderCatalog();
   renderExamples(command);
-
-  const parts = rawCommand ? rawCommand.trim().split(/\s+/) : [];
-  if (parts.length > 0 && parts[0] === command.name) {
-    const args = parts.slice(1);
-    argumentInputs.forEach((input, index) => {
-      input.value = args[index] || '';
-    });
-  }
-
-  updatePreviewFromArguments();
-  if (rawCommand) commandInput.value = rawCommand.trim();
-  setStatus(activeState.player ? `Ready for ${activeState.player.name}` : 'Ready');
+  setStatus('Ready');
   renderCommandList();
+  closeDrawer();
 
-  if (argumentInputs.length > 0) argumentInputs[0].focus();
+  if (command.name === 'ac') {
+    coinAmount.focus();
+    coinAmount.select();
+  } else if (catalogKindForSelected() !== null) {
+    catalogSearch.focus();
+  } else if (argumentInputs.length > 0) {
+    argumentInputs[0].focus();
+  }
 }
 
 function loadRawCommand(rawCommand: string) {
@@ -439,7 +485,8 @@ function loadRawCommand(rawCommand: string) {
   }
 
   commandInput.value = trimmed;
-  setStatus('Command loaded');
+  advancedDetails.open = true;
+  setStatus('Raw command loaded');
 }
 
 function normalizeCommandInput(raw: string): string {
@@ -459,7 +506,10 @@ async function runCommand(rawOverride?: string) {
   }
 
   setStatus(`Applying ${command}…`);
+  commandButton.setAttribute('disabled', 'disabled');
   const result = await commandsApi.runCommand({ command }) as CommandResult;
+  commandButton.removeAttribute('disabled');
+
   if (!result) {
     setStatus('Command failed without a response.', 'error');
     return;
@@ -478,47 +528,29 @@ window.addEventListener('get-command-center-data', (event: Event) => {
   commandData = data && Array.isArray(data.commands) ? data : { commands: [] };
   renderCategories();
   renderCommandList();
-});
 
-window.addEventListener('command-center-state', (event: Event) => {
-  const state = (event as CustomEvent).detail as CommandCenterState;
-  if (state) renderActiveState(state);
+  if (commandData.commands.some(command => command.name === 'ac')) {
+    selectCommand('ac');
+  }
 });
 
 window.addEventListener('command-center-data-error', (event: Event) => {
   setStatus(String((event as CustomEvent).detail || 'Unable to load commands.'), 'error');
 });
 
-window.addEventListener('command-center-state-error', (event: Event) => {
-  playerStatus.textContent = String((event as CustomEvent).detail || 'Unable to read the current session.');
-  connectionState.classList.remove('online');
-});
-
 window.addEventListener('command-center-catalog-error', (event: Event) => {
   catalogResults.textContent = String((event as CustomEvent).detail || 'Catalog search failed.');
 });
 
-refreshButton.addEventListener('click', () => void refreshState());
+actionsButton.addEventListener('click', openDrawer);
+moreActionsButton.addEventListener('click', openDrawer);
+drawerClose.addEventListener('click', closeDrawer);
+drawerBackdrop.addEventListener('click', closeDrawer);
 commandsListButton.addEventListener('click', () => commandsApi.openCommandsList());
 commandSearch.addEventListener('input', renderCommandList);
 categorySelect.addEventListener('change', renderCommandList);
 catalogSearch.addEventListener('input', () => scheduleCatalogSearch());
 commandButton.addEventListener('click', () => void runCommand());
-
-favoriteButton.addEventListener('click', () => {
-  if (!selectedCommand) return;
-  if (favorites.has(selectedCommand.name)) favorites.delete(selectedCommand.name);
-  else favorites.add(selectedCommand.name);
-  saveFavorites();
-  updateFavoriteButton();
-  renderCommandList();
-});
-
-clearHistoryButton.addEventListener('click', () => {
-  commandHistory = [];
-  saveHistory();
-  renderHistory();
-});
 
 for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-command]'))) {
   button.addEventListener('click', () => {
@@ -536,23 +568,57 @@ for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-se
   });
 }
 
+for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-coin-mode]'))) {
+  button.addEventListener('click', () => {
+    coinMode = button.dataset.coinMode === 'remove' ? 'remove' : 'add';
+    updateCoinModeButtons();
+    updateCoinPreview();
+  });
+}
+
+for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-coin-value]'))) {
+  button.addEventListener('click', () => {
+    const value = Number(button.dataset.coinValue || '0');
+    if (!Number.isFinite(value) || value < 0) return;
+    coinAmount.value = String(Math.floor(value));
+    updateCoinPreview();
+  });
+}
+
+coinAmount.addEventListener('input', updateCoinPreview);
+
+favoriteButton.addEventListener('click', () => {
+  if (!selectedCommand) return;
+  if (favorites.has(selectedCommand.name)) favorites.delete(selectedCommand.name);
+  else favorites.add(selectedCommand.name);
+  saveFavorites();
+  updateFavoriteButton();
+  renderCommandList();
+});
+
+clearHistoryButton.addEventListener('click', () => {
+  commandHistory = [];
+  saveHistory();
+  renderHistory();
+});
+
 document.addEventListener('keydown', event => {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
     event.preventDefault();
-    commandSearch.focus();
-    commandSearch.select();
+    openDrawer();
   }
 
   if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
     event.preventDefault();
     void runCommand();
   }
+
+  if (event.key === 'Escape' && !actionDrawer.classList.contains('hidden')) {
+    closeDrawer();
+  }
 });
 
 window.addEventListener('load', () => {
   renderHistory();
-  renderActiveState(activeState);
   void commandsApi.fetchCommandCenterData();
-  void refreshState();
-  commandSearch.focus();
 });
