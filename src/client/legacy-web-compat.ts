@@ -43,12 +43,15 @@ export const installLegacyWebCompatibility = async (window: BrowserWindow): Prom
     };
 
     const xhrOpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
-      const normalized = normalizeLocalUrl(url);
-      if (normalized !== url) {
-        console.info('[WADDLE-COMPAT] local XHR port restored', url, '->', normalized);
+    XMLHttpRequest.prototype.open = function() {
+      const args = Array.prototype.slice.call(arguments);
+      const originalUrl = args[1];
+      const normalized = normalizeLocalUrl(originalUrl);
+      if (normalized !== originalUrl) {
+        console.info('[WADDLE-COMPAT] local XHR port restored', originalUrl, '->', normalized);
+        args[1] = normalized;
       }
-      return xhrOpen.call(this, method, normalized, async, user, password);
+      return xhrOpen.apply(this, args);
     };
 
     if (typeof window.fetch === 'function') {
