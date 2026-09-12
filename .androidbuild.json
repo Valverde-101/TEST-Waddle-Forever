@@ -14,6 +14,9 @@
     "reuse": true,
     "retention_generations": 3,
     "heavy_storage_policy": "all-mutable-heavy-artifacts-under-work",
+    "preserve_untracked_paths": [
+      "user-data"
+    ],
     "pools": [
       "dependencies",
       "build",
