@@ -98,6 +98,10 @@ function getLayout(): PenguinStorageLayout {
   };
 }
 
+function legacyPenguinsExist(layout: PenguinStorageLayout): boolean {
+  return layout.legacyDataRoot !== null && fs.existsSync(path.join(layout.legacyDataRoot, 'penguins'));
+}
+
 function logOnceOrChanged(kind: 'prepare' | 'storage', message: string): void {
   if (kind === 'prepare') {
     if (message === lastPrepareLog) return;
@@ -132,12 +136,9 @@ export function preparePortablePenguinStorage(): PenguinStorageLayout {
 
       if (!portableHasUsers && legacyHasUsers) {
         const copied = copyMissingTreeSync(legacyDataRoot, layout.dataRoot);
-        legacyMigrationOccurred = copied > 0;
+        legacyMigrationOccurred = legacyMigrationOccurred || copied > 0;
         console.log(`WADDLE_USER_DATA_MIGRATION=PASS source=${legacyDataRoot} destination=${layout.dataRoot} copied=${copied} mode=copy_missing_preserve_legacy`);
       }
-      // A successful inspection is authoritative for this process. If storage
-      // later disappears, ensurePortablePenguinStorage repairs the active tree;
-      // it does not repeatedly traverse the legacy database every 1.5 seconds.
       legacyMigrationChecked = true;
     }
     layout = getLayout();
@@ -149,6 +150,16 @@ export function preparePortablePenguinStorage(): PenguinStorageLayout {
 
 /** Ensure the final data/penguins hierarchy exists after DataFolder.init(). */
 export function ensurePortablePenguinStorage(): PenguinStorageLayout {
+  // If the active penguin directory disappeared after startup and a preserved
+  // legacy tree still exists, re-arm migration before creating an empty folder.
+  // This turns a real directory loss into profile recovery rather than merely
+  // converting ENOENT into an empty database.
+  const before = getLayout();
+  if (!fs.existsSync(before.penguinsRoot) && legacyPenguinsExist(before)) {
+    legacyMigrationChecked = false;
+    console.warn(`WADDLE_PENGUIN_STORAGE=WARN reason=portable_penguins_missing action=recover_from_legacy path=${before.penguinsRoot}`);
+  }
+
   const prepared = preparePortablePenguinStorage();
   ensureDirectorySync(prepared.dataRoot);
   ensureDirectorySync(prepared.penguinsRoot);
