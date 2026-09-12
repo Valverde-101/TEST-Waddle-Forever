@@ -3,7 +3,7 @@ import { ClientSocket } from "./socket-server";
 import { WorldContext } from "@server/socket-server/handlers/handlers";
 import { getBlueString, getRedString, logverbose } from "@server/logger";
 import { publishWaddleLiveTrace } from "@common/live-trace";
-import { getXtCompatibilityRule, isNoResponseClientPacket } from "./handlers/protocol";
+import { getXtCompatibilityRule, getXtReadOnlyFallback, isNoResponseClientPacket } from "./handlers/protocol";
 
 type ParsedXtMessage = {
   name: string;
@@ -282,31 +282,47 @@ export class XtHandler {
         });
         throw error;
       }
-    } else if (isNoResponseClientPacket(name)) {
-      // These packets are protocol acknowledgements/lifecycle notifications, not
-      // missing gameplay handlers. Accepting them explicitly removes false
-      // "unhandled-action" noise while preserving strict errors for everything
-      // that really is unsupported.
-      publishWaddleLiveTrace({
-        category: 'XT',
-        phase: 'handled',
-        source: 'xt-handler',
-        action: name,
-        direction: 'in',
-        status: 'protocol-acknowledged',
-        argCount: args.length
-      });
     } else {
-      logverbose(getRedString('unhandled XT: ' + name));
-      publishWaddleLiveTrace({
-        category: 'XT',
-        phase: 'error',
-        source: 'xt-handler',
-        action: name,
-        direction: 'in',
-        status: 'unhandled-action',
-        argCount: args.length
-      });
+      const fallback = 'penguin' in context ? getXtReadOnlyFallback(name) : undefined;
+      if (fallback !== undefined) {
+        context.msg.send(context.penguin, fallback.responseAction, ...fallback.responseArgs);
+        publishWaddleLiveTrace({
+          category: 'XT',
+          phase: 'handled',
+          source: 'xt-handler',
+          action: name,
+          direction: 'in',
+          status: 'compatibility-response',
+          argCount: args.length,
+          responseAction: fallback.responseAction,
+          compatibilityReason: fallback.reason
+        });
+      } else if (isNoResponseClientPacket(name)) {
+        // These packets are protocol acknowledgements/lifecycle notifications, not
+        // missing gameplay handlers. Accepting them explicitly removes false
+        // "unhandled-action" noise while preserving strict errors for everything
+        // that really is unsupported.
+        publishWaddleLiveTrace({
+          category: 'XT',
+          phase: 'handled',
+          source: 'xt-handler',
+          action: name,
+          direction: 'in',
+          status: 'protocol-acknowledged',
+          argCount: args.length
+        });
+      } else {
+        logverbose(getRedString('unhandled XT: ' + name));
+        publishWaddleLiveTrace({
+          category: 'XT',
+          phase: 'error',
+          source: 'xt-handler',
+          action: name,
+          direction: 'in',
+          status: 'unhandled-action',
+          argCount: args.length
+        });
+      }
     }
   }
 
