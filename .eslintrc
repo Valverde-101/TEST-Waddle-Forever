@@ -58,6 +58,7 @@
     },
     {
       "files": [
+        "src/client/main.ts",
         "src/client/flash-loader.ts",
         "src/common/version.ts"
       ],
