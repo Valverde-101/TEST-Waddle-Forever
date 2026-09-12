@@ -2,8 +2,8 @@ import { BrowserWindow, ipcMain } from "electron";
 import fs from "fs";
 import path from "path";
 import { getPopupCreator } from "@client/popups";
-import { USER_DATA_FOLDER } from "@common/paths";
 import { createCommandsList } from "../commandslist/commandslist";
+import { ensurePortablePenguinStorage, withPenguinStorageRecovery } from "@server/database/storage-layout";
 import { getCommandsList } from "@server/commands/commands";
 import { ITEMS } from "@server/game-logic/items";
 import { FURNITURE } from "@server/game-logic/furniture";
@@ -12,7 +12,6 @@ import { ROOMS } from "@server/game-data/rooms";
 const GET_PLAYERS_CHANNEL = 'command-center:get-players';
 const GET_DATA_CHANNEL = 'command-center:get-data';
 const RUN_COMMAND_CHANNEL = 'command-center:run-command';
-const PENGUINS_DIRECTORY = path.join(USER_DATA_FOLDER, 'data', 'penguins');
 
 type CommandTarget = {
   id: number;
@@ -29,6 +28,7 @@ type StoredPenguin = {
   is_member: boolean;
   safeChat?: boolean;
   noSave?: boolean;
+  [key: string]: unknown;
 };
 
 type StoredCommandResult = {
@@ -61,29 +61,38 @@ const getCommandCenterData = () => ({
   }
 });
 
-const getStoredPenguinPath = (id: number) => path.join(PENGUINS_DIRECTORY, `${id}.json`);
+const getPenguinsDirectory = (): string => ensurePortablePenguinStorage().penguinsRoot;
+const getStoredPenguinPath = (id: number): string => path.join(getPenguinsDirectory(), `${id}.json`);
 
 const readStoredPenguin = async (id: number): Promise<StoredPenguin | null> => {
-  const filePath = getStoredPenguinPath(id);
-  try {
-    const raw = await fs.promises.readFile(filePath, 'utf-8');
-    return JSON.parse(raw) as StoredPenguin;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    throw error;
-  }
+  return withPenguinStorageRecovery(`command-center.read:${id}`, async () => {
+    const filePath = getStoredPenguinPath(id);
+    try {
+      const raw = await fs.promises.readFile(filePath, 'utf-8');
+      return JSON.parse(raw) as StoredPenguin;
+    } catch (error) {
+      // Missing profile is a valid result. Missing parent storage is repaired by
+      // withPenguinStorageRecovery before each attempt.
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT' && fs.existsSync(getPenguinsDirectory())) return null;
+      throw error;
+    }
+  });
 };
 
 const writeStoredPenguin = async (id: number, data: StoredPenguin): Promise<void> => {
-  const filePath = getStoredPenguinPath(id);
-  const temporaryPath = path.join(PENGUINS_DIRECTORY, `.${id}.command-center.tmp`);
-  await fs.promises.writeFile(temporaryPath, JSON.stringify(data), 'utf-8');
-  await fs.promises.rename(temporaryPath, filePath);
+  await withPenguinStorageRecovery(`command-center.write:${id}`, async () => {
+    const penguinsDirectory = getPenguinsDirectory();
+    const filePath = path.join(penguinsDirectory, `${id}.json`);
+    const temporaryPath = path.join(penguinsDirectory, `.${id}.command-center.tmp`);
+    await fs.promises.writeFile(temporaryPath, JSON.stringify(data), 'utf-8');
+    await fs.promises.rename(temporaryPath, filePath);
+  });
 };
 
 const listStoredPenguins = async (): Promise<CommandTarget[]> => {
-  try {
-    const files = await fs.promises.readdir(PENGUINS_DIRECTORY);
+  return withPenguinStorageRecovery('command-center.list', async () => {
+    const penguinsDirectory = getPenguinsDirectory();
+    const files = await fs.promises.readdir(penguinsDirectory);
     const targets: CommandTarget[] = [];
 
     for (const file of files) {
@@ -95,7 +104,7 @@ const listStoredPenguins = async (): Promise<CommandTarget[]> => {
       if (!Number.isInteger(id) || id < 101) continue;
 
       try {
-        const data = JSON.parse(await fs.promises.readFile(path.join(PENGUINS_DIRECTORY, file), 'utf-8')) as Partial<StoredPenguin>;
+        const data = JSON.parse(await fs.promises.readFile(path.join(penguinsDirectory, file), 'utf-8')) as Partial<StoredPenguin>;
         if (typeof data.name !== 'string' || data.name.trim() === '') continue;
         targets.push({ id, name: data.name, online: false, saved: true });
       } catch (error) {
@@ -104,10 +113,7 @@ const listStoredPenguins = async (): Promise<CommandTarget[]> => {
     }
 
     return targets.sort((a, b) => a.name.localeCompare(b.name) || a.id - b.id);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
-    throw error;
-  }
+  });
 };
 
 const getCommandTargets = async (server: { getAllPlayersInfo: () => Array<{ name: string; id: number }> }): Promise<CommandTarget[]> => {
@@ -282,7 +288,7 @@ export const createCommands = getPopupCreator(
       if (signature !== lastPlayerSignature) {
         const online = players.filter(player => player.online).length;
         const saved = players.filter(player => player.saved).length;
-        console.log(`WADDLE_COMMAND_CENTER_PLAYERS=STATE count=${players.length} online=${online} saved=${saved} storage=${PENGUINS_DIRECTORY} players=${signature || 'none'}`);
+        console.log(`WADDLE_COMMAND_CENTER_PLAYERS=STATE count=${players.length} online=${online} saved=${saved} storage=${getPenguinsDirectory()} players=${signature || 'none'}`);
         lastPlayerSignature = signature;
       }
       return players;
