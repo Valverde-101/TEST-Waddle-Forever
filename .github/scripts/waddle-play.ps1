@@ -392,36 +392,68 @@ $state = [ordered]@{
 }
 $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
 
-$healthSeconds = if ($launchRoot.network_backed) { 90 } else { 45 }
-$deadline = [DateTime]::UtcNow.AddSeconds($healthSeconds)
+# Startup on SMB is dominated by remote Node module traversal. A fixed deadline
+# from process birth incorrectly killed healthy clients that were continuously
+# making structured progress and had already presented the main window. Treat
+# lack of progress as the health failure instead, while retaining a hard cap so
+# noisy or endlessly progressing failures cannot keep the launcher open forever.
+$idleHealthSeconds = if ($launchRoot.network_backed) { 90 } else { 45 }
+$hardHealthSeconds = if ($launchRoot.network_backed) { 300 } else { 120 }
+$healthStartedUtc = [DateTime]::UtcNow
+$hardDeadline = $healthStartedUtc.AddSeconds($hardHealthSeconds)
+$lastProgressUtc = $healthStartedUtc
+$lastEventCount = 0
 $lastEvent = 'none'
+$timeoutKind = 'none'
+Write-Host "WADDLE_PLAY_WATCHDOG=PASS mode=progress_aware idle_timeout_seconds=$idleHealthSeconds hard_timeout_seconds=$hardHealthSeconds network_backed=$($launchRoot.network_backed)"
 try {
-  do {
+  while ($true) {
     Start-Sleep -Milliseconds 250
     if (-not (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)) {
       $tail = if (Test-Path -LiteralPath $stderr) { (@(Get-Content -LiteralPath $stderr -Tail 12 -ErrorAction SilentlyContinue) -join ' | ') } else { 'diagnostic_missing' }
       throw "WADDLE_PLAY=FAIL process_exited_before_ready pid=$($process.Id) last_event=$lastEvent tail=$tail"
     }
+
     $events = @(Get-WaddleRuntimeEvents -Path $stderr -ProcessId $process.Id)
     if ($events.Count -gt 0) { $lastEvent = [string]$events[$events.Count - 1].event }
+    if ($events.Count -gt $lastEventCount) {
+      $lastProgressUtc = [DateTime]::UtcNow
+      $lastEventCount = $events.Count
+    }
+
     $fatal = Get-WaddleFatalRuntimeEvent -Events $events
     if ($fatal) { throw "WADDLE_PLAY=FAIL runtime_event pid=$($process.Id) event=$($fatal | ConvertTo-Json -Compress -Depth 8)" }
+
     $ready = @($events | Where-Object { [string]$_.event -eq 'main-window-ready' } | Select-Object -Last 1)
     if ($ready.Count -gt 0) {
       $launchWatch.Stop()
       $url = if ($ready[0].PSObject.Properties['url']) { [string]$ready[0].url } else { '' }
       $state['status']='RUNNING'; $state['ready_utc']=[DateTime]::UtcNow.ToString('o'); $state['launcher_return_ms']=[int64]$launchWatch.ElapsedMilliseconds; $state['main_window_url']=$url
+      $state['health_watchdog']='progress_aware'; $state['health_idle_timeout_seconds']=$idleHealthSeconds; $state['health_hard_timeout_seconds']=$hardHealthSeconds; $state['health_progress_events']=$lastEventCount
       $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
-      Write-Host "WADDLE_PLAY=PASS pid=$($process.Id) machine=$machine electron=10.4.7 event=main-window-ready url=$url launch_ms=$($launchWatch.ElapsedMilliseconds) runtime=$repo node_modules=$modulesCanonical electron_source=$sourceLaunchElectron electron_runtime=$launchElectron electron_cache=$($electronRuntime.mode) flash=$flashCanonical network_backed=$($launchRoot.network_backed) smb_mode=$($launchRoot.mode) profile_mode=$profileMode state=$statePath shell_execute=false inherit_handles=false node_modules_copied=0 local_install=0"
+      Write-Host "WADDLE_PLAY=PASS pid=$($process.Id) machine=$machine electron=10.4.7 event=main-window-ready url=$url launch_ms=$($launchWatch.ElapsedMilliseconds) runtime=$repo node_modules=$modulesCanonical electron_source=$sourceLaunchElectron electron_runtime=$launchElectron electron_cache=$($electronRuntime.mode) flash=$flashCanonical network_backed=$($launchRoot.network_backed) smb_mode=$($launchRoot.mode) profile_mode=$profileMode state=$statePath shell_execute=false inherit_handles=false node_modules_copied=0 local_install=0 watchdog=progress_aware progress_events=$lastEventCount"
       exit 0
     }
-  } while ([DateTime]::UtcNow -lt $deadline)
 
+    $now = [DateTime]::UtcNow
+    if ($now -ge $hardDeadline) {
+      $timeoutKind = 'hard_cap'
+      break
+    }
+    if ($now -ge $lastProgressUtc.AddSeconds($idleHealthSeconds)) {
+      $timeoutKind = 'inactivity'
+      break
+    }
+  }
+
+  $launchWatch.Stop()
   $tail = if (Test-Path -LiteralPath $stderr) { (@(Get-Content -LiteralPath $stderr -Tail 16 -ErrorAction SilentlyContinue) -join ' | ') } else { 'diagnostic_missing' }
-  throw "WADDLE_PLAY=FAIL main_window_ready_timeout pid=$($process.Id) timeout_seconds=$healthSeconds last_event=$lastEvent diagnostic=$stderr tail=$tail"
+  $idleForSeconds = [Math]::Round(([DateTime]::UtcNow - $lastProgressUtc).TotalSeconds,1)
+  throw "WADDLE_PLAY=FAIL main_window_ready_timeout pid=$($process.Id) timeout_kind=$timeoutKind idle_timeout_seconds=$idleHealthSeconds hard_timeout_seconds=$hardHealthSeconds elapsed_seconds=$([Math]::Round($launchWatch.Elapsed.TotalSeconds,1)) idle_for_seconds=$idleForSeconds progress_events=$lastEventCount last_event=$lastEvent diagnostic=$stderr tail=$tail"
 } catch {
   try { Stop-WaddleOwnedProcess -ProcessId $process.Id -ExpectedExecutable $launchElectron -Reason 'health_failure' } catch {}
   $state['status']='FAILED'; $state['failure']=[string]$_.Exception.Message; $state['failed_utc']=[DateTime]::UtcNow.ToString('o')
+  $state['health_watchdog']='progress_aware'; $state['health_idle_timeout_seconds']=$idleHealthSeconds; $state['health_hard_timeout_seconds']=$hardHealthSeconds; $state['health_progress_events']=$lastEventCount
   $state | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $statePath -Encoding UTF8
   throw
 }
