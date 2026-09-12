@@ -35,6 +35,9 @@ const getPluginName = () => {
 };
 
 const getPluginPath = () => {
+  const sourceOverride = process.env.WADDLE_PPAPI_FLASH_SOURCE_PATH?.trim();
+  if (sourceOverride) return path.resolve(sourceOverride);
+
   const override = process.env.WADDLE_PPAPI_FLASH_PATH?.trim();
   if (override) return path.resolve(override);
   return path.join(__dirname, '..', 'assets', 'flash', getPluginName());
@@ -51,7 +54,35 @@ const getWindowsFlashCacheRoot = () => {
   return path.join(base, 'WaddleForever', 'flash-cache');
 };
 
+const preparePrelaunchedRuntimePlugin = (sourcePath: string) => {
+  const inheritedRuntime = process.env.WADDLE_PPAPI_FLASH_RUNTIME_PATH?.trim();
+  if (!inheritedRuntime) return null;
+
+  const runtimePath = path.resolve(inheritedRuntime);
+  if (!fs.existsSync(runtimePath)) {
+    throw new Error(`Prelaunched Pepper Flash runtime not found: ${runtimePath}`);
+  }
+
+  const sourceHash = hashFile(sourcePath);
+  const runtimeHash = hashFile(runtimePath);
+  if (runtimeHash !== sourceHash) {
+    throw new Error(`Prelaunched Pepper Flash hash mismatch: source=${sourceHash} runtime=${runtimeHash}`);
+  }
+
+  const samePath = path.resolve(runtimePath).toLowerCase() === path.resolve(sourcePath).toLowerCase();
+  return {
+    sourcePath,
+    runtimePath,
+    sha256: sourceHash,
+    mode: samePath ? 'prelaunch_repo_direct' : 'prelaunch_local_hash_cache',
+    copied: false
+  };
+};
+
 const prepareRuntimePlugin = (sourcePath: string, flashVersion: string) => {
+  const prelaunched = preparePrelaunchedRuntimePlugin(sourcePath);
+  if (prelaunched !== null) return prelaunched;
+
   const sourceHash = hashFile(sourcePath);
 
   if (process.platform !== 'win32') {
@@ -64,6 +95,10 @@ const prepareRuntimePlugin = (sourcePath: string, flashVersion: string) => {
     };
   }
 
+  // Direct Electron launches do not have the Win32 prelaunch contract. Keep a
+  // verified local cache as their compatibility fallback. Waddle-Start resolves
+  // local-vs-SMB before Electron starts and passes WADDLE_PPAPI_FLASH_RUNTIME_PATH,
+  // so the production launch path never makes a second routing decision here.
   const cacheDir = path.join(getWindowsFlashCacheRoot(), flashVersion, sourceHash.toLowerCase());
   fs.mkdirSync(cacheDir, { recursive: true });
   const runtimePath = path.join(cacheDir, path.basename(sourcePath));
