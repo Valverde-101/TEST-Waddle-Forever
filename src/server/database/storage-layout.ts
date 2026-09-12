@@ -11,6 +11,10 @@ export type PenguinStorageLayout = {
 };
 
 const TRANSIENT_STORAGE_ERRORS = new Set(['ENOENT', 'ENOTDIR']);
+let legacyMigrationChecked = false;
+let legacyMigrationOccurred = false;
+let lastPrepareLog = '';
+let lastStorageLog = '';
 
 function isTransientStorageError(error: unknown): boolean {
   const code = (error as NodeJS.ErrnoException | undefined)?.code;
@@ -47,12 +51,8 @@ function readDirectorySync(directory: string): fs.Dirent[] {
 }
 
 function directoryHasUserPenguins(directory: string): boolean {
-  try {
-    return readDirectorySync(directory).some(entry => entry.isFile() && /^(?:10[1-9]|1[1-9]\d|[2-9]\d{2,}|\d{4,})\.json$/.test(entry.name));
-  } catch (error) {
-    if (isTransientStorageError(error)) return false;
-    throw error;
-  }
+  if (!fs.existsSync(directory)) return false;
+  return readDirectorySync(directory).some(entry => entry.isFile() && /^(?:10[1-9]|1[1-9]\d|[2-9]\d{2,}|\d{4,})\.json$/.test(entry.name));
 }
 
 function copyMissingTreeSync(source: string, destination: string): number {
@@ -87,15 +87,26 @@ function resolveLegacyDataRoot(): string | null {
   return path.resolve(candidate) === path.resolve(current) ? null : candidate;
 }
 
-function getLayout(migratedLegacyData: boolean): PenguinStorageLayout {
+function getLayout(): PenguinStorageLayout {
   const dataRoot = path.join(USER_DATA_FOLDER, 'data');
   return {
     userDataRoot: USER_DATA_FOLDER,
     dataRoot,
     penguinsRoot: path.join(dataRoot, 'penguins'),
     legacyDataRoot: resolveLegacyDataRoot(),
-    migratedLegacyData
+    migratedLegacyData: legacyMigrationOccurred
   };
+}
+
+function logOnceOrChanged(kind: 'prepare' | 'storage', message: string): void {
+  if (kind === 'prepare') {
+    if (message === lastPrepareLog) return;
+    lastPrepareLog = message;
+  } else {
+    if (message === lastStorageLog) return;
+    lastStorageLog = message;
+  }
+  console.log(message);
 }
 
 /**
@@ -108,24 +119,31 @@ function getLayout(migratedLegacyData: boolean): PenguinStorageLayout {
 export function preparePortablePenguinStorage(): PenguinStorageLayout {
   ensureDirectorySync(USER_DATA_FOLDER);
 
-  const initial = getLayout(false);
-  const legacyDataRoot = initial.legacyDataRoot;
-  let migratedLegacyData = false;
+  let layout = getLayout();
+  const legacyDataRoot = layout.legacyDataRoot;
 
-  if (legacyDataRoot !== null && fs.existsSync(legacyDataRoot)) {
-    const legacyPenguins = path.join(legacyDataRoot, 'penguins');
-    const portableHasUsers = directoryHasUserPenguins(initial.penguinsRoot);
-    const legacyHasUsers = directoryHasUserPenguins(legacyPenguins);
+  if (!legacyMigrationChecked) {
+    if (legacyDataRoot === null || !fs.existsSync(legacyDataRoot)) {
+      legacyMigrationChecked = true;
+    } else {
+      const legacyPenguins = path.join(legacyDataRoot, 'penguins');
+      const portableHasUsers = directoryHasUserPenguins(layout.penguinsRoot);
+      const legacyHasUsers = directoryHasUserPenguins(legacyPenguins);
 
-    if (!portableHasUsers && legacyHasUsers) {
-      const copied = copyMissingTreeSync(legacyDataRoot, initial.dataRoot);
-      migratedLegacyData = copied > 0;
-      console.log(`WADDLE_USER_DATA_MIGRATION=PASS source=${legacyDataRoot} destination=${initial.dataRoot} copied=${copied} mode=copy_missing_preserve_legacy`);
+      if (!portableHasUsers && legacyHasUsers) {
+        const copied = copyMissingTreeSync(legacyDataRoot, layout.dataRoot);
+        legacyMigrationOccurred = copied > 0;
+        console.log(`WADDLE_USER_DATA_MIGRATION=PASS source=${legacyDataRoot} destination=${layout.dataRoot} copied=${copied} mode=copy_missing_preserve_legacy`);
+      }
+      // A successful inspection is authoritative for this process. If storage
+      // later disappears, ensurePortablePenguinStorage repairs the active tree;
+      // it does not repeatedly traverse the legacy database every 1.5 seconds.
+      legacyMigrationChecked = true;
     }
+    layout = getLayout();
   }
 
-  const layout = getLayout(migratedLegacyData);
-  console.log(`WADDLE_USER_DATA_PREPARE=PASS user_data=${layout.userDataRoot} data_exists=${fs.existsSync(layout.dataRoot)} legacy=${layout.legacyDataRoot ?? 'none'} migrated_legacy=${layout.migratedLegacyData}`);
+  logOnceOrChanged('prepare', `WADDLE_USER_DATA_PREPARE=PASS user_data=${layout.userDataRoot} data_exists=${fs.existsSync(layout.dataRoot)} legacy=${layout.legacyDataRoot ?? 'none'} migrated_legacy=${layout.migratedLegacyData}`);
   return layout;
 }
 
@@ -135,7 +153,7 @@ export function ensurePortablePenguinStorage(): PenguinStorageLayout {
   ensureDirectorySync(prepared.dataRoot);
   ensureDirectorySync(prepared.penguinsRoot);
 
-  console.log(`WADDLE_PENGUIN_STORAGE=PASS user_data=${prepared.userDataRoot} data=${prepared.dataRoot} penguins=${prepared.penguinsRoot} migrated_legacy=${prepared.migratedLegacyData}`);
+  logOnceOrChanged('storage', `WADDLE_PENGUIN_STORAGE=PASS user_data=${prepared.userDataRoot} data=${prepared.dataRoot} penguins=${prepared.penguinsRoot} migrated_legacy=${prepared.migratedLegacyData}`);
   return prepared;
 }
 
