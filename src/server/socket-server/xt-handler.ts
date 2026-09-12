@@ -283,21 +283,29 @@ export class XtHandler {
         throw error;
       }
     } else {
-      const fallback = 'penguin' in context ? getXtReadOnlyFallback(name) : undefined;
-      if (fallback !== undefined) {
-        context.msg.send(context.penguin, fallback.responseAction, ...fallback.responseArgs);
-        publishWaddleLiveTrace({
-          category: 'XT',
-          phase: 'handled',
-          source: 'xt-handler',
-          action: name,
-          direction: 'in',
-          status: 'compatibility-response',
-          argCount: args.length,
-          responseAction: fallback.responseAction,
-          compatibilityReason: fallback.reason
-        });
-      } else if (isNoResponseClientPacket(name)) {
+      // Keep the type guard and the response in the same lexical scope. WorldContext
+      // intentionally permits pre-login contexts without a penguin, so moving the
+      // guard into a ternary loses TypeScript's narrowing before the send call.
+      if ('penguin' in context) {
+        const fallback = getXtReadOnlyFallback(name);
+        if (fallback !== undefined) {
+          context.msg.send(context.penguin, fallback.responseAction, ...fallback.responseArgs);
+          publishWaddleLiveTrace({
+            category: 'XT',
+            phase: 'handled',
+            source: 'xt-handler',
+            action: name,
+            direction: 'in',
+            status: 'compatibility-response',
+            argCount: args.length,
+            responseAction: fallback.responseAction,
+            compatibilityReason: fallback.reason
+          });
+          return;
+        }
+      }
+
+      if (isNoResponseClientPacket(name)) {
         // These packets are protocol acknowledgements/lifecycle notifications, not
         // missing gameplay handlers. Accepting them explicitly removes false
         // "unhandled-action" noise while preserving strict errors for everything
