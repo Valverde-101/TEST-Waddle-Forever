@@ -1,5 +1,5 @@
 import { DataFolder, PenguinRepository } from './database/database';
-import { ensurePortablePenguinStorage } from './database/storage-layout';
+import { ensurePortablePenguinStorage, preparePortablePenguinStorage } from './database/storage-layout';
 import { VERSION } from '@common/constants';
 import { USER_DATA_FOLDER } from '@common/paths';
 import settingsManager from './settings';
@@ -17,17 +17,16 @@ export function startMods(): string[] {
 
 /** Initialize the db, game data, and the 3 services (http, login, world). Returns the world server. */
 export async function startServices() {
-  // Repair/create the portable storage hierarchy before DatabaseMigrator or
-  // PenguinRepository touch it. This also imports a legacy <repo>/data tree
-  // into <repo>/user-data/data without deleting the old copy.
-  const storage = ensurePortablePenguinStorage();
+  // First recover legacy <repo>/data if it exists, but do not create a brand
+  // new data directory here. DataFolder.init() owns the new-vs-migrate decision.
+  preparePortablePenguinStorage();
 
   const data = new DataFolder(USER_DATA_FOLDER);
   data.init(VERSION);
 
-  // DataFolder migrations can create/update files, so assert the penguin
-  // directory once more before constructing the repository used by login/world.
-  ensurePortablePenguinStorage();
+  // Once DataFolder has initialized/migrated the database, enforce the complete
+  // portable hierarchy used by login, world and Command Center.
+  const storage = ensurePortablePenguinStorage();
 
   const gameData = new GameData(settingsManager);
 
