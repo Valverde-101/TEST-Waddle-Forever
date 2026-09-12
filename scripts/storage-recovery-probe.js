@@ -63,6 +63,14 @@ async function main() {
     if (!fs.existsSync(portablePenguins)) {
       throw new Error(`storage recovery did not recreate: ${portablePenguins}`);
     }
+    if (!names.includes('101.json')) {
+      throw new Error(`storage recovery recreated the directory but lost the legacy profile: ${names.join(',')}`);
+    }
+
+    const restored = JSON.parse(fs.readFileSync(path.join(portablePenguins, '101.json'), 'utf8'));
+    if (restored.name !== 'StorageProbe') {
+      throw new Error(`restored profile mismatch: ${JSON.stringify(restored)}`);
+    }
 
     // The recovery path should be usable immediately for a new atomic write.
     const temporary = path.join(portablePenguins, '.102.probe.tmp');
@@ -74,7 +82,7 @@ async function main() {
     }
 
     process.stdout.write(
-      `WADDLE_STORAGE_RECOVERY_PROBE=PASS legacy_migration=true missing_directory_recovery=true atomic_write=true root=${root}\n`
+      `WADDLE_STORAGE_RECOVERY_PROBE=PASS legacy_migration=true missing_directory_recovery=true profile_restoration=true atomic_write=true root=${root}\n`
     );
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
