@@ -13,22 +13,23 @@
         <div>
           <div class="eyebrow">WADDLE FOREVER</div>
           <h1>Command Center</h1>
-          <p>Run game commands without memorizing IDs or syntax.</p>
+          <p>Commands apply automatically to the penguin that is currently in your game.</p>
         </div>
         <div class="header-actions">
           <button id="commandslist-button" class="ghost-button" title="Open the legacy command reference">Reference</button>
-          <button id="refresh-button" class="ghost-button" title="Refresh penguins">Refresh</button>
+          <button id="refresh-button" class="ghost-button" title="Refresh current session">Refresh status</button>
         </div>
       </header>
 
-      <section class="target-bar">
-        <label class="field-group target-field">
-          <span>Target penguin</span>
-          <select id="player-select" class="select"></select>
-        </label>
+      <section class="target-bar" aria-label="Current game session">
+        <div class="field-group target-field">
+          <span>Current penguin</span>
+          <strong id="active-penguin-name">Detecting session…</strong>
+          <small id="active-penguin-meta" class="muted">No name, ID, or target selection is required.</small>
+        </div>
         <div class="connection-state" id="connection-state">
           <span class="status-dot"></span>
-          <span id="player-status">Loading penguins…</span>
+          <span id="player-status">Checking the active game session…</span>
         </div>
       </section>
 
@@ -46,14 +47,14 @@
           <strong>Add furniture</strong><span>Search + quantity</span>
         </button>
         <button class="quick-action" data-select-command="jr">
-          <strong>Teleport</strong><span>Choose room</span>
+          <strong>Teleport</strong><span>Choose a room</span>
         </button>
       </section>
 
       <section class="workspace">
         <aside class="command-browser">
           <div class="browser-toolbar">
-            <input id="command-search" type="search" placeholder="Search commands…  Ctrl+K" autocomplete="off" />
+            <input id="command-search" type="search" placeholder="Search actions…  Ctrl+K" autocomplete="off" />
             <select id="category-select" class="select compact-select">
               <option value="all">All categories</option>
             </select>
@@ -63,8 +64,8 @@
 
         <section class="command-editor">
           <div id="empty-state" class="empty-state">
-            <h2>Choose a command</h2>
-            <p>Use search, a quick action, or select a command from the list.</p>
+            <h2>Choose an action</h2>
+            <p>Use search, a quick action, or select an action from the list.</p>
           </div>
 
           <div id="editor-content" class="editor-content hidden">
@@ -94,13 +95,13 @@
             </div>
 
             <label class="field-group command-preview-group">
-              <span>Command preview</span>
+              <span>Command preview · advanced</span>
               <input id="command-input" type="text" autocomplete="off" spellcheck="false" placeholder="Command" />
             </label>
 
             <div class="run-row">
               <div id="command-status" class="command-status neutral">Ready</div>
-              <button id="command-button" class="primary-button">Run command <span>Ctrl+Enter</span></button>
+              <button id="command-button" class="primary-button">Apply to current penguin <span>Ctrl+Enter</span></button>
             </div>
           </div>
         </section>
@@ -120,6 +121,5 @@
 
     <script>var exports = {};</script>
     <script src="commands-static.js"></script>
-    <script src="commands-enhancements.js"></script>
   </body>
 </html>
