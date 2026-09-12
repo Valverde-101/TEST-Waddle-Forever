@@ -7,6 +7,10 @@ import { ITEMS } from "@server/game-logic/items";
 import { FURNITURE } from "@server/game-logic/furniture";
 import { ROOMS } from "@server/game-data/rooms";
 
+const GET_PLAYERS_CHANNEL = 'command-center:get-players';
+const GET_DATA_CHANNEL = 'command-center:get-data';
+const RUN_COMMAND_CHANNEL = 'command-center:run-command';
+
 const getCommandCenterData = () => ({
   commands: getCommandsList(),
   catalog: {
@@ -33,7 +37,7 @@ const getCommandCenterData = () => ({
 
 export const createCommands = getPopupCreator(
   'commands',
-  ['get-players', 'get-command-center-data', 'run-command', 'open-commands-list'],
+  ['open-commands-list'],
   (mainWindow, settings, server, wins) => {
     const commandsWindow = new BrowserWindow({
       width: 1040,
@@ -50,88 +54,91 @@ export const createCommands = getPopupCreator(
 
     commandsWindow.setMenu(null);
 
-    const sendPlayers = () => {
-      if (commandsWindow.isDestroyed() || commandsWindow.webContents.isDestroyed()) return;
-      commandsWindow.webContents.send('get-players', server.getAllPlayersInfo());
-    };
+    // Command Center used to send an IPC request and then wait for a second
+    // event on the same channel. That design could silently lose the player
+    // response while other Command Center data still arrived. Use Electron's
+    // request/response IPC contract instead so every refresh resolves with a
+    // value or rejects with a visible error.
+    ipcMain.removeHandler(GET_PLAYERS_CHANNEL);
+    ipcMain.removeHandler(GET_DATA_CHANNEL);
+    ipcMain.removeHandler(RUN_COMMAND_CHANNEL);
 
-    const sendCommandCenterData = () => {
-      if (commandsWindow.isDestroyed() || commandsWindow.webContents.isDestroyed()) return;
-      commandsWindow.webContents.send('get-command-center-data', getCommandCenterData());
-    };
+    let lastPlayerSignature = '';
 
-    // Register IPC before loading the renderer. The old ordering allowed the
-    // renderer's first fetchPlayers() request to race ahead of ipcMain.on(),
-    // leaving the UI permanently stuck on "Loading players...".
-    ipcMain.on('get-players', sendPlayers);
-    ipcMain.on('get-command-center-data', sendCommandCenterData);
+    ipcMain.handle(GET_PLAYERS_CHANNEL, () => {
+      const players = server.getAllPlayersInfo();
+      const signature = players.map(player => `${player.id}:${player.name}`).join('|');
+      if (signature !== lastPlayerSignature) {
+        console.log(`WADDLE_COMMAND_CENTER_PLAYERS=STATE count=${players.length} players=${signature || 'none'}`);
+        lastPlayerSignature = signature;
+      }
+      return players;
+    });
 
-    ipcMain.on('run-command', (_, arg) => {
+    ipcMain.handle(GET_DATA_CHANNEL, () => getCommandCenterData());
+
+    ipcMain.handle(RUN_COMMAND_CHANNEL, (_, arg) => {
       const id = arg && arg.id;
       const rawCommand = arg && arg.command;
 
       if (typeof id !== 'number' || !Number.isFinite(id)) {
-        commandsWindow.webContents.send('command-result', {
+        return {
           ok: false,
           message: 'Select an online penguin before running a command.'
-        });
-        return;
+        };
       }
 
       if (typeof rawCommand !== 'string' || rawCommand.trim() === '') {
-        commandsWindow.webContents.send('command-result', {
+        return {
           ok: false,
           message: 'Enter or choose a command first.'
-        });
-        return;
+        };
       }
 
       const command = rawCommand.trim();
       const commandMatch = command.match(/^(\w+)(.*)$/);
       if (commandMatch === null) {
-        commandsWindow.webContents.send('command-result', {
+        return {
           ok: false,
           command,
           message: 'The command format is invalid.'
-        });
-        return;
+        };
       }
 
       const name = commandMatch[1];
       const argString = commandMatch[2].trim();
       const known = getCommandsList().some(info => info.name === name);
       if (!known) {
-        commandsWindow.webContents.send('command-result', {
+        return {
           ok: false,
           command,
           message: `Unknown command: ${name}`
-        });
-        return;
+        };
       }
 
       try {
         const dispatched = server.runCommand(id, name, argString === '' ? [] : argString.split(/\s+/));
         if (!dispatched) {
-          commandsWindow.webContents.send('command-result', {
+          return {
             ok: false,
             command,
-            message: 'That penguin is no longer online. The player list was refreshed.'
-          });
-          sendPlayers();
-          return;
+            refreshPlayers: true,
+            message: 'That penguin is no longer online. Refreshing the player list.'
+          };
         }
 
-        commandsWindow.webContents.send('command-result', {
+        console.log(`WADDLE_COMMAND_CENTER_COMMAND=PASS target=${id} command=${name}`);
+        return {
           ok: true,
           command,
           message: `Command dispatched: ${command}`
-        });
+        };
       } catch (error) {
-        commandsWindow.webContents.send('command-result', {
+        return {
           ok: false,
           command,
           message: error instanceof Error ? error.message : String(error)
-        });
+        };
       }
     });
 
@@ -139,16 +146,11 @@ export const createCommands = getPopupCreator(
       createCommandsList(mainWindow, wins, settings, server);
     });
 
-    // Always seed the renderer after its document is ready, then keep targets
-    // synchronized while the panel is open. This also picks up a penguin that
-    // logs in after Command Center was already opened.
-    commandsWindow.webContents.once('did-finish-load', () => {
-      sendPlayers();
-      sendCommandCenterData();
+    commandsWindow.once('closed', () => {
+      ipcMain.removeHandler(GET_PLAYERS_CHANNEL);
+      ipcMain.removeHandler(GET_DATA_CHANNEL);
+      ipcMain.removeHandler(RUN_COMMAND_CHANNEL);
     });
-
-    const playerPushTimer = setInterval(sendPlayers, 1500);
-    commandsWindow.once('closed', () => clearInterval(playerPushTimer));
 
     commandsWindow.loadFile(path.join(__dirname, 'commands.html'));
 
