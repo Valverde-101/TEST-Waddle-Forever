@@ -4,15 +4,20 @@ const dispatch = (name: string, detail: unknown) => {
   window.dispatchEvent(new CustomEvent(name, { detail }));
 };
 
-const fetchPlayers = async () => {
-  try {
-    const players = await ipcRenderer.invoke('command-center:get-players');
-    dispatch('get-players', players);
-    return players;
-  } catch (error) {
-    dispatch('command-center-player-error', error instanceof Error ? error.message : String(error));
-    throw error;
-  }
+// Preserve the original Waddle command-window contract: the renderer requests
+// the current players and the main process pushes the authoritative live list
+// back to this exact window. This path does not depend on disk I/O and cannot
+// be held hostage by a slow/corrupt saved profile.
+ipcRenderer.on('get-players', (_event, players) => {
+  dispatch('get-players', players);
+});
+
+ipcRenderer.on('command-center-player-error', (_event, message) => {
+  dispatch('command-center-player-error', message);
+});
+
+const fetchPlayers = () => {
+  ipcRenderer.send('get-players');
 };
 
 const fetchCommandCenterData = async () => {
@@ -22,7 +27,7 @@ const fetchCommandCenterData = async () => {
     return data;
   } catch (error) {
     dispatch('command-center-data-error', error instanceof Error ? error.message : String(error));
-    throw error;
+    return undefined;
   }
 };
 
@@ -31,7 +36,7 @@ const runCommand = async (obj: any) => {
     const result = await ipcRenderer.invoke('command-center:run-command', obj);
     dispatch('command-result', result);
     if (result && result.refreshPlayers) {
-      await fetchPlayers();
+      fetchPlayers();
     }
     return result;
   } catch (error) {
@@ -50,10 +55,3 @@ const runCommand = async (obj: any) => {
   openCommandsList: () => ipcRenderer.send('open-commands-list'),
   runCommand
 };
-
-// Do not depend on a one-shot renderer request. A penguin can enter the world
-// after Command Center was opened, so keep the selector synchronized for the
-// whole lifetime of this popup.
-setInterval(() => {
-  void fetchPlayers().catch(() => undefined);
-}, 1500);
