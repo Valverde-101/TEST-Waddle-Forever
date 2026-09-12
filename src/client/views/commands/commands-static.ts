@@ -15,29 +15,30 @@ type CatalogEntry = {
 
 type CommandCenterData = {
   commands: CommandInfo[];
-  catalog: {
-    items: CatalogEntry[];
-    furniture: CatalogEntry[];
-    rooms: Array<{ id: number; name: string }>;
-  };
+};
+
+type ActivePenguin = {
+  id: number;
+  name: string;
+};
+
+type CommandCenterState = {
+  online: boolean;
+  player: ActivePenguin | null;
+  onlineCount: number;
 };
 
 type CommandResult = {
   ok: boolean;
   command?: string;
   message: string;
-};
-
-type CommandTarget = {
-  id: number;
-  name: string;
-  online?: boolean;
-  saved?: boolean;
+  player?: ActivePenguin;
 };
 
 const commandsApi = (window as any).api;
 
-const playerSelect = document.getElementById('player-select')! as HTMLSelectElement;
+const activePenguinName = document.getElementById('active-penguin-name')!;
+const activePenguinMeta = document.getElementById('active-penguin-meta')!;
 const playerStatus = document.getElementById('player-status')!;
 const connectionState = document.getElementById('connection-state')!;
 const refreshButton = document.getElementById('refresh-button')!;
@@ -52,7 +53,7 @@ const commandTitle = document.getElementById('command-title')!;
 const commandDescription = document.getElementById('command-description')!;
 const argumentFields = document.getElementById('argument-fields')!;
 const commandInput = document.getElementById('command-input')! as HTMLInputElement;
-const commandButton = document.getElementById('command-button')!;
+const commandButton = document.getElementById('command-button')! as HTMLButtonElement;
 const commandStatus = document.getElementById('command-status')!;
 const favoriteButton = document.getElementById('favorite-button')!;
 const catalogSearchWrap = document.getElementById('catalog-search-wrap')!;
@@ -64,18 +65,18 @@ const examples = document.getElementById('examples')!;
 const historyList = document.getElementById('history-list')!;
 const clearHistoryButton = document.getElementById('clear-history')!;
 
-const HISTORY_KEY = 'waddle-command-center-history-v1';
+const HISTORY_KEY = 'waddle-command-center-history-v2';
 const FAVORITES_KEY = 'waddle-command-center-favorites-v1';
 const MAX_HISTORY = 12;
 
-let commandData: CommandCenterData = {
-  commands: [],
-  catalog: { items: [], furniture: [], rooms: [] }
-};
+let commandData: CommandCenterData = { commands: [] };
+let activeState: CommandCenterState = { online: false, player: null, onlineCount: 0 };
 let selectedCommand: CommandInfo | null = null;
 let argumentInputs: HTMLInputElement[] = [];
 let commandHistory: string[] = readStringArray(HISTORY_KEY);
 let favorites = new Set(readStringArray(FAVORITES_KEY));
+let catalogSearchTimer: ReturnType<typeof setTimeout> | null = null;
+let catalogRequestSequence = 0;
 
 function readStringArray(key: string): string[] {
   try {
@@ -136,39 +137,29 @@ function setStatus(message: string, kind: 'neutral' | 'success' | 'error' = 'neu
   commandStatus.classList.add(kind);
 }
 
-function populatePlayers(players: CommandTarget[]) {
-  const previous = playerSelect.value;
-  playerSelect.replaceChildren();
+function renderActiveState(state: CommandCenterState) {
+  activeState = state;
+  const player = state && state.player;
 
-  if (players.length === 0) {
-    const option = document.createElement('option');
-    option.value = '';
-    option.textContent = 'No penguin profiles found';
-    playerSelect.appendChild(option);
-    playerSelect.disabled = true;
-    playerStatus.textContent = 'No saved or online penguins';
-    connectionState.classList.remove('online');
+  if (player) {
+    activePenguinName.textContent = player.name;
+    activePenguinMeta.textContent = `Connected automatically · #${player.id} · no selection required`;
+    playerStatus.textContent = state.onlineCount > 1
+      ? `${state.onlineCount} sessions detected · commands use the active local session`
+      : 'Ready · commands apply automatically to this penguin';
+    connectionState.classList.add('online');
     return;
   }
 
-  const onlineCount = players.filter(player => player.online === true).length;
-  const savedCount = players.filter(player => player.saved === true).length;
+  activePenguinName.textContent = 'No active penguin';
+  activePenguinMeta.textContent = 'Enter the game first. You never need to type a penguin name or ID.';
+  playerStatus.textContent = 'Waiting for an in-game session';
+  connectionState.classList.remove('online');
+}
 
-  for (const player of players) {
-    const option = document.createElement('option');
-    option.value = String(player.id);
-    const state = player.online ? 'ONLINE' : player.saved ? 'SAVED' : 'SESSION';
-    option.textContent = `${player.name}  ·  #${player.id}  ·  ${state}`;
-    playerSelect.appendChild(option);
-  }
-
-  if (previous && players.some(player => String(player.id) === previous)) {
-    playerSelect.value = previous;
-  }
-
-  playerSelect.disabled = false;
-  playerStatus.textContent = `${onlineCount} online · ${savedCount} saved`;
-  connectionState.classList.toggle('online', onlineCount > 0);
+async function refreshState() {
+  const state = await commandsApi.fetchState();
+  if (state) renderActiveState(state as CommandCenterState);
 }
 
 function renderCategories() {
@@ -282,6 +273,15 @@ function updatePreviewFromArguments() {
   commandInput.value = [selectedCommand.name, ...args].join(' ');
 }
 
+function argumentPlaceholder(command: string, name: string, index: number): string {
+  if (command === 'ai' && index === 0) return 'Item ID or all';
+  if (command === 'af' && index === 0) return 'Furniture ID';
+  if (command === 'af' && index === 1) return 'Quantity (optional)';
+  if (command === 'jr' && index === 0) return 'Room ID or name';
+  if (command === 'ac') return 'Amount, e.g. 10000';
+  return name || `Argument ${index + 1}`;
+}
+
 function makeArgumentField(name: string, index: number): HTMLInputElement {
   const label = document.createElement('label');
   label.className = 'field-group';
@@ -300,38 +300,26 @@ function makeArgumentField(name: string, index: number): HTMLInputElement {
   return input;
 }
 
-function argumentPlaceholder(command: string, name: string, index: number): string {
-  if (command === 'ai' && index === 0) return 'Item ID or all';
-  if (command === 'af' && index === 0) return 'Furniture ID';
-  if (command === 'af' && index === 1) return 'Quantity (optional)';
-  if (command === 'jr' && index === 0) return 'Room ID or name';
-  if (command === 'ac') return 'Amount, e.g. 10000';
-  return name || `Argument ${index + 1}`;
+function catalogKindForSelected(): string | null {
+  if (!selectedCommand) return null;
+  if (selectedCommand.name === 'ai') return 'items';
+  if (selectedCommand.name === 'af') return 'furniture';
+  if (selectedCommand.name === 'jr') return 'rooms';
+  return null;
 }
 
-function getCatalogForSelected(): CatalogEntry[] | Array<{ id: number; name: string }> {
-  if (!selectedCommand) return [];
-  if (selectedCommand.name === 'ai') return commandData.catalog.items;
-  if (selectedCommand.name === 'af') return commandData.catalog.furniture;
-  if (selectedCommand.name === 'jr') return commandData.catalog.rooms;
-  return [];
-}
-
-function renderCatalogResults() {
-  const catalog = getCatalogForSelected();
-  const query = catalogSearch.value.trim().toLowerCase();
+function renderCatalogResults(entries: CatalogEntry[]) {
   catalogResults.replaceChildren();
 
-  if (!selectedCommand || catalog.length === 0) return;
+  if (entries.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'history-empty';
+    empty.textContent = 'No catalog entries found.';
+    catalogResults.appendChild(empty);
+    return;
+  }
 
-  const matches = catalog
-    .filter(entry => {
-      if (!query) return true;
-      return String(entry.id).includes(query) || entry.name.toLowerCase().includes(query);
-    })
-    .slice(0, 30);
-
-  for (const entry of matches) {
+  for (const entry of entries) {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'catalog-result';
@@ -340,13 +328,13 @@ function renderCatalogResults() {
     name.textContent = entry.name;
 
     const meta = document.createElement('small');
-    const cost = 'cost' in entry && typeof entry.cost === 'number' ? ` · ${entry.cost} coins` : '';
+    const cost = typeof entry.cost === 'number' ? ` · ${entry.cost} coins` : '';
     meta.textContent = `ID ${entry.id}${cost}`;
 
     button.append(name, meta);
     button.addEventListener('click', () => {
-      if (argumentInputs.length === 0) return;
-      argumentInputs[0].value = selectedCommand!.name === 'jr' ? entry.name : String(entry.id);
+      if (argumentInputs.length === 0 || !selectedCommand) return;
+      argumentInputs[0].value = selectedCommand.name === 'jr' ? entry.name : String(entry.id);
       updatePreviewFromArguments();
       catalogSearch.value = entry.name;
       catalogResults.replaceChildren();
@@ -354,28 +342,44 @@ function renderCatalogResults() {
     });
     catalogResults.appendChild(button);
   }
+}
 
-  if (matches.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'history-empty';
-    empty.textContent = 'No catalog entries found.';
-    catalogResults.appendChild(empty);
-  }
+async function performCatalogSearch() {
+  const kind = catalogKindForSelected();
+  if (kind === null) return;
+
+  const sequence = ++catalogRequestSequence;
+  const query = catalogSearch.value.trim();
+  catalogResults.textContent = 'Searching…';
+
+  const entries = await commandsApi.searchCatalog({ kind, query, limit: 40 });
+  if (sequence !== catalogRequestSequence || kind !== catalogKindForSelected()) return;
+  renderCatalogResults(Array.isArray(entries) ? entries : []);
+}
+
+function scheduleCatalogSearch(immediate = false) {
+  if (catalogSearchTimer !== null) clearTimeout(catalogSearchTimer);
+  catalogSearchTimer = setTimeout(() => {
+    catalogSearchTimer = null;
+    void performCatalogSearch();
+  }, immediate ? 0 : 140);
 }
 
 function renderCatalog() {
-  const enabled = selectedCommand !== null && ['ai', 'af', 'jr'].includes(selectedCommand.name);
+  const kind = catalogKindForSelected();
+  const enabled = kind !== null;
   catalogSearchWrap.classList.toggle('hidden', !enabled);
   catalogResults.replaceChildren();
   catalogSearch.value = '';
+  catalogRequestSequence += 1;
 
   if (!enabled || !selectedCommand) return;
   catalogLabel.textContent = selectedCommand.name === 'ai'
-    ? 'Find clothing item by name or ID'
+    ? 'Find clothing by name or ID'
     : selectedCommand.name === 'af'
       ? 'Find furniture by name or ID'
       : 'Find room by name or ID';
-  renderCatalogResults();
+  scheduleCatalogSearch(true);
 }
 
 function renderExamples(command: CommandInfo) {
@@ -414,9 +418,10 @@ function selectCommand(name: string, rawCommand?: string) {
       input.value = args[index] || '';
     });
   }
+
   updatePreviewFromArguments();
   if (rawCommand) commandInput.value = rawCommand.trim();
-  setStatus('Ready');
+  setStatus(activeState.player ? `Ready for ${activeState.player.name}` : 'Ready');
   renderCommandList();
 
   if (argumentInputs.length > 0) argumentInputs[0].focus();
@@ -426,104 +431,79 @@ function loadRawCommand(rawCommand: string) {
   const trimmed = rawCommand.trim();
   const match = trimmed.match(/^(\w+)/);
   if (!match) return;
-  const known = commandData.commands.find(item => item.name === match[1]);
-  if (known) {
-    selectCommand(known.name, trimmed);
-    commandInput.value = trimmed;
+
+  const name = match[1];
+  if (commandData.commands.some(command => command.name === name)) {
+    selectCommand(name, trimmed);
     return;
   }
 
-  // When an action is already selected, accept just its values. Example:
-  // selecting Coins and typing "5000" is normalized to "ac 5000".
-  if (selectedCommand) {
-    const normalized = `${selectedCommand.name}${trimmed ? ` ${trimmed}` : ''}`;
-    selectCommand(selectedCommand.name, normalized);
-    commandInput.value = normalized;
-  }
+  commandInput.value = trimmed;
+  setStatus('Command loaded');
 }
 
 function normalizeCommandInput(raw: string): string {
   const trimmed = raw.trim();
-  if (!trimmed) return '';
-
+  if (trimmed === '') return '';
   const first = trimmed.match(/^(\w+)/)?.[1] || '';
   if (commandData.commands.some(info => info.name === first)) return trimmed;
   if (selectedCommand) return `${selectedCommand.name} ${trimmed}`.trim();
   return trimmed;
 }
 
-function runCommand() {
-  const rawCommand = commandInput.value.trim();
-  const command = normalizeCommandInput(rawCommand);
-  const id = Number(playerSelect.value);
-
-  if (!Number.isFinite(id) || playerSelect.disabled) {
-    setStatus('Select an online or saved penguin first.', 'error');
-    return;
-  }
-  if (!command) {
-    setStatus('Choose or enter a command first.', 'error');
+async function runCommand(rawOverride?: string) {
+  const command = normalizeCommandInput(rawOverride === undefined ? commandInput.value : rawOverride);
+  if (command === '') {
+    setStatus('Choose an action first.', 'error');
     return;
   }
 
-  const name = command.match(/^(\w+)/)?.[1] || '';
-  if (!commandData.commands.some(info => info.name === name)) {
-    setStatus(`Unknown command: ${name || command}`, 'error');
+  setStatus(`Applying ${command}…`);
+  const result = await commandsApi.runCommand({ command }) as CommandResult;
+  if (!result) {
+    setStatus('Command failed without a response.', 'error');
     return;
   }
 
-  if (command !== rawCommand) {
-    commandInput.value = command;
-    const args = command.split(/\s+/).slice(1);
-    argumentInputs.forEach((input, index) => {
-      input.value = args[index] || '';
-    });
+  if (result.ok) {
+    rememberCommand(result.command || command);
+    setStatus(result.message, 'success');
+  } else {
+    setStatus(result.message, 'error');
   }
-
-  setStatus(`Sending ${command}…`);
-  void commandsApi.runCommand({ id, command });
 }
 
-window.addEventListener('get-players', (event: Event) => {
-  const players = (event as CustomEvent).detail as CommandTarget[];
-  populatePlayers(Array.isArray(players) ? players : []);
-});
-
 window.addEventListener('get-command-center-data', (event: Event) => {
-  commandData = (event as CustomEvent).detail as CommandCenterData;
+  const data = (event as CustomEvent).detail as CommandCenterData;
+  commandData = data && Array.isArray(data.commands) ? data : { commands: [] };
   renderCategories();
   renderCommandList();
-  if (!selectedCommand && commandData.commands.length > 0) {
-    const initial = commandData.commands.find(command => command.name === 'ac') || commandData.commands[0];
-    selectCommand(initial.name);
-  }
 });
 
-window.addEventListener('command-result', (event: Event) => {
-  const result = (event as CustomEvent).detail as CommandResult;
-  setStatus(result.message, result.ok ? 'success' : 'error');
-  if (result.ok && result.command) rememberCommand(result.command);
-});
-
-window.addEventListener('command-center-player-error', (event: Event) => {
-  const message = String((event as CustomEvent).detail || 'Unable to read penguin storage.');
-  playerSelect.disabled = true;
-  playerStatus.textContent = 'Penguin storage error';
-  connectionState.classList.remove('online');
-  setStatus(message, 'error');
+window.addEventListener('command-center-state', (event: Event) => {
+  const state = (event as CustomEvent).detail as CommandCenterState;
+  if (state) renderActiveState(state);
 });
 
 window.addEventListener('command-center-data-error', (event: Event) => {
-  const message = String((event as CustomEvent).detail || 'Unable to load command data.');
-  setStatus(message, 'error');
+  setStatus(String((event as CustomEvent).detail || 'Unable to load commands.'), 'error');
 });
 
-refreshButton.addEventListener('click', () => void commandsApi.fetchPlayers());
+window.addEventListener('command-center-state-error', (event: Event) => {
+  playerStatus.textContent = String((event as CustomEvent).detail || 'Unable to read the current session.');
+  connectionState.classList.remove('online');
+});
+
+window.addEventListener('command-center-catalog-error', (event: Event) => {
+  catalogResults.textContent = String((event as CustomEvent).detail || 'Catalog search failed.');
+});
+
+refreshButton.addEventListener('click', () => void refreshState());
 commandsListButton.addEventListener('click', () => commandsApi.openCommandsList());
 commandSearch.addEventListener('input', renderCommandList);
 categorySelect.addEventListener('change', renderCommandList);
-catalogSearch.addEventListener('input', renderCatalogResults);
-commandButton.addEventListener('click', runCommand);
+catalogSearch.addEventListener('input', () => scheduleCatalogSearch());
+commandButton.addEventListener('click', () => void runCommand());
 
 favoriteButton.addEventListener('click', () => {
   if (!selectedCommand) return;
@@ -540,12 +520,19 @@ clearHistoryButton.addEventListener('click', () => {
   renderHistory();
 });
 
-for (const button of Array.from(document.querySelectorAll<HTMLElement>('.quick-action'))) {
+for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-command]'))) {
   button.addEventListener('click', () => {
-    const raw = button.dataset.command;
-    const name = button.dataset.selectCommand;
-    if (raw) loadRawCommand(raw);
-    else if (name) selectCommand(name);
+    const command = button.dataset.command || '';
+    if (command === '') return;
+    loadRawCommand(command);
+    void runCommand(command);
+  });
+}
+
+for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-select-command]'))) {
+  button.addEventListener('click', () => {
+    const name = button.dataset.selectCommand || '';
+    if (name !== '') selectCommand(name);
   });
 }
 
@@ -554,17 +541,18 @@ document.addEventListener('keydown', event => {
     event.preventDefault();
     commandSearch.focus();
     commandSearch.select();
-    return;
   }
+
   if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
     event.preventDefault();
-    runCommand();
+    void runCommand();
   }
 });
 
 window.addEventListener('load', () => {
   renderHistory();
-  void commandsApi.fetchPlayers();
+  renderActiveState(activeState);
   void commandsApi.fetchCommandCenterData();
+  void refreshState();
   commandSearch.focus();
 });
