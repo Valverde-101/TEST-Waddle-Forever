@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link href="../base.css" rel="stylesheet" type="text/css" media="screen"/>
     <link href="commands.css" rel="stylesheet" type="text/css" media="screen"/>
+    <style>
+      .command-center {
+        grid-template-rows: auto auto minmax(0, 1fr) auto;
+      }
+    </style>
     <title>Command Center</title>
   </head>
   <body>
@@ -13,23 +18,26 @@
         <div>
           <div class="eyebrow">WADDLE FOREVER</div>
           <h1>Command Center</h1>
-          <p>Commands apply automatically to the penguin that is currently in your game.</p>
+          <p>Choose an action and apply it directly to the penguin currently in your game.</p>
         </div>
         <div class="header-actions">
           <button id="commandslist-button" class="ghost-button" title="Open the legacy command reference">Reference</button>
-          <button id="refresh-button" class="ghost-button" title="Refresh current session">Refresh status</button>
+          <button id="refresh-button" class="ghost-button hidden" tabindex="-1" aria-hidden="true">Refresh status</button>
         </div>
       </header>
 
-      <section class="target-bar" aria-label="Current game session">
+      <!-- Kept only as an internal compatibility target for the renderer. The
+           player is resolved synchronously when a command is dispatched; the
+           user never has to wait for or select a session. -->
+      <section class="target-bar hidden" aria-hidden="true">
         <div class="field-group target-field">
           <span>Current penguin</span>
-          <strong id="active-penguin-name">Detecting session…</strong>
-          <small id="active-penguin-meta" class="muted">No name, ID, or target selection is required.</small>
+          <strong id="active-penguin-name">Ready</strong>
+          <small id="active-penguin-meta" class="muted">No player selection is required.</small>
         </div>
         <div class="connection-state" id="connection-state">
           <span class="status-dot"></span>
-          <span id="player-status">Checking the active game session…</span>
+          <span id="player-status">Ready</span>
         </div>
       </section>
 
@@ -101,7 +109,7 @@
 
             <div class="run-row">
               <div id="command-status" class="command-status neutral">Ready</div>
-              <button id="command-button" class="primary-button">Apply to current penguin <span>Ctrl+Enter</span></button>
+              <button id="command-button" class="primary-button">Apply <span>Ctrl+Enter</span></button>
             </div>
           </div>
         </section>
@@ -120,6 +128,7 @@
     </main>
 
     <script>var exports = {};</script>
+    <script src="commands-compat-static.js"></script>
     <script src="commands-static.js"></script>
   </body>
 </html>
