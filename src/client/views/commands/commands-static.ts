@@ -28,6 +28,13 @@ type CommandResult = {
   message: string;
 };
 
+type CommandTarget = {
+  id: number;
+  name: string;
+  online?: boolean;
+  saved?: boolean;
+};
+
 const commandsApi = (window as any).api;
 
 const playerSelect = document.getElementById('player-select')! as HTMLSelectElement;
@@ -129,25 +136,29 @@ function setStatus(message: string, kind: 'neutral' | 'success' | 'error' = 'neu
   commandStatus.classList.add(kind);
 }
 
-function populatePlayers(players: Array<{ name: string; id: number }>) {
+function populatePlayers(players: CommandTarget[]) {
   const previous = playerSelect.value;
   playerSelect.replaceChildren();
 
   if (players.length === 0) {
     const option = document.createElement('option');
     option.value = '';
-    option.textContent = 'No online penguins';
+    option.textContent = 'No penguin profiles found';
     playerSelect.appendChild(option);
     playerSelect.disabled = true;
-    playerStatus.textContent = 'No online penguins';
+    playerStatus.textContent = 'No saved or online penguins';
     connectionState.classList.remove('online');
     return;
   }
 
+  const onlineCount = players.filter(player => player.online === true).length;
+  const savedCount = players.filter(player => player.saved === true).length;
+
   for (const player of players) {
     const option = document.createElement('option');
     option.value = String(player.id);
-    option.textContent = `${player.name}  ·  #${player.id}`;
+    const state = player.online ? 'ONLINE' : player.saved ? 'SAVED' : 'SESSION';
+    option.textContent = `${player.name}  ·  #${player.id}  ·  ${state}`;
     playerSelect.appendChild(option);
   }
 
@@ -156,8 +167,8 @@ function populatePlayers(players: Array<{ name: string; id: number }>) {
   }
 
   playerSelect.disabled = false;
-  playerStatus.textContent = `${players.length} penguin${players.length === 1 ? '' : 's'} online`;
-  connectionState.classList.add('online');
+  playerStatus.textContent = `${onlineCount} online · ${savedCount} saved`;
+  connectionState.classList.toggle('online', onlineCount > 0);
 }
 
 function renderCategories() {
@@ -415,16 +426,39 @@ function loadRawCommand(rawCommand: string) {
   const trimmed = rawCommand.trim();
   const match = trimmed.match(/^(\w+)/);
   if (!match) return;
-  selectCommand(match[1], trimmed);
-  commandInput.value = trimmed;
+  const known = commandData.commands.find(item => item.name === match[1]);
+  if (known) {
+    selectCommand(known.name, trimmed);
+    commandInput.value = trimmed;
+    return;
+  }
+
+  // When an action is already selected, accept just its values. Example:
+  // selecting Coins and typing "5000" is normalized to "ac 5000".
+  if (selectedCommand) {
+    const normalized = `${selectedCommand.name}${trimmed ? ` ${trimmed}` : ''}`;
+    selectCommand(selectedCommand.name, normalized);
+    commandInput.value = normalized;
+  }
+}
+
+function normalizeCommandInput(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+
+  const first = trimmed.match(/^(\w+)/)?.[1] || '';
+  if (commandData.commands.some(info => info.name === first)) return trimmed;
+  if (selectedCommand) return `${selectedCommand.name} ${trimmed}`.trim();
+  return trimmed;
 }
 
 function runCommand() {
-  const command = commandInput.value.trim();
+  const rawCommand = commandInput.value.trim();
+  const command = normalizeCommandInput(rawCommand);
   const id = Number(playerSelect.value);
 
   if (!Number.isFinite(id) || playerSelect.disabled) {
-    setStatus('No online penguin selected.', 'error');
+    setStatus('Select an online or saved penguin first.', 'error');
     return;
   }
   if (!command) {
@@ -438,13 +472,21 @@ function runCommand() {
     return;
   }
 
+  if (command !== rawCommand) {
+    commandInput.value = command;
+    const args = command.split(/\s+/).slice(1);
+    argumentInputs.forEach((input, index) => {
+      input.value = args[index] || '';
+    });
+  }
+
   setStatus(`Sending ${command}…`);
-  commandsApi.runCommand({ id, command });
+  void commandsApi.runCommand({ id, command });
 }
 
 window.addEventListener('get-players', (event: Event) => {
-  const players = (event as CustomEvent).detail as Array<{ name: string; id: number }>;
-  populatePlayers(players);
+  const players = (event as CustomEvent).detail as CommandTarget[];
+  populatePlayers(Array.isArray(players) ? players : []);
 });
 
 window.addEventListener('get-command-center-data', (event: Event) => {
@@ -463,7 +505,20 @@ window.addEventListener('command-result', (event: Event) => {
   if (result.ok && result.command) rememberCommand(result.command);
 });
 
-refreshButton.addEventListener('click', () => commandsApi.fetchPlayers());
+window.addEventListener('command-center-player-error', (event: Event) => {
+  const message = String((event as CustomEvent).detail || 'Unable to read penguin storage.');
+  playerSelect.disabled = true;
+  playerStatus.textContent = 'Penguin storage error';
+  connectionState.classList.remove('online');
+  setStatus(message, 'error');
+});
+
+window.addEventListener('command-center-data-error', (event: Event) => {
+  const message = String((event as CustomEvent).detail || 'Unable to load command data.');
+  setStatus(message, 'error');
+});
+
+refreshButton.addEventListener('click', () => void commandsApi.fetchPlayers());
 commandsListButton.addEventListener('click', () => commandsApi.openCommandsList());
 commandSearch.addEventListener('input', renderCommandList);
 categorySelect.addEventListener('change', renderCommandList);
@@ -509,7 +564,7 @@ document.addEventListener('keydown', event => {
 
 window.addEventListener('load', () => {
   renderHistory();
-  commandsApi.fetchPlayers();
-  commandsApi.fetchCommandCenterData();
+  void commandsApi.fetchPlayers();
+  void commandsApi.fetchCommandCenterData();
   commandSearch.focus();
 });
