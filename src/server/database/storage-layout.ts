@@ -17,14 +17,6 @@ function isTransientStorageError(error: unknown): boolean {
   return typeof code === 'string' && TRANSIENT_STORAGE_ERRORS.has(code);
 }
 
-function sleepSync(milliseconds: number): void {
-  // Atomics.wait is available in the Node 12 runtime bundled with Electron 10
-  // and gives us a tiny synchronous backoff without adding another dependency.
-  const buffer = new SharedArrayBuffer(4);
-  const view = new Int32Array(buffer);
-  Atomics.wait(view, 0, 0, milliseconds);
-}
-
 function ensureDirectorySync(directory: string): void {
   let lastError: unknown;
   for (let attempt = 1; attempt <= 4; attempt++) {
@@ -36,7 +28,19 @@ function ensureDirectorySync(directory: string): void {
     } catch (error) {
       lastError = error;
       if (!isTransientStorageError(error) || attempt === 4) throw error;
-      sleepSync(50 * attempt);
+    }
+  }
+  throw lastError;
+}
+
+function readDirectorySync(directory: string): fs.Dirent[] {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      return fs.readdirSync(directory, { withFileTypes: true });
+    } catch (error) {
+      lastError = error;
+      if (!isTransientStorageError(error) || attempt === 4) throw error;
     }
   }
   throw lastError;
@@ -44,7 +48,7 @@ function ensureDirectorySync(directory: string): void {
 
 function directoryHasUserPenguins(directory: string): boolean {
   try {
-    return fs.readdirSync(directory).some(file => /^(?:10[1-9]|1[1-9]\d|[2-9]\d{2,}|\d{4,})\.json$/.test(file));
+    return readDirectorySync(directory).some(entry => entry.isFile() && /^(?:10[1-9]|1[1-9]\d|[2-9]\d{2,}|\d{4,})\.json$/.test(entry.name));
   } catch (error) {
     if (isTransientStorageError(error)) return false;
     throw error;
@@ -56,7 +60,7 @@ function copyMissingTreeSync(source: string, destination: string): number {
   ensureDirectorySync(destination);
 
   let copied = 0;
-  for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+  for (const entry of readDirectorySync(source)) {
     const sourcePath = path.join(source, entry.name);
     const destinationPath = path.join(destination, entry.name);
 
@@ -83,40 +87,63 @@ function resolveLegacyDataRoot(): string | null {
   return path.resolve(candidate) === path.resolve(current) ? null : candidate;
 }
 
-export function ensurePortablePenguinStorage(): PenguinStorageLayout {
+function getLayout(migratedLegacyData: boolean): PenguinStorageLayout {
   const dataRoot = path.join(USER_DATA_FOLDER, 'data');
-  const penguinsRoot = path.join(dataRoot, 'penguins');
-  const legacyDataRoot = resolveLegacyDataRoot();
-
-  ensureDirectorySync(USER_DATA_FOLDER);
-
-  let migratedLegacyData = false;
-  if (legacyDataRoot !== null && fs.existsSync(legacyDataRoot)) {
-    const legacyPenguins = path.join(legacyDataRoot, 'penguins');
-    const portableHasUsers = directoryHasUserPenguins(penguinsRoot);
-    const legacyHasUsers = directoryHasUserPenguins(legacyPenguins);
-
-    if (!portableHasUsers && legacyHasUsers) {
-      const copied = copyMissingTreeSync(legacyDataRoot, dataRoot);
-      migratedLegacyData = copied > 0;
-      console.log(`WADDLE_USER_DATA_MIGRATION=PASS source=${legacyDataRoot} destination=${dataRoot} copied=${copied} mode=copy_missing_preserve_legacy`);
-    }
-  }
-
-  ensureDirectorySync(dataRoot);
-  ensureDirectorySync(penguinsRoot);
-
-  console.log(`WADDLE_PENGUIN_STORAGE=PASS user_data=${USER_DATA_FOLDER} data=${dataRoot} penguins=${penguinsRoot} migrated_legacy=${migratedLegacyData}`);
-
   return {
     userDataRoot: USER_DATA_FOLDER,
     dataRoot,
-    penguinsRoot,
-    legacyDataRoot,
+    penguinsRoot: path.join(dataRoot, 'penguins'),
+    legacyDataRoot: resolveLegacyDataRoot(),
     migratedLegacyData
   };
 }
 
+/**
+ * Prepare portable storage before DataFolder.init().
+ *
+ * Important: when there is no legacy database, this deliberately does NOT
+ * create <user-data>/data. DataFolder uses existence of that directory to
+ * distinguish a brand-new database from an old database that needs migrations.
+ */
+export function preparePortablePenguinStorage(): PenguinStorageLayout {
+  ensureDirectorySync(USER_DATA_FOLDER);
+
+  const initial = getLayout(false);
+  const legacyDataRoot = initial.legacyDataRoot;
+  let migratedLegacyData = false;
+
+  if (legacyDataRoot !== null && fs.existsSync(legacyDataRoot)) {
+    const legacyPenguins = path.join(legacyDataRoot, 'penguins');
+    const portableHasUsers = directoryHasUserPenguins(initial.penguinsRoot);
+    const legacyHasUsers = directoryHasUserPenguins(legacyPenguins);
+
+    if (!portableHasUsers && legacyHasUsers) {
+      const copied = copyMissingTreeSync(legacyDataRoot, initial.dataRoot);
+      migratedLegacyData = copied > 0;
+      console.log(`WADDLE_USER_DATA_MIGRATION=PASS source=${legacyDataRoot} destination=${initial.dataRoot} copied=${copied} mode=copy_missing_preserve_legacy`);
+    }
+  }
+
+  const layout = getLayout(migratedLegacyData);
+  console.log(`WADDLE_USER_DATA_PREPARE=PASS user_data=${layout.userDataRoot} data_exists=${fs.existsSync(layout.dataRoot)} legacy=${layout.legacyDataRoot ?? 'none'} migrated_legacy=${layout.migratedLegacyData}`);
+  return layout;
+}
+
+/** Ensure the final data/penguins hierarchy exists after DataFolder.init(). */
+export function ensurePortablePenguinStorage(): PenguinStorageLayout {
+  const prepared = preparePortablePenguinStorage();
+  ensureDirectorySync(prepared.dataRoot);
+  ensureDirectorySync(prepared.penguinsRoot);
+
+  console.log(`WADDLE_PENGUIN_STORAGE=PASS user_data=${prepared.userDataRoot} data=${prepared.dataRoot} penguins=${prepared.penguinsRoot} migrated_legacy=${prepared.migratedLegacyData}`);
+  return prepared;
+}
+
+/**
+ * Retry an individual repository operation when SMB briefly reports a directory
+ * as missing. This is the exact failure observed during XML login (ENOENT from
+ * scandir .../data/penguins).
+ */
 export async function withPenguinStorageRecovery<T>(label: string, operation: () => Promise<T>): Promise<T> {
   let lastError: unknown;
 
