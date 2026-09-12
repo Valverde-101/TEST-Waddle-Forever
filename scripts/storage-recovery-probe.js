@@ -11,6 +11,11 @@ async function main() {
     throw new Error(`compiled storage module missing: ${compiledStorage}`);
   }
 
+  // The production app runs with the repository as cwd. Reproduce that exact
+  // contract so compiled/common/version.js resolves the canonical package.json
+  // instead of looking at the GitHub runner checkout directory.
+  process.chdir(repo);
+
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'waddle-storage-probe-'));
   const portableRoot = path.join(root, 'user-data');
   const legacyData = path.join(root, 'data');
