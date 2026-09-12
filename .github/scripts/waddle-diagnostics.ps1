@@ -311,10 +311,38 @@ foreach ($issue in $issueArray) {
   $severityCounts[$severity] = [int]$severityCounts[$severity] + 1
 }
 
+# Resolve the repository SHA without importing AndroidBuild Core. The runner can
+# mark a mapped/shared repository as unsafe for an unqualified `git` call, which
+# previously left diagnostics with git_sha="" even while the exact-head gate
+# correctly passed. Prefer the managed Git captured by CI, scope safe.directory
+# to this process invocation, then fall back to trusted Waddle state when Git is
+# unavailable (for example, a diagnostics-only user session).
 $gitSha = ''
 try {
-  $gitSha = (& git -C $RepoRoot rev-parse HEAD 2>$null | Select-Object -First 1).Trim()
+  $gitExecutable = ''
+  if ($env:WADDLE_GIT_EXE -and (Test-Path -LiteralPath $env:WADDLE_GIT_EXE -PathType Leaf)) {
+    $gitExecutable = [string]$env:WADDLE_GIT_EXE
+  } else {
+    $gitCommand = Get-Command git.exe -ErrorAction SilentlyContinue
+    if (-not $gitCommand) { $gitCommand = Get-Command git -ErrorAction SilentlyContinue }
+    if ($gitCommand) { $gitExecutable = [string]$gitCommand.Source }
+  }
+
+  if ($gitExecutable) {
+    $gitOutput = & $gitExecutable -c "safe.directory=$RepoRoot" -C $RepoRoot rev-parse HEAD 2>$null
+    if ($LASTEXITCODE -eq 0 -and $gitOutput) {
+      $gitSha = ([string]($gitOutput | Select-Object -First 1)).Trim()
+    }
+  }
 } catch {}
+
+if ([string]::IsNullOrWhiteSpace($gitSha)) {
+  $certificationState = Read-JsonFile -Path (Join-Path $WorkRoot 'state\waddle-certification.json')
+  $gitSha = [string](Get-PropertyValue -Object $certificationState -Name 'source_sha' -Default '')
+}
+if ([string]::IsNullOrWhiteSpace($gitSha) -and $env:WADDLE_EXPECTED_SHA) {
+  $gitSha = ([string]$env:WADDLE_EXPECTED_SHA).Trim()
+}
 
 $status = 'PASS'
 if ([int]$severityCounts.critical -gt 0) { $status = 'FAIL' }
