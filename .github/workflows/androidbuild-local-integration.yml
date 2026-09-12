@@ -55,16 +55,36 @@ jobs:
           if([version]$version -lt [version]'3.0.17'){throw "WADDLE_CERT=FAIL core_required=3.0.17 actual=$version"}
           Enable-AndroidBuildPortableTools -AndroidBuildRoot $root | Out-Null
           $repo=Join-Path $root 'Repositories\TEST-Waddle-Forever'
-          $sync=Sync-AndroidBuildRepositoryExactHead `
-            -RepoRoot $repo `
-            -ExpectedSha $env:WADDLE_EXPECTED_SHA `
-            -AndroidBuildRoot $root `
-            -AllowTrackedReset `
-            -CleanUntracked `
-            -SourceRemote 'https://github.com/${{ github.repository }}.git' `
-            -FetchTimeoutSeconds 7200 `
-            -FetchDepth 1
-          if([string]$sync.actual_sha -ne [string]$env:WADDLE_EXPECTED_SHA){throw "WADDLE_CERT=FAIL exact_head expected=$env:WADDLE_EXPECTED_SHA actual=$($sync.actual_sha)"}
+
+          # Waddle keeps its authoritative player/settings database under
+          # <repo>\user-data. AndroidBuild Core CleanUntracked currently maps to
+          # `git clean -fdx`, which intentionally ignores .gitignore and would
+          # erase that database. Exact-head synchronization for Waddle therefore
+          # resets tracked files only; generated/mutable trees are managed by
+          # Waddle Setup and .work. A sentinel proves the synchronization itself
+          # cannot remove portable player data.
+          $userData=Join-Path $repo 'user-data'
+          New-Item -ItemType Directory -Force -Path $userData | Out-Null
+          $preserveProbe=Join-Path $userData '.androidbuild-preserve-probe'
+          $probeValue=[guid]::NewGuid().ToString('N')
+          Set-Content -LiteralPath $preserveProbe -Value $probeValue -Encoding ASCII
+          try {
+            $sync=Sync-AndroidBuildRepositoryExactHead `
+              -RepoRoot $repo `
+              -ExpectedSha $env:WADDLE_EXPECTED_SHA `
+              -AndroidBuildRoot $root `
+              -AllowTrackedReset `
+              -SourceRemote 'https://github.com/${{ github.repository }}.git' `
+              -FetchTimeoutSeconds 7200 `
+              -FetchDepth 1
+            if([string]$sync.actual_sha -ne [string]$env:WADDLE_EXPECTED_SHA){throw "WADDLE_CERT=FAIL exact_head expected=$env:WADDLE_EXPECTED_SHA actual=$($sync.actual_sha)"}
+            if(-not(Test-Path -LiteralPath $preserveProbe -PathType Leaf)){throw "WADDLE_USER_DATA_PRESERVATION=FAIL reason=sentinel_removed path=$preserveProbe"}
+            $actualProbe=(Get-Content -LiteralPath $preserveProbe -Raw).Trim()
+            if($actualProbe -ne $probeValue){throw "WADDLE_USER_DATA_PRESERVATION=FAIL reason=sentinel_changed expected=$probeValue actual=$actualProbe"}
+            Write-Host "WADDLE_USER_DATA_PRESERVATION=PASS path=$userData sync_clean_untracked=false"
+          } finally {
+            Remove-Item -LiteralPath $preserveProbe -Force -ErrorAction SilentlyContinue
+          }
           "WADDLE_CANONICAL_REPO=$repo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "WADDLE_CERT_SYNC=PASS repo=$repo sha=$($sync.actual_sha) core=$version"
 
