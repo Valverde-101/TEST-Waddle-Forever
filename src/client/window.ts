@@ -7,6 +7,7 @@ import { SettingsManager } from '../server/settings';
 import { getSiteUrl } from './views/multiplayer/multiplayer';
 import { instrumentRuntimeWindow, writeRuntimeDiagnostic } from './runtime-diagnostics';
 import { installWaddleDiagnosticPanel } from './diagnostic-panel';
+import { installLegacyWebCompatibility } from './legacy-web-compat';
 
 const faviconPaths: Record<string, string> = {
   win32: '../assets/favicon.ico',
@@ -105,10 +106,10 @@ export const createWindow = async (store: Store, clientSettings: GlobalSettings,
     });
   });
 
-  // Diagnostics must never be allowed to prevent the game window from opening.
-  // Arm the panel when a renderer DOM exists, but keep installation strictly
-  // best-effort. Resolving domReady before starting the panel guarantees the
-  // caller can begin the bounded Flash probe immediately.
+  // Diagnostics and compatibility hooks must never be allowed to prevent the
+  // game window from opening. Resolve domReady first, then install both hooks
+  // strictly best-effort. The compatibility layer restores the dynamic local
+  // port for archived AJAX code that incorrectly uses location.hostname.
   mainWindow.webContents.once('dom-ready', () => {
     writeRuntimeDiagnostic('renderer-dom-ready', {
       url: mainWindow.webContents.getURL()
@@ -117,6 +118,16 @@ export const createWindow = async (store: Store, clientSettings: GlobalSettings,
       resolveDomReady();
       resolveDomReady = null;
     }
+
+    void installLegacyWebCompatibility(mainWindow).catch(error => {
+      writeRuntimeDiagnostic('legacy-web-compat-nonblocking-failure', {
+        error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+        url: mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()
+          ? ''
+          : mainWindow.webContents.getURL()
+      });
+    });
+
     void installWaddleDiagnosticPanel(mainWindow).catch(error => {
       writeRuntimeDiagnostic('diagnostic-panel-nonblocking-failure', {
         error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
