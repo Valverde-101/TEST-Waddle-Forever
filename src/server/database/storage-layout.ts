@@ -55,6 +55,14 @@ function directoryHasUserPenguins(directory: string): boolean {
   return readDirectorySync(directory).some(entry => entry.isFile() && /^(?:10[1-9]|1[1-9]\d|[2-9]\d{2,}|\d{4,})\.json$/.test(entry.name));
 }
 
+function legacyDatabaseLooksUsable(directory: string): boolean {
+  const penguins = path.join(directory, 'penguins');
+  if (!fs.existsSync(penguins)) return false;
+  if (fs.existsSync(path.join(directory, '.version'))) return true;
+  if (fs.existsSync(path.join(penguins, 'seq'))) return true;
+  return readDirectorySync(penguins).some(entry => entry.isFile() && /^\d+\.json$/.test(entry.name));
+}
+
 function copyMissingTreeSync(source: string, destination: string): number {
   if (!fs.existsSync(source)) return 0;
   ensureDirectorySync(destination);
@@ -127,17 +135,27 @@ export function preparePortablePenguinStorage(): PenguinStorageLayout {
   const legacyDataRoot = layout.legacyDataRoot;
 
   if (!legacyMigrationChecked) {
-    if (legacyDataRoot === null || !fs.existsSync(legacyDataRoot)) {
+    if (legacyDataRoot === null || !fs.existsSync(legacyDataRoot) || !legacyDatabaseLooksUsable(legacyDataRoot)) {
       legacyMigrationChecked = true;
     } else {
+      const portableDataExists = fs.existsSync(layout.dataRoot);
       const legacyPenguins = path.join(legacyDataRoot, 'penguins');
       const portableHasUsers = directoryHasUserPenguins(layout.penguinsRoot);
       const legacyHasUsers = directoryHasUserPenguins(legacyPenguins);
 
-      if (!portableHasUsers && legacyHasUsers) {
+      // First portable launch: migrate the entire historical database even if
+      // it predates the >=101 user-id scheme. DataFolder.init() will then run
+      // the normal version migrations on that copied database.
+      const shouldCopyWholeLegacy = !portableDataExists;
+      // Recovery/partial-portable case: preserve current portable files, but
+      // restore missing user profiles from the legacy tree.
+      const shouldRecoverMissingProfiles = portableDataExists && !portableHasUsers && legacyHasUsers;
+
+      if (shouldCopyWholeLegacy || shouldRecoverMissingProfiles) {
         const copied = copyMissingTreeSync(legacyDataRoot, layout.dataRoot);
         legacyMigrationOccurred = legacyMigrationOccurred || copied > 0;
-        console.log(`WADDLE_USER_DATA_MIGRATION=PASS source=${legacyDataRoot} destination=${layout.dataRoot} copied=${copied} mode=copy_missing_preserve_legacy`);
+        const mode = shouldCopyWholeLegacy ? 'initial_portable_migration' : 'copy_missing_preserve_legacy';
+        console.log(`WADDLE_USER_DATA_MIGRATION=PASS source=${legacyDataRoot} destination=${layout.dataRoot} copied=${copied} mode=${mode}`);
       }
       legacyMigrationChecked = true;
     }
