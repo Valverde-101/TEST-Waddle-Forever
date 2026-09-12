@@ -100,6 +100,20 @@ jobs:
             -AndroidBuildRoot $env:ANDROIDBUILD_ROOT
           if($LASTEXITCODE -ne 0){throw "WADDLE_CERT=FAIL certification_exit=$LASTEXITCODE"}
 
+      - name: Verify portable penguin storage recovery
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $probe=Join-Path $env:WADDLE_CANONICAL_REPO 'scripts\storage-recovery-probe.js'
+          if(-not(Test-Path -LiteralPath $probe -PathType Leaf)){throw "WADDLE_STORAGE_RECOVERY_PROBE=FAIL script_missing=$probe"}
+          $node=Join-Path $env:ANDROIDBUILD_ROOT 'Tools\Node\20.19.0\x64\node.exe'
+          if(-not(Test-Path -LiteralPath $node -PathType Leaf)){throw "WADDLE_STORAGE_RECOVERY_PROBE=FAIL node_missing=$node"}
+          & $node $probe
+          if($LASTEXITCODE -ne 0){throw "WADDLE_STORAGE_RECOVERY_PROBE=FAIL exit=$LASTEXITCODE"}
+          Import-Module (Join-Path $env:ANDROIDBUILD_ROOT 'Core\Current\AndroidBuild.psd1') -Force -DisableNameChecking
+          Test-AndroidBuildExactHead -RepoRoot $env:WADDLE_CANONICAL_REPO -ExpectedSha $env:WADDLE_EXPECTED_SHA -AndroidBuildRoot $env:ANDROIDBUILD_ROOT | Out-Null
+          Write-Host "WADDLE_STORAGE_RECOVERY_PROBE_EXACT_HEAD=PASS sha=$env:WADDLE_EXPECTED_SHA"
+
       - name: Build incremental SWF dependency analysis
         shell: powershell
         run: |
