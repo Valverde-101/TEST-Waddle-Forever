@@ -67,7 +67,7 @@ let commandData: CommandCenterData = {
 };
 let selectedCommand: CommandInfo | null = null;
 let argumentInputs: HTMLInputElement[] = [];
-let history: string[] = readStringArray(HISTORY_KEY);
+let commandHistory: string[] = readStringArray(HISTORY_KEY);
 let favorites = new Set(readStringArray(FAVORITES_KEY));
 
 function readStringArray(key: string): string[] {
@@ -80,7 +80,7 @@ function readStringArray(key: string): string[] {
 }
 
 function saveHistory() {
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(commandHistory));
 }
 
 function saveFavorites() {
@@ -233,7 +233,7 @@ function renderCommandList() {
 
 function renderHistory() {
   historyList.replaceChildren();
-  if (history.length === 0) {
+  if (commandHistory.length === 0) {
     const empty = document.createElement('span');
     empty.className = 'history-empty';
     empty.textContent = 'Commands you run will appear here.';
@@ -241,7 +241,7 @@ function renderHistory() {
     return;
   }
 
-  for (const command of history) {
+  for (const command of commandHistory) {
     const chip = document.createElement('button');
     chip.type = 'button';
     chip.className = 'history-chip';
@@ -253,7 +253,7 @@ function renderHistory() {
 }
 
 function rememberCommand(command: string) {
-  history = [command, ...history.filter(item => item !== command)].slice(0, MAX_HISTORY);
+  commandHistory = [command, ...commandHistory.filter(item => item !== command)].slice(0, MAX_HISTORY);
   saveHistory();
   renderHistory();
 }
@@ -480,7 +480,7 @@ favoriteButton.addEventListener('click', () => {
 });
 
 clearHistoryButton.addEventListener('click', () => {
-  history = [];
+  commandHistory = [];
   saveHistory();
   renderHistory();
 });
