@@ -1,6 +1,8 @@
 import { BrowserWindow, ipcMain } from "electron";
+import fs from "fs";
 import path from "path";
 import { getPopupCreator } from "@client/popups";
+import { USER_DATA_FOLDER } from "@common/paths";
 import { createCommandsList } from "../commandslist/commandslist";
 import { getCommandsList } from "@server/commands/commands";
 import { ITEMS } from "@server/game-logic/items";
@@ -10,6 +12,30 @@ import { ROOMS } from "@server/game-data/rooms";
 const GET_PLAYERS_CHANNEL = 'command-center:get-players';
 const GET_DATA_CHANNEL = 'command-center:get-data';
 const RUN_COMMAND_CHANNEL = 'command-center:run-command';
+const PENGUINS_DIRECTORY = path.join(USER_DATA_FOLDER, 'data', 'penguins');
+
+type CommandTarget = {
+  id: number;
+  name: string;
+  online: boolean;
+  saved: boolean;
+};
+
+type StoredPenguin = {
+  name: string;
+  coins: number;
+  inventory: number[];
+  furniture: Record<string, number>;
+  is_member: boolean;
+  safeChat?: boolean;
+  noSave?: boolean;
+};
+
+type StoredCommandResult = {
+  supported: boolean;
+  ok: boolean;
+  message: string;
+};
 
 const getCommandCenterData = () => ({
   commands: getCommandsList(),
@@ -34,6 +60,191 @@ const getCommandCenterData = () => ({
     }))
   }
 });
+
+const getStoredPenguinPath = (id: number) => path.join(PENGUINS_DIRECTORY, `${id}.json`);
+
+const readStoredPenguin = async (id: number): Promise<StoredPenguin | null> => {
+  const filePath = getStoredPenguinPath(id);
+  try {
+    const raw = await fs.promises.readFile(filePath, 'utf-8');
+    return JSON.parse(raw) as StoredPenguin;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw error;
+  }
+};
+
+const writeStoredPenguin = async (id: number, data: StoredPenguin): Promise<void> => {
+  const filePath = getStoredPenguinPath(id);
+  const temporaryPath = path.join(PENGUINS_DIRECTORY, `.${id}.command-center.tmp`);
+  await fs.promises.writeFile(temporaryPath, JSON.stringify(data), 'utf-8');
+  await fs.promises.rename(temporaryPath, filePath);
+};
+
+const listStoredPenguins = async (): Promise<CommandTarget[]> => {
+  try {
+    const files = await fs.promises.readdir(PENGUINS_DIRECTORY);
+    const targets: CommandTarget[] = [];
+
+    for (const file of files) {
+      const match = file.match(/^(\d+)\.json$/);
+      if (match === null) continue;
+
+      const id = Number(match[1]);
+      // User-created penguins start at 101. Lower IDs are reserved for mascots.
+      if (!Number.isInteger(id) || id < 101) continue;
+
+      try {
+        const data = JSON.parse(await fs.promises.readFile(path.join(PENGUINS_DIRECTORY, file), 'utf-8')) as Partial<StoredPenguin>;
+        if (typeof data.name !== 'string' || data.name.trim() === '') continue;
+        targets.push({ id, name: data.name, online: false, saved: true });
+      } catch (error) {
+        console.warn(`WADDLE_COMMAND_CENTER_PROFILE=WARN id=${id} file=${file} error=${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    return targets.sort((a, b) => a.name.localeCompare(b.name) || a.id - b.id);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw error;
+  }
+};
+
+const getCommandTargets = async (server: { getAllPlayersInfo: () => Array<{ name: string; id: number }> }): Promise<CommandTarget[]> => {
+  const saved = await listStoredPenguins();
+  const byId = new Map<number, CommandTarget>(saved.map(target => [target.id, target]));
+
+  for (const player of server.getAllPlayersInfo()) {
+    const existing = byId.get(player.id);
+    if (existing !== undefined) {
+      existing.online = true;
+      existing.name = player.name;
+    } else {
+      byId.set(player.id, {
+        id: player.id,
+        name: player.name,
+        online: true,
+        saved: false
+      });
+    }
+  }
+
+  return Array.from(byId.values()).sort((a, b) => {
+    if (a.online !== b.online) return a.online ? -1 : 1;
+    return a.name.localeCompare(b.name) || a.id - b.id;
+  });
+};
+
+const parseInteger = (value: string | undefined): number | null => {
+  if (value === undefined || value.trim() === '') return null;
+  const number = Number(value);
+  return Number.isInteger(number) ? number : null;
+};
+
+const runStoredCommand = async (id: number, name: string, args: string[]): Promise<StoredCommandResult> => {
+  const penguin = await readStoredPenguin(id);
+  if (penguin === null) {
+    return {
+      supported: true,
+      ok: false,
+      message: `Saved penguin #${id} was not found on disk.`
+    };
+  }
+
+  let message = '';
+
+  switch (name) {
+    case 'ac': {
+      const amount = parseInteger(args[0]);
+      if (amount === null) {
+        return { supported: true, ok: false, message: 'Coins requires an integer amount.' };
+      }
+      const current = Number.isFinite(penguin.coins) ? penguin.coins : 0;
+      penguin.coins = Math.max(0, current + amount);
+      message = `${penguin.name}: coins saved at ${penguin.coins}.`;
+      break;
+    }
+    case 'ai': {
+      const requested = args[0];
+      if (requested === 'all') {
+        const owned = new Set(Array.isArray(penguin.inventory) ? penguin.inventory : []);
+        for (const item of ITEMS.rows) owned.add(item.id);
+        penguin.inventory = Array.from(owned);
+        message = `${penguin.name}: all clothing items were saved to the profile.`;
+        break;
+      }
+
+      const itemId = parseInteger(requested);
+      if (itemId === null || !ITEMS.rows.some(item => item.id === itemId)) {
+        return { supported: true, ok: false, message: `Unknown clothing item ID: ${requested ?? ''}` };
+      }
+      const owned = new Set(Array.isArray(penguin.inventory) ? penguin.inventory : []);
+      owned.add(itemId);
+      penguin.inventory = Array.from(owned);
+      message = `${penguin.name}: item ${itemId} saved to inventory.`;
+      break;
+    }
+    case 'af': {
+      const furnitureId = parseInteger(args[0]);
+      const quantity = args[1] === undefined ? 1 : parseInteger(args[1]);
+      if (furnitureId === null || !FURNITURE.rows.some(item => item.id === furnitureId)) {
+        return { supported: true, ok: false, message: `Unknown furniture ID: ${args[0] ?? ''}` };
+      }
+      if (quantity === null || quantity < 1) {
+        return { supported: true, ok: false, message: 'Furniture quantity must be a positive integer.' };
+      }
+      if (penguin.furniture === null || typeof penguin.furniture !== 'object') penguin.furniture = {};
+      const key = String(furnitureId);
+      const current = Number(penguin.furniture[key] ?? 0);
+      penguin.furniture[key] = Math.min(99, Math.max(0, current) + quantity);
+      message = `${penguin.name}: furniture ${furnitureId} saved (${penguin.furniture[key]} owned).`;
+      break;
+    }
+    case 'rename': {
+      const newName = args.join(' ').trim();
+      if (newName === '') {
+        return { supported: true, ok: false, message: 'Rename requires a penguin name.' };
+      }
+      penguin.name = newName;
+      message = `Penguin #${id} renamed to ${newName}.`;
+      break;
+    }
+    case 'member': {
+      penguin.is_member = !penguin.is_member;
+      message = `${penguin.name}: membership ${penguin.is_member ? 'enabled' : 'disabled'}.`;
+      break;
+    }
+    case 'safechat': {
+      penguin.safeChat = !penguin.safeChat;
+      message = `${penguin.name}: safe chat ${penguin.safeChat ? 'enabled' : 'disabled'}.`;
+      break;
+    }
+    case 'nosave': {
+      penguin.noSave = true;
+      message = `${penguin.name}: saving disabled in stored profile.`;
+      break;
+    }
+    case 'enablesave': {
+      penguin.noSave = false;
+      message = `${penguin.name}: saving enabled in stored profile.`;
+      break;
+    }
+    default:
+      return {
+        supported: false,
+        ok: false,
+        message: `Command ${name} requires the penguin to be online.`
+      };
+  }
+
+  await writeStoredPenguin(id, penguin);
+  console.log(`WADDLE_COMMAND_CENTER_STORED_COMMAND=PASS target=${id} command=${name} path=${getStoredPenguinPath(id)}`);
+  return {
+    supported: true,
+    ok: true,
+    message: `${message} The change will be present on the next login.`
+  };
+};
 
 export const createCommands = getPopupCreator(
   'commands',
@@ -65,11 +276,13 @@ export const createCommands = getPopupCreator(
 
     let lastPlayerSignature = '';
 
-    ipcMain.handle(GET_PLAYERS_CHANNEL, () => {
-      const players = server.getAllPlayersInfo();
-      const signature = players.map(player => `${player.id}:${player.name}`).join('|');
+    ipcMain.handle(GET_PLAYERS_CHANNEL, async () => {
+      const players = await getCommandTargets(server);
+      const signature = players.map(player => `${player.id}:${player.name}:${player.online ? 'online' : 'saved'}`).join('|');
       if (signature !== lastPlayerSignature) {
-        console.log(`WADDLE_COMMAND_CENTER_PLAYERS=STATE count=${players.length} players=${signature || 'none'}`);
+        const online = players.filter(player => player.online).length;
+        const saved = players.filter(player => player.saved).length;
+        console.log(`WADDLE_COMMAND_CENTER_PLAYERS=STATE count=${players.length} online=${online} saved=${saved} storage=${PENGUINS_DIRECTORY} players=${signature || 'none'}`);
         lastPlayerSignature = signature;
       }
       return players;
@@ -77,14 +290,14 @@ export const createCommands = getPopupCreator(
 
     ipcMain.handle(GET_DATA_CHANNEL, () => getCommandCenterData());
 
-    ipcMain.handle(RUN_COMMAND_CHANNEL, (_, arg) => {
+    ipcMain.handle(RUN_COMMAND_CHANNEL, async (_, arg) => {
       const id = arg && arg.id;
       const rawCommand = arg && arg.command;
 
       if (typeof id !== 'number' || !Number.isFinite(id)) {
         return {
           ok: false,
-          message: 'Select an online penguin before running a command.'
+          message: 'Select a penguin before running a command.'
         };
       }
 
@@ -107,6 +320,7 @@ export const createCommands = getPopupCreator(
 
       const name = commandMatch[1];
       const argString = commandMatch[2].trim();
+      const args = argString === '' ? [] : argString.split(/\s+/);
       const known = getCommandsList().some(info => info.name === name);
       if (!known) {
         return {
@@ -117,26 +331,29 @@ export const createCommands = getPopupCreator(
       }
 
       try {
-        const dispatched = server.runCommand(id, name, argString === '' ? [] : argString.split(/\s+/));
-        if (!dispatched) {
+        const dispatched = server.runCommand(id, name, args);
+        if (dispatched) {
+          console.log(`WADDLE_COMMAND_CENTER_COMMAND=PASS target=${id} command=${name} mode=online`);
           return {
-            ok: false,
+            ok: true,
             command,
             refreshPlayers: true,
-            message: 'That penguin is no longer online. Refreshing the player list.'
+            message: `Command dispatched to online penguin: ${command}`
           };
         }
 
-        console.log(`WADDLE_COMMAND_CENTER_COMMAND=PASS target=${id} command=${name}`);
+        const stored = await runStoredCommand(id, name, args);
         return {
-          ok: true,
+          ok: stored.ok,
           command,
-          message: `Command dispatched: ${command}`
+          refreshPlayers: true,
+          message: stored.message
         };
       } catch (error) {
         return {
           ok: false,
           command,
+          refreshPlayers: true,
           message: error instanceof Error ? error.message : String(error)
         };
       }
