@@ -49,19 +49,22 @@ export const createCommands = getPopupCreator(
     });
 
     commandsWindow.setMenu(null);
-    commandsWindow.loadFile(path.join(__dirname, 'commands.html'));
 
-    ipcMain.on('get-players', () => {
-      if (!commandsWindow.isDestroyed()) {
-        commandsWindow.webContents.send('get-players', server.getAllPlayersInfo());
-      }
-    });
+    const sendPlayers = () => {
+      if (commandsWindow.isDestroyed() || commandsWindow.webContents.isDestroyed()) return;
+      commandsWindow.webContents.send('get-players', server.getAllPlayersInfo());
+    };
 
-    ipcMain.on('get-command-center-data', () => {
-      if (!commandsWindow.isDestroyed()) {
-        commandsWindow.webContents.send('get-command-center-data', getCommandCenterData());
-      }
-    });
+    const sendCommandCenterData = () => {
+      if (commandsWindow.isDestroyed() || commandsWindow.webContents.isDestroyed()) return;
+      commandsWindow.webContents.send('get-command-center-data', getCommandCenterData());
+    };
+
+    // Register IPC before loading the renderer. The old ordering allowed the
+    // renderer's first fetchPlayers() request to race ahead of ipcMain.on(),
+    // leaving the UI permanently stuck on "Loading players...".
+    ipcMain.on('get-players', sendPlayers);
+    ipcMain.on('get-command-center-data', sendCommandCenterData);
 
     ipcMain.on('run-command', (_, arg) => {
       const id = arg && arg.id;
@@ -107,7 +110,17 @@ export const createCommands = getPopupCreator(
       }
 
       try {
-        server.runCommand(id, name, argString === '' ? [] : argString.split(/\s+/));
+        const dispatched = server.runCommand(id, name, argString === '' ? [] : argString.split(/\s+/));
+        if (!dispatched) {
+          commandsWindow.webContents.send('command-result', {
+            ok: false,
+            command,
+            message: 'That penguin is no longer online. The player list was refreshed.'
+          });
+          sendPlayers();
+          return;
+        }
+
         commandsWindow.webContents.send('command-result', {
           ok: true,
           command,
@@ -125,6 +138,19 @@ export const createCommands = getPopupCreator(
     ipcMain.on('open-commands-list', () => {
       createCommandsList(mainWindow, wins, settings, server);
     });
+
+    // Always seed the renderer after its document is ready, then keep targets
+    // synchronized while the panel is open. This also picks up a penguin that
+    // logs in after Command Center was already opened.
+    commandsWindow.webContents.once('did-finish-load', () => {
+      sendPlayers();
+      sendCommandCenterData();
+    });
+
+    const playerPushTimer = setInterval(sendPlayers, 1500);
+    commandsWindow.once('closed', () => clearInterval(playerPushTimer));
+
+    commandsWindow.loadFile(path.join(__dirname, 'commands.html'));
 
     return commandsWindow;
   }
