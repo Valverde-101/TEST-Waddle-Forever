@@ -75,16 +75,23 @@ export const createWindow = async (store: Store, clientSettings: GlobalSettings,
   mainWindow.webContents.on('will-navigate', guardNavigation);
   mainWindow.webContents.on('will-redirect', guardNavigation);
 
+  // main.ts validates Flash with executeJavaScript(). Electron 10 can leave an
+  // executeJavaScript call queued until the renderer has a DOM when navigation
+  // is still pending (the legacy Flash page may never reach did-finish-load).
+  // Returning the BrowserWindow before dom-ready therefore created a deadlock:
+  // the visible page existed, but the Flash probe never completed and the
+  // external Play watchdog eventually killed an otherwise healthy client.
+  // Resolve only the DOM milestone here; full page completion remains
+  // intentionally non-blocking.
+  let resolveDomReady: (() => void) | null = null;
+  const domReady = new Promise<void>(resolve => {
+    resolveDomReady = resolve;
+  });
+
   // The legacy Flash page can keep Electron's loadURL()/did-finish-load
   // lifecycle pending for a long time even though the local HTTP server is
-  // already serving the document successfully. On SMB that previously left
-  // BrowserWindow hidden behind show:false, createWindow never returned, and
-  // the external Play watchdog killed a healthy Electron process after 90s.
-  //
-  // Presentation is therefore decoupled from full document completion. The
-  // authoritative startup gate remains in main.ts: main-window-ready is emitted
-  // only after waitForFlashRuntime confirms the PPAPI plugin, MIME type and SWF
-  // object. Returning here early cannot turn a broken Flash runtime into PASS.
+  // already serving the document successfully. Presentation is therefore
+  // decoupled from full document completion.
   void loadMain(mainWindow, clientSettings, serverSettings).then(() => {
     writeRuntimeDiagnostic('main-navigation-complete', {
       url: mainWindow.webContents.getURL()
@@ -100,12 +107,16 @@ export const createWindow = async (store: Store, clientSettings: GlobalSettings,
 
   // Diagnostics must never be allowed to prevent the game window from opening.
   // Arm the panel when a renderer DOM exists, but keep installation strictly
-  // best-effort. The panel's own 10s did-finish-load readiness timeout is useful
-  // evidence, not a prerequisite for presenting or validating the game.
+  // best-effort. Resolving domReady before starting the panel guarantees the
+  // caller can begin the bounded Flash probe immediately.
   mainWindow.webContents.once('dom-ready', () => {
     writeRuntimeDiagnostic('renderer-dom-ready', {
       url: mainWindow.webContents.getURL()
     });
+    if (resolveDomReady !== null) {
+      resolveDomReady();
+      resolveDomReady = null;
+    }
     void installWaddleDiagnosticPanel(mainWindow).catch(error => {
       writeRuntimeDiagnostic('diagnostic-panel-nonblocking-failure', {
         error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
@@ -136,6 +147,24 @@ export const createWindow = async (store: Store, clientSettings: GlobalSettings,
     focused: mainWindow.isFocused(),
     minimized: mainWindow.isMinimized(),
     navigationPending: mainWindow.webContents.isLoading()
+  });
+
+  const domTimeoutMs = 30000;
+  let domTimer: NodeJS.Timeout | null = null;
+  try {
+    await Promise.race([
+      domReady,
+      new Promise<void>((_, reject) => {
+        domTimer = setTimeout(() => reject(new Error(`WADDLE_RENDERER_DOM_READY_TIMEOUT=${domTimeoutMs}`)), domTimeoutMs);
+      })
+    ]);
+  } finally {
+    if (domTimer !== null) clearTimeout(domTimer);
+  }
+
+  writeRuntimeDiagnostic('main-window-dom-gate-pass', {
+    url: mainWindow.webContents.getURL(),
+    loading: mainWindow.webContents.isLoading()
   });
 
   return mainWindow;
