@@ -142,7 +142,14 @@ const waitForFlashRuntime = async (window: BrowserWindow, timeoutMs = 25000): Pr
       const status = await readFlashRuntimeStatus(window);
       lastStatus = status;
 
-      if (status.pluginFound && status.mimeFound && status.objectPresent && !status.fallbackPresent) {
+      // The landing page legitimately contains no Flash object before the user
+      // enters the game. Runtime readiness therefore means Pepper Flash is
+      // registered with Chromium and its MIME type is available, not that the
+      // current page has already inserted an <object>/<embed>. The certification
+      // flash-runtime probe separately instantiates boots.swf and proves that the
+      // plugin is actually scriptable, so requiring objectPresent here only
+      // creates a false startup failure on the non-Flash landing page.
+      if (status.pluginFound && status.mimeFound && !status.fallbackPresent) {
         return status;
       }
 
