@@ -7,6 +7,21 @@ if errorlevel 1 (
   exit /b 1
 )
 
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".github\scripts\waddle-source-sync.ps1" -Trigger start
+set "WADDLE_SYNC_EXIT=%ERRORLEVEL%"
+if not "%WADDLE_SYNC_EXIT%"=="0" (
+  popd >nul
+  echo.
+  echo ============================================================
+  echo WADDLE START BLOCKED - source synchronization needs attention.
+  echo No local files were deleted or overwritten.
+  echo Sync log: %~dp0.work\logs\source-sync\source-sync-last.log
+  echo Run Waddle-Sync.cmd after resolving any real local changes.
+  echo ============================================================
+  if not "%WADDLE_NONINTERACTIVE%"=="1" pause
+  exit /b %WADDLE_SYNC_EXIT%
+)
+
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".github\scripts\waddle-play.ps1"
 set "WADDLE_EXIT=%ERRORLEVEL%"
 popd >nul
