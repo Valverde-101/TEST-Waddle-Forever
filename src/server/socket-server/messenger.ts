@@ -1,6 +1,7 @@
 import { getGreenString, getYellowString, logverbose } from "@server/logger";
 import { ClientSocket } from "@server/socket-server/socket-server";
 import { WorldPenguin } from "@server/socket-server/world/world-penguin";
+import { publishWaddleLiveTrace } from "@common/live-trace";
 
 const getXtMessageLastless = (handler: string, ...args: Array<number | string>): string => {
   return `%xt%${handler}%-1%` + args.join('%');
@@ -32,23 +33,92 @@ export class PenguinMessenger {
   }
 
   private async write(ps: WorldPenguin | ClientSocket | Array<ClientSocket | WorldPenguin>, message: string): Promise<void> {
-    if (!Array.isArray(ps)) {
-      ps = [ps];
-    }
+    const recipients = Array.isArray(ps) ? ps : [ps];
+    const clients = recipients.map(recipient => {
+      if (!(recipient instanceof WorldPenguin)) {
+        return recipient;
+      }
 
-    await Promise.all(ps.map(p => (p instanceof WorldPenguin ? this._clients.get(p) : p)?.write(message)));
+      const client = this._clients.get(recipient);
+      if (client === undefined) {
+        // Optional chaining here used to turn a missing binding into `undefined`
+        // inside Promise.all(), which resolves successfully. The caller would
+        // then emit status=sent even though the packet was silently discarded.
+        throw new Error('No client socket bound to penguin');
+      }
+      return client;
+    });
+
+    await Promise.all(clients.map(client => client.write(message)));
   }
 
   public async send(penguins: WorldPenguin | ClientSocket | Array<ClientSocket | WorldPenguin>, message: string, ...args: Array<string | number>): Promise<void> {
     logverbose(getGreenString('sending XT: '), message, args);
-    await this.write(penguins, getXtMessage(message, ...args));
+    const startedAt = Date.now();
+    const recipientCount = Array.isArray(penguins) ? penguins.length : 1;
+    try {
+      await this.write(penguins, getXtMessage(message, ...args));
+      publishWaddleLiveTrace({
+        category: 'XT',
+        phase: 'response',
+        source: 'messenger',
+        action: message,
+        direction: 'out',
+        status: 'sent',
+        argCount: args.length,
+        recipientCount,
+        durationMs: Date.now() - startedAt
+      });
+    } catch (error) {
+      publishWaddleLiveTrace({
+        category: 'XT',
+        phase: 'error',
+        source: 'messenger',
+        action: message,
+        direction: 'out',
+        status: 'send-failed',
+        argCount: args.length,
+        recipientCount,
+        durationMs: Date.now() - startedAt,
+        error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+      });
+      throw error;
+    }
   }
 
   public async sendXml(client: ClientSocket, action: string, body: string, room?: number) {
     const roomString = room === undefined ? '' : ` r="${room}"`;
     const xml = `<msg t="sys"><body action="${action}"${roomString}>${body}</body></msg>`;
     logverbose(getYellowString('Sending XML: '), xml);
-    await this.write(client, xml);
+    const startedAt = Date.now();
+    try {
+      await this.write(client, xml);
+      publishWaddleLiveTrace({
+        category: 'XML',
+        phase: 'response',
+        source: 'messenger',
+        action,
+        direction: 'out',
+        status: 'sent',
+        bodyLength: body.length,
+        recipientCount: 1,
+        durationMs: Date.now() - startedAt
+      });
+    } catch (error) {
+      publishWaddleLiveTrace({
+        category: 'XML',
+        phase: 'error',
+        source: 'messenger',
+        action,
+        direction: 'out',
+        status: 'send-failed',
+        bodyLength: body.length,
+        recipientCount: 1,
+        durationMs: Date.now() - startedAt,
+        error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+      });
+      throw error;
+    }
   }
 
   public close() {

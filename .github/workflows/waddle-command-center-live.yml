@@ -1,0 +1,202 @@
+name: Waddle Command Center Live Publish
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [dev]
+    paths:
+      - 'src/client/views/commands/**'
+      - '.github/workflows/waddle-command-center-live.yml'
+
+permissions:
+  contents: read
+
+env:
+  WADDLE_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+concurrency:
+  group: waddle-command-center-live-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  publish-command-center:
+    runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
+    timeout-minutes: 10
+
+    steps:
+      - name: Prepare isolated Command Center build
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Set-StrictMode -Version Latest
+
+          $roots=New-Object System.Collections.Generic.List[string]
+          if($env:ANDROIDBUILD_ROOT){$roots.Add([string]$env:ANDROIDBUILD_ROOT)}
+          foreach($drive in [IO.DriveInfo]::GetDrives()){
+            try{
+              if(-not $drive.IsReady){continue}
+              $candidate=[IO.Path]::Combine($drive.RootDirectory.FullName,'AndroidBuild')
+              if(-not $roots.Contains($candidate)){$roots.Add($candidate)}
+            }catch{}
+          }
+
+          $root=$null
+          foreach($candidate in $roots){
+            try{$full=(Resolve-Path -LiteralPath $candidate -ErrorAction Stop).Path}catch{continue}
+            if(Test-Path -LiteralPath (Join-Path $full 'Tools\Node\20.19.0\x64\node.exe') -PathType Leaf){$root=$full;break}
+          }
+          if(-not $root){throw 'COMMAND_CENTER_LIVE=FAIL androidbuild_root_not_found'}
+
+          $gitExe=Join-Path $root 'Tools\Git\cmd\git.exe'
+          if(-not(Test-Path -LiteralPath $gitExe -PathType Leaf)){
+            $gitCommand=Get-Command git.exe -ErrorAction SilentlyContinue
+            if($gitCommand){$gitExe=[string]$gitCommand.Source}
+          }
+          if([string]::IsNullOrWhiteSpace($gitExe) -or -not(Test-Path -LiteralPath $gitExe -PathType Leaf)){throw "COMMAND_CENTER_LIVE=FAIL git_missing=$gitExe"}
+
+          $liveRepo=Join-Path $root 'Repositories\TEST-Waddle-Forever'
+          $sourceModules=Join-Path $liveRepo 'node_modules'
+          if(-not(Test-Path -LiteralPath (Join-Path $liveRepo '.git'))){throw "COMMAND_CENTER_LIVE=FAIL live_repo_missing=$liveRepo"}
+          if(-not(Test-Path -LiteralPath $sourceModules -PathType Container)){throw "COMMAND_CENTER_LIVE=FAIL node_modules_missing=$sourceModules"}
+
+          & $gitExe -c "safe.directory=$liveRepo" -C $liveRepo fetch --no-tags --depth=1 'https://github.com/${{ github.repository }}.git' $env:WADDLE_EXPECTED_SHA
+          if($LASTEXITCODE -ne 0){throw "COMMAND_CENTER_LIVE=FAIL fetch_exact_sha exit=$LASTEXITCODE sha=$env:WADDLE_EXPECTED_SHA"}
+          $global:LASTEXITCODE=0
+
+          $base=Join-Path $root 'Certification\Waddle-CommandCenter'
+          New-Item -ItemType Directory -Force -Path $base | Out-Null
+          $workRepo=Join-Path $base ('run-{0}-attempt-{1}' -f $env:GITHUB_RUN_ID,$env:GITHUB_RUN_ATTEMPT)
+          if(Test-Path -LiteralPath $workRepo){
+            & $gitExe -c "safe.directory=$liveRepo" -C $liveRepo worktree remove --force --force $workRepo 2>$null
+            $global:LASTEXITCODE=0
+            if(Test-Path -LiteralPath $workRepo){Remove-Item -LiteralPath $workRepo -Recurse -Force}
+          }
+          & $gitExe -c "safe.directory=$liveRepo" -C $liveRepo worktree prune
+          $global:LASTEXITCODE=0
+          & $gitExe -c "safe.directory=$liveRepo" -C $liveRepo worktree add --detach --force $workRepo $env:WADDLE_EXPECTED_SHA
+          if($LASTEXITCODE -ne 0){throw "COMMAND_CENTER_LIVE=FAIL worktree_add exit=$LASTEXITCODE path=$workRepo"}
+          $global:LASTEXITCODE=0
+
+          $actual=(& $gitExe -c "safe.directory=$workRepo" -C $workRepo rev-parse HEAD 2>&1 | Out-String).Trim()
+          if($LASTEXITCODE -ne 0 -or $actual -ne $env:WADDLE_EXPECTED_SHA){throw "COMMAND_CENTER_LIVE=FAIL exact_head expected=$env:WADDLE_EXPECTED_SHA actual=$actual"}
+          $global:LASTEXITCODE=0
+
+          $targetModules=Join-Path $workRepo 'node_modules'
+          if(Test-Path -LiteralPath $targetModules){Remove-Item -LiteralPath $targetModules -Recurse -Force}
+          New-Item -ItemType Junction -Path $targetModules -Target $sourceModules -ErrorAction Stop | Out-Null
+
+          "ANDROIDBUILD_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WADDLE_LIVE_REPO=$liveRepo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WADDLE_COMMAND_BUILD_REPO=$workRepo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WADDLE_GIT_EXE=$gitExe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "COMMAND_CENTER_LIVE_PREP=PASS sha=$actual worktree=$workRepo live_repo=$liveRepo dependency_mode=read_only_junction git=$gitExe"
+
+      - name: Build exact-SHA Command Center
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Set-StrictMode -Version Latest
+          $nodeHome=Join-Path $env:ANDROIDBUILD_ROOT 'Tools\Node\20.19.0\x64'
+          $node=Join-Path $nodeHome 'node.exe'
+          $yarn=Join-Path $nodeHome 'yarn.cmd'
+          $modules=Join-Path $env:WADDLE_COMMAND_BUILD_REPO 'node_modules'
+          $bin=Join-Path $modules '.bin'
+          if(-not(Test-Path -LiteralPath $node -PathType Leaf)){throw "COMMAND_CENTER_LIVE=FAIL node_missing=$node"}
+          if(-not(Test-Path -LiteralPath $yarn -PathType Leaf)){throw "COMMAND_CENTER_LIVE=FAIL yarn_missing=$yarn"}
+          if(-not(Test-Path -LiteralPath (Join-Path $bin 'tsc-alias.cmd') -PathType Leaf)){throw "COMMAND_CENTER_LIVE=FAIL bin_missing=$bin"}
+          $env:PATH="$bin;$nodeHome;$env:PATH"
+          $env:NODE_PATH=$modules
+
+          # package-info.ts is generated by normal Waddle Setup and is intentionally
+          # not tracked. Reuse only that generated compile input from the live
+          # checkout so this isolated UI build matches the normal project build.
+          $livePackageInfo=Join-Path $env:WADDLE_LIVE_REPO 'src\server\game-data\package-info.ts'
+          $buildPackageInfo=Join-Path $env:WADDLE_COMMAND_BUILD_REPO 'src\server\game-data\package-info.ts'
+          if(-not(Test-Path -LiteralPath $livePackageInfo -PathType Leaf)){throw "COMMAND_CENTER_LIVE=FAIL package_info_missing=$livePackageInfo"}
+          Copy-Item -LiteralPath $livePackageInfo -Destination $buildPackageInfo -Force
+          Write-Host "COMMAND_CENTER_LIVE_GENERATED_INPUT=PASS package_info=$buildPackageInfo bin=$bin"
+
+          Push-Location $env:WADDLE_COMMAND_BUILD_REPO
+          try {
+            & $yarn build-tsc
+            $code=$LASTEXITCODE
+            $global:LASTEXITCODE=0
+            if($code -ne 0){throw "COMMAND_CENTER_LIVE=FAIL build_tsc_exit=$code"}
+          } finally { Pop-Location }
+
+          $compiled=Join-Path $env:WADDLE_COMMAND_BUILD_REPO 'compiled\client\views\commands'
+          $required=@(
+            'commands.js',
+            'commands-preload.js',
+            'commands-static.js',
+            'commands-compat-static.js',
+            'commands.html',
+            'commands.css',
+            'commands-compact.css'
+          )
+          foreach($name in $required){
+            $path=Join-Path $compiled $name
+            if(-not(Test-Path -LiteralPath $path -PathType Leaf)){throw "COMMAND_CENTER_LIVE=FAIL compiled_file_missing=$path"}
+          }
+          Write-Host "COMMAND_CENTER_LIVE_BUILD=PASS sha=$env:WADDLE_EXPECTED_SHA files=$($required.Count)"
+
+      - name: Publish certified Command Center to shared runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Set-StrictMode -Version Latest
+          $source=Join-Path $env:WADDLE_COMMAND_BUILD_REPO 'compiled\client\views\commands'
+          $dest=Join-Path $env:WADDLE_LIVE_REPO 'compiled\client\views\commands'
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+
+          $required=@(
+            'commands.js',
+            'commands-preload.js',
+            'commands-static.js',
+            'commands-compat-static.js',
+            'commands.html',
+            'commands.css',
+            'commands-compact.css'
+          )
+          foreach($name in $required){
+            $src=Join-Path $source $name
+            $dst=Join-Path $dest $name
+            $tmp="$dst.new-$env:GITHUB_RUN_ID"
+            Copy-Item -LiteralPath $src -Destination $tmp -Force
+            Move-Item -LiteralPath $tmp -Destination $dst -Force
+            if((Get-FileHash -LiteralPath $src -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $dst -Algorithm SHA256).Hash){
+              throw "COMMAND_CENTER_LIVE=FAIL publish_hash_mismatch file=$name"
+            }
+          }
+
+          $stateDir=Join-Path $env:WADDLE_LIVE_REPO '.work\state'
+          New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
+          $state=[ordered]@{
+            schema='waddle-command-center-live/v1';
+            status='PASS';
+            source_sha=$env:WADDLE_EXPECTED_SHA;
+            run_id=$env:GITHUB_RUN_ID;
+            files=$required;
+            published_utc=[DateTime]::UtcNow.ToString('o')
+          }
+          $state | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $stateDir 'command-center-live.json') -Encoding UTF8
+          Write-Host "COMMAND_CENTER_LIVE_PUBLISH=PASS sha=$env:WADDLE_EXPECTED_SHA destination=$dest files=$($required.Count) restart_required_for_native_window_code=true reopen_popup_refreshes_html_css=true"
+
+      - name: Cleanup isolated Command Center build
+        if: always()
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          if(-not $env:WADDLE_COMMAND_BUILD_REPO -or -not $env:WADDLE_LIVE_REPO -or -not $env:WADDLE_GIT_EXE){exit 0}
+          if(Test-Path -LiteralPath $env:WADDLE_COMMAND_BUILD_REPO){
+            $modules=Join-Path $env:WADDLE_COMMAND_BUILD_REPO 'node_modules'
+            if(Test-Path -LiteralPath $modules){
+              & cmd.exe /d /c "rmdir `"$modules`"" | Out-Null
+              $global:LASTEXITCODE=0
+            }
+            & $env:WADDLE_GIT_EXE -c "safe.directory=$env:WADDLE_LIVE_REPO" -C $env:WADDLE_LIVE_REPO worktree remove --force --force $env:WADDLE_COMMAND_BUILD_REPO
+            $global:LASTEXITCODE=0
+          }
+          & $env:WADDLE_GIT_EXE -c "safe.directory=$env:WADDLE_LIVE_REPO" -C $env:WADDLE_LIVE_REPO worktree prune
+          $global:LASTEXITCODE=0
+          Write-Host 'COMMAND_CENTER_LIVE_CLEANUP=PASS'

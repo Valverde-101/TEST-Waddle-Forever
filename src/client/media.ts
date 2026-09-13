@@ -1,149 +1,332 @@
-import path from 'path'
-import fs from 'fs'
+import path from 'path';
+import fs from 'fs';
+import http from 'http';
+import https from 'https';
+import unzipper from 'unzipper';
 
-import electronIsDev from "electron-is-dev";
+import electronIsDev from 'electron-is-dev';
+import { BrowserWindow, dialog } from 'electron';
 
-import { VERSION } from '@common/version';
+import { VERSION } from '@common/constants';
 import settingsManager from '@server/settings';
-import { download } from './download';
-import { unzip } from './unzip';
-import { logError, MEDIA_DIRECTORY, postJSON } from '@common/utils';
+import { logError, MEDIA_DIRECTORY, parseURL, postJSON } from '@common/utils';
+import { createProgressBarWindow, ProgressCallback, setPrompt, showProgress } from './views/progress/progress';
 
-/**
- * Downloads and extracts a media folder from the website
- * @param mediaName Name used for the folder and in the website
- * @param onSuccess Function for running if it succeeds
- * @param onFail Function for running if it fails
- */
-export const downloadMediaFolder = async (mediaName: string, onSuccess: () => void, onFail: (err: unknown) => void) => {
-  // in dev, the medias are always installed
-  // can only test this in production builds
+let progressWin: BrowserWindow | null = null;
+
+/** Creates the shared setup/progress window if needed and reuses it across media phases. */
+export async function progressWindow(): Promise<BrowserWindow> {
+  if (progressWin === null || progressWin.isDestroyed()) {
+    progressWin = await createProgressBarWindow();
+  }
+  return progressWin;
+}
+
+export function destroyProgressWindow(): void {
+  if (progressWin !== null && !progressWin.isDestroyed()) {
+    // destroy, not close, otherwise the close-confirmation handler is triggered.
+    progressWin.destroy();
+  }
+  progressWin = null;
+}
+
+const removePartialFile = (destination: string) => {
+  fs.unlink(destination, () => {});
+};
+
+async function downloadFile(
+  url: string,
+  destination: string,
+  update: ProgressCallback,
+  finish: () => void,
+  maxRedirects = 5
+): Promise<boolean> {
+  const { protocol } = parseURL(url);
+  const module = protocol === 'http' ? http : https;
+
+  return await new Promise<boolean>((resolve, reject) => {
+    let settled = false;
+    let destinationTouched = false;
+    let file: fs.WriteStream | undefined;
+
+    const fail = (error: Error) => {
+      if (settled) return;
+      settled = true;
+      if (file && !file.destroyed) file.destroy();
+      if (destinationTouched) removePartialFile(destination);
+      logError('Error downloading', error);
+      finish();
+      reject(error);
+    };
+
+    const request = module.get(url, response => {
+      const status = response.statusCode ?? 0;
+
+      if ([301, 302, 303, 307, 308].includes(status)) {
+        const location = response.headers.location;
+        response.resume();
+        if (location === undefined) {
+          fail(new Error(`Redirect from ${url} did not include a Location header`));
+          return;
+        }
+        if (maxRedirects <= 0) {
+          fail(new Error(`Too many redirects while downloading ${url}`));
+          return;
+        }
+
+        let redirectURL: string;
+        try {
+          redirectURL = new URL(location, url).toString();
+        } catch (error) {
+          fail(error instanceof Error ? error : new Error(`Invalid redirect URL from ${url}`));
+          return;
+        }
+
+        settled = true;
+        resolve(downloadFile(redirectURL, destination, update, finish, maxRedirects - 1));
+        return;
+      }
+
+      if (status < 200 || status >= 300) {
+        response.resume();
+        fail(new Error(`Download failed with HTTP ${status} for ${url}`));
+        return;
+      }
+
+      destinationTouched = true;
+      file = fs.createWriteStream(destination);
+      const totalSize = Number(response.headers['content-length'] || 0);
+      let downloadedSize = 0;
+
+      response.on('data', chunk => {
+        downloadedSize += chunk.length;
+        if (totalSize > 0) update(downloadedSize / totalSize);
+      });
+      response.once('aborted', () => fail(new Error(`Download aborted before completion: ${url}`)));
+      response.once('error', fail);
+      file.once('error', fail);
+      file.once('finish', () => {
+        if (settled) return;
+        settled = true;
+        file?.close();
+        finish();
+        resolve(true);
+      });
+      response.pipe(file);
+    });
+
+    request.once('error', fail);
+  });
+}
+
+const downloadMessages: Record<string, string> = {
+  default: 'Downloading Media:',
+  clothing: 'Downloading Clothing:'
+};
+
+async function download(url: string, destination: string, name: string): Promise<boolean> {
+  const win = await progressWindow();
+  setPrompt(downloadMessages[name] ?? 'Downloading files:', win);
+  return await showProgress(win, async (progress, end) => {
+    return await downloadFile(url, destination, progress, end);
+  });
+}
+
+export async function unzip(zipDir: string, outDir: string): Promise<boolean> {
+  const win = await progressWindow();
+  setPrompt('Extracting Media:', win);
+
+  return await showProgress(win, async (progress, end) => {
+    return await new Promise<boolean>((resolve, reject) => {
+      let settled = false;
+
+      const unlink = () => {
+        try {
+          if (fs.existsSync(zipDir)) fs.unlinkSync(zipDir);
+        } catch (error) {
+          console.warn(`Could not remove temporary archive ${zipDir}:`, error);
+        }
+      };
+
+      const succeed = () => {
+        if (settled) return;
+        settled = true;
+        unlink();
+        end();
+        resolve(true);
+      };
+
+      const fail = (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        unlink();
+        end();
+        reject(error);
+      };
+
+      try {
+        const stream = fs.createReadStream(zipDir);
+        const unzipStream = unzipper.Extract({ path: outDir });
+        const totalBytes = fs.statSync(zipDir).size;
+        let processedBytes = 0;
+
+        unzipStream.once('close', succeed);
+        unzipStream.once('error', fail);
+        stream.on('data', chunk => {
+          processedBytes += chunk.length;
+          if (totalBytes > 0) progress(processedBytes / totalBytes);
+        });
+        stream.once('error', fail);
+        stream.pipe(unzipStream);
+      } catch (error) {
+        fail(error);
+      }
+    });
+  });
+}
+
+/** Downloads and extracts a media folder from the release matching VERSION. */
+export const downloadMediaFolder = async (
+  mediaName: string,
+  onSuccess: () => void,
+  onFail: (err: unknown) => void
+): Promise<boolean> => {
   if (electronIsDev) {
     onSuccess();
-    return;
+    return true;
   }
 
-  // remove any existing .zip files that may be leftover if a download was cancelled
+  await progressWindow();
+
   try {
-    // media folder should exist by this point
-    for (const file of fs.readdirSync(MEDIA_DIRECTORY).filter(f => f.endsWith('.zip'))) {
+    for (const file of fs.readdirSync(MEDIA_DIRECTORY).filter(file => file.endsWith('.zip'))) {
       try {
         fs.unlinkSync(path.join(MEDIA_DIRECTORY, file));
-      } catch (err) {
-        logError('Failed to unlink existing zip file', err);
+      } catch (error) {
+        logError('Failed to unlink existing zip file', error);
       }
     }
-  } catch (err) {
-    logError('Error reading media directory for zip files', err);
+  } catch (error) {
+    logError('Error reading media directory for zip files', error);
   }
 
-  // use date to avoid collision (unlink only deletes after the app is closed)
-  const zipName = String(Date.now()) + '.zip';
-  const zipDir = path.join(MEDIA_DIRECTORY, zipName);
-  // using the "media file name convention"
-  // the media/ is to access the proper API route
+  const zipDir = path.join(MEDIA_DIRECTORY, `${Date.now()}.zip`);
+  const folderDestination = path.join(MEDIA_DIRECTORY, mediaName);
+
   try {
-    await download(`https://github.com/nhaar/Waddle-Forever/releases/download/v${VERSION}/${mediaName}.zip`, zipDir);
-    const folderDestination = path.join(MEDIA_DIRECTORY, mediaName);
-    try {
-      await unzip(zipDir, folderDestination);
-    } catch (error) {
-      logError('Error unzipping: ', error);
-      onFail(error);
-      return;
-    }
+    await download(`https://github.com/nhaar/Waddle-Forever/releases/download/v${VERSION}/${mediaName}.zip`, zipDir, mediaName);
+    await unzip(zipDir, folderDestination);
     fs.writeFileSync(path.join(folderDestination, '.version'), VERSION);
     onSuccess();
-    
+    return true;
   } catch (error) {
-    onFail(error);    
+    logError(`Failed to install media folder ${mediaName}`, error);
+    try {
+      if (fs.existsSync(zipDir)) fs.unlinkSync(zipDir);
+    } catch (cleanupError) {
+      logError(`Failed to remove partial media archive ${zipDir}`, cleanupError);
+    }
+    onFail(error);
+    return false;
   }
-}
+};
 
 const checkMedia = async (mediaName: string): Promise<boolean> => {
   let isUpToDate = true;
+  const targetDirectory = path.join(MEDIA_DIRECTORY, mediaName);
 
-  const TARGET_DIRECTORY = path.join(MEDIA_DIRECTORY, mediaName);
-  if (!fs.existsSync(TARGET_DIRECTORY)) {
+  if (!fs.existsSync(targetDirectory)) {
     isUpToDate = false;
     try {
-      fs.mkdirSync(TARGET_DIRECTORY);
-    } catch (error) {
+      fs.mkdirSync(targetDirectory, { recursive: true });
+    } catch (_error) {
       throw new AdminError();
     }
   }
 
-  const versionFile = path.join(TARGET_DIRECTORY, '.version');
+  const versionFile = path.join(targetDirectory, '.version');
   if (!fs.existsSync(versionFile)) {
     isUpToDate = false;
   } else {
-    const previousVersion = fs.readFileSync(versionFile, { encoding: 'utf-8' }).trim();
+    const previousVersion = fs.readFileSync(versionFile, 'utf-8').trim();
     if (previousVersion === VERSION) {
       isUpToDate = true;
     } else {
-      // even though the versions are different,
-      // the contents may be the same, so we can skip
-      // downloading a new file if they are equivalent
-      const response = await postJSON('/compare-versions', { oldVersion: previousVersion, newVersion: VERSION, media: mediaName });
-      if (response !== undefined) {
-        if (response.isEquivalent) {
-          fs.writeFileSync(versionFile, VERSION);
-          isUpToDate = true;
-        } else {
-          isUpToDate = false;
-        }
+      const response = await postJSON('/compare-versions', {
+        oldVersion: previousVersion,
+        newVersion: VERSION,
+        media: mediaName
+      });
+      if (response?.isEquivalent === true) {
+        fs.writeFileSync(versionFile, VERSION);
+        isUpToDate = true;
       } else {
-        // API error on server, we assume there's no equivalence
-        // this scenario shouldn't happen, and if it does
-        // we might get an error trying to download anyways
         isUpToDate = false;
       }
     }
   }
 
-  let success = true;
   if (!isUpToDate) {
-    fs.rmdirSync(TARGET_DIRECTORY, { recursive: true })
-    await downloadMediaFolder(mediaName, () => {}, (err) => { throw err; });
+    fs.rmSync(targetDirectory, { recursive: true, force: true });
+    let failure: unknown;
+    const success = await downloadMediaFolder(mediaName, () => {}, error => {
+      failure = error;
+    });
+    if (!success) {
+      if (failure instanceof Error) throw failure;
+      throw new Error(`Could not install required media folder: ${mediaName}`);
+    }
   }
 
-  return success;
-}
+  return true;
+};
 
 export class AdminError extends Error {
   constructor() {
     super('Could not create media directory');
   }
-};
+}
 
-/**
- * Initializes the media folders, downloading when needed to update things
- * @returns Whether the checks and downloads were successful
- */
+/** Initializes required media and handles the optional clothing package. */
 export const startMedia = async (): Promise<void> => {
-  // in dev, there's no reason to mess with the media folder as they are all part of the github repo
-  if (electronIsDev) {
-    return;
-  }
+  if (electronIsDev) return;
 
   if (!fs.existsSync(MEDIA_DIRECTORY)) {
     try {
-      fs.mkdirSync(MEDIA_DIRECTORY);
-    } catch (error) {
+      fs.mkdirSync(MEDIA_DIRECTORY, { recursive: true });
+    } catch (_error) {
       throw new AdminError();
     }
   }
 
-  // check media of name "string" if the "boolean" is true
-  const mediaConditions: [string, boolean][] = [
-    ['default', true], // mandatory check
-    ['clothing', settingsManager.settings.clothing]
-  ];
+  await checkMedia('default');
+  if (settingsManager.settings.clothing) {
+    await checkMedia('clothing');
+  }
 
-  for (const mediaCondition of mediaConditions) {
-    const [name, mustCheck] = mediaCondition;
-    if (mustCheck) {
-      await checkMedia(name);
+  if (!settingsManager.settings.clothing && settingsManager.settings.answered_packages !== VERSION) {
+    if (process.env.WADDLE_NONINTERACTIVE === '1') {
+      settingsManager.updateSettings({ answered_packages: VERSION });
+      return;
+    }
+
+    const result = await dialog.showMessageBox(await progressWindow(), {
+      buttons: ['Download Clothing (~600 MB)', 'No Thanks'],
+      title: 'Download package?',
+      message: 'Would you like to download the clothing package? It includes all non essential clothing items from Club Penguin. If you say no, you can always download it later.',
+      defaultId: 0,
+      cancelId: 1
+    });
+
+    if (result.response === 0) {
+      const installed = await downloadMediaFolder('clothing', () => {
+        settingsManager.updateSettings({ clothing: true });
+      }, error => {
+        logError('Optional clothing package download failed', error);
+      });
+      if (installed) settingsManager.updateSettings({ answered_packages: VERSION });
+    } else {
+      settingsManager.updateSettings({ answered_packages: VERSION });
     }
   }
-}
+};

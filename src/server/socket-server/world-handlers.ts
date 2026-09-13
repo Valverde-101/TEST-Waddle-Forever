@@ -11,11 +11,14 @@ import { getIglooOld, handleAddFlooring, handleAddFurniture, handleAddIgloo, han
 import { handleBuyNinjaCards, handleGetFireLevel, handleGetNinjaCards, handleGetNinjaLevel, handleGetNinjaRanks, handleGetWaterLevel, handleJoinFromMatchmake, handleJoinMatchmaking, handleJoinSensei, handleLeaveMatchmake } from "./handlers/ninja";
 import { handleDonateCoins, handleGetBakeryState, handleGetCookieInventory, handleRetrieveMedieval2012, handleSendEnterHopper, handleViewedMedieval2012 } from "./handlers/party";
 import { handleAdoptPuffle, handleAdoptPuffleOld, handleEatPuffleItem, handleGetIglooPuffles, handleGetIglooPufflesOld, handleGetPuffleInventory, handlePuffleBackyardSwap, handlePuffleDigOnCommand, handlePuffleDigRandom, handlePuffleWalk, handleRevealGoldPuffle, isAfterPuffleCreatureGuard, isBeforePuffleCreatureGuard, sendModernPuffleCheck, sendPuffleCheck } from "./handlers/puffle";
+import { handlePuffleTrick } from "./handlers/puffle-trick";
 import { handleGetRainbowQuestData, handleSendRainbowQuestBonusCoins, handleSendRainbowQuestCollectCoins, handleSendRainbowQuestItemCollect, handleSendRainbowTaskComplete } from "./handlers/rainbow";
 import { handleEndSled, handleJoinSled, handleMoveSled, isSledGuard } from "./handlers/sled";
 import { BaseContext, GuardFunction, HandlerFunction, WorldContext } from "@server/socket-server/handlers/handlers";
 import { handleAddIgnore, handleGetIgnoreList, handleRemoveIgnore } from "./handlers/buddy";
 import { handleEnterFireGame, handleFireMove, handleLeaveFire, isFireGuard } from "./handlers/fire";
+import { handleFollowPath, handleGetAbTestData, handleIsPlayerIglooOpen } from "./handlers/compatibility";
+import { handleGetActionStatus, handleMapCategorySetting, handlePlayercardOpenedSetting, handleSpecialDance, handleSpecialSnowball, handleSpecialWave } from "./handlers/experience";
 
 type PreProcessCallbackInfo<Ctx extends WorldContext> = [
   [(ctx: WorldContext) => ctx is Ctx,
@@ -208,10 +211,19 @@ export const createWorldXtHandler = (): XtHandler => {
     r.xt('s', 'u#ss', ['string'], handleSafeMessage),
     r.xt('s', 'u#sl', ['string'], handleSendLine),
     r.xt('s', 'u#tp', ['number', 'number'], handleTeleport),
+    r.xt('s', 'u#followpath', ['number'], handleFollowPath, { xt: { cooldown: 1000 } }),
     p.xt('s', 'u#glr', [], handleGLR),
     p.xt('s', 'u#pbi', ['string'], handlePBI),
     p.xt('s', 'u#h', [], handleHeartbeat),
     p.xt('s', 'u#gp', ['number'], handleGetPlayer),
+    p.xt('s', 'u#gabcms', [], handleGetAbTestData),
+
+    p.xt('s', 'nx#gas', [], handleGetActionStatus, { xt: { once: true } }),
+    p.xt('s', 'nx#mcs', ['number'], handleMapCategorySetting),
+    p.xt('s', 'nx#pcos', [], handlePlayercardOpenedSetting, { xt: { once: true } }),
+    p.xt('s', 'nx#swave', [], handleSpecialWave, { xt: { once: true } }),
+    p.xt('s', 'nx#sdance', [], handleSpecialDance, { xt: { once: true } }),
+    p.xt('s', 'nx#ssnowball', [], handleSpecialSnowball, { xt: { once: true } }),
     
     r.xt('s', 'm#sm', ['string', 'string'], handleSendMessage),
     
@@ -237,6 +249,7 @@ export const createWorldXtHandler = (): XtHandler => {
     p.xt('s', 'p#pcn', ['string'], sendPuffleCheck),
     p.xt('s', 'p#pw', ['number', 'number'], handlePuffleWalk),
     p.xt('s', 'p#puffleswap', ['number', 'string'], handlePuffleBackyardSwap),
+    r.xt('s', 'p#puffletrick', ['number'], handlePuffleTrick),
     r.xt('s', 'p#puffledig', ['number'], handlePuffleDigRandom),
     r.xt('s', 'p#puffledigoncommand', [], handlePuffleDigOnCommand),
     p.xt('s', 'p#pcid', ['number', 'number'], handleEatPuffleItem),
@@ -254,6 +267,7 @@ export const createWorldXtHandler = (): XtHandler => {
     p.xt('s', 'g#or', ['number', 'string'], handleOpenIgloo),
     p.xt('s', 'g#cr', ['number'], handleCloseIgloo),
     p.xt('s', 'g#gr', [], handleGetOpenIgloos),
+    p.xt('s', 'g#pio', ['number'], handleIsPlayerIglooOpen),
     p.xt('s', 'g#um', ['number'], handleUpdateMusic),
     p.xt('s', 'g#gili', [], handleGetIglooLikes),
     p.xt('s', 'g#ggd', [], handleGetDj3kTracks),
@@ -297,7 +311,6 @@ export const createWorldXtHandler = (): XtHandler => {
     p.xt('s', 'f#epfgrantreward', ['number'], handleGrantAwards),
     p.xt('s', 'f#epfgp', [], handleGetPartyOp),
     p.xt('s', 'f#epfsp', ['number'], handleSetPartyOp),
-
     p.xt('s', 'ni#gnr', ['number'], handleGetNinjaRanks),
     p.xt('s', 'ni#gnl', [], handleGetNinjaLevel),
     p.xt('s', 'ni#gcd', [], handleGetNinjaCards),

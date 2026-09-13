@@ -1,6 +1,7 @@
 import { PenguinMessenger } from "../../socket-server/messenger";
 import { ClientSocket } from "@server/socket-server/socket-server";
 import { getDefaultPenguin } from "@server/database/database";
+import { withPenguinStorageRecovery } from "@server/database/storage-layout";
 import { logdebug } from "@server/logger";
 import { WorldPenguin } from "@server/socket-server/world/world-penguin";
 import serverList, { getServerPopulation } from "@server/servers";
@@ -28,7 +29,7 @@ export const getKey: LoginHandler = ({ msg, client }) => {
   // random key generation
   // this is used for authentication, so it is not needed for us, we just send any key
   msg.sendXml(client, 'rndK', '<k>key</k>', -1);
-}
+};
 
 export const login: LoginHandler = async (ctx, message: string) => {
   const { msg, data, settings, db, client } = ctx;
@@ -51,7 +52,8 @@ export const login: LoginHandler = async (ctx, message: string) => {
     // account creation only happens when given name, not when given ID
     const modernLogin = ('world' in ctx && data.isVanillaEngine());
     if (!modernLogin) {
-      if (!await db.exists(nickname)) {
+      const exists = await withPenguinStorageRecovery(`login.exists:${nickname}`, () => db.exists(nickname));
+      if (!exists) {
         // todo: error 101 is incorrect password
         if (settings.settings.no_create_via_login) {
           sendError(msg, client, 100);
@@ -59,20 +61,22 @@ export const login: LoginHandler = async (ctx, message: string) => {
         }
 
         const json = getDefaultPenguin(nickname, 1 /* blue */, settings.settings.always_member, settings.getVirtualDate(0).getTime());
-        await db.create(json);
+        await withPenguinStorageRecovery(`login.create:${nickname}`, () => db.create(json));
       }
     }
 
-    const idTest = modernLogin ? Number(nickname) : await db.fromName(nickname);
+    const idTest = modernLogin
+      ? Number(nickname)
+      : await withPenguinStorageRecovery(`login.fromName:${nickname}`, () => db.fromName(nickname));
     if (idTest === null) {
       throw new Error(`Could not find penguin with name: ${nickname}`);
     }
     const id = typeof idTest === 'number' ? idTest : idTest[0];
 
     if ('world' in ctx) {
-      const offline = await ctx.off.getPenguin(id);
+      const offline = await withPenguinStorageRecovery(`world.getPenguin:${id}`, () => ctx.off.getPenguin(id));
       if (offline === undefined) {
-        throw new Error('Couldn\'t find penguin');
+        throw new Error(`Couldn't find penguin #${id} in persistent storage`);
       }
       const p = new WorldPenguin(id, offline.getJSON(), settings);
       ctx.off.removePenguin(offline.id);

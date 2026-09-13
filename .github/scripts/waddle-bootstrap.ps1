@@ -19,30 +19,73 @@ Import-WaddleCore -AndroidBuildRoot $root
 $managedNode = Enable-WaddleManagedNodeToolchain -AndroidBuildRoot $root
 $workspace = Initialize-WaddleWorkspace -RepoRoot $repo -AndroidBuildRoot $root
 $toolchain = Test-WaddleToolchain -AndroidBuildRoot $root
+$runtimeHome = Get-WaddleExternalRuntimeHome -AndroidBuildRoot $root
 $envPath = Update-WaddleLocalEnv -RepoRoot $repo -AndroidBuildRoot $root -WorkRoot $workspace.work_root -FFDecPath $toolchain.ffdec
 Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_NODE_HOME' -Value $managedNode.home
 Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_NODE_EXE' -Value $managedNode.node
 Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_NPM_CMD' -Value $managedNode.npm
 Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_YARN_CMD' -Value $managedNode.yarn
 Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_ELECTRON_EXE' -Value ''
-Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_RUNTIME_ROOT' -Value ''
+Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_RUNTIME_ROOT' -Value $runtimeHome
+Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_RUNTIME_HOME' -Value $runtimeHome
+Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_RUNTIME_NODE_MODULES' -Value (Join-Path $repo 'node_modules')
+Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_RUNTIME_MODE' -Value 'repo_local_direct'
 Import-WaddleLocalEnv -Path $envPath
+
+# Setup may install dependencies and always refreshes generated package metadata.
+# On a shared SMB repo both are writes visible to every machine, so block them
+# while any Electron runtime lease is alive anywhere on the share.
+Assert-WaddleRuntimeMutationAllowed -RepoRoot $repo -Reason 'setup_dependencies_and_generated_content'
 $dependencies = Invoke-WaddleDependencyBootstrap -RepoRoot $repo -WorkRoot $workspace.work_root
 $flash = Test-WaddlePepperFlash -RepoRoot $repo
 $electronSource = Test-WaddleElectronRuntime -WorkRoot $workspace.work_root -ExpectedVersion $dependencies.electron
 Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_ELECTRON_SOURCE_EXE' -Value $electronSource.executable
+Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_ELECTRON_EXE' -Value $electronSource.executable
+Set-WaddleEnvValue -Path $envPath -Name 'WADDLE_PPAPI_FLASH_PATH' -Value $flash.path
 [Environment]::SetEnvironmentVariable('WADDLE_ELECTRON_SOURCE_EXE',$electronSource.executable,'Process')
+[Environment]::SetEnvironmentVariable('WADDLE_ELECTRON_EXE',$electronSource.executable,'Process')
+[Environment]::SetEnvironmentVariable('WADDLE_RUNTIME_ROOT',$runtimeHome,'Process')
+[Environment]::SetEnvironmentVariable('WADDLE_RUNTIME_HOME',$runtimeHome,'Process')
+[Environment]::SetEnvironmentVariable('WADDLE_RUNTIME_NODE_MODULES',$dependencies.node_modules,'Process')
+[Environment]::SetEnvironmentVariable('WADDLE_PPAPI_FLASH_PATH',$flash.path,'Process')
 
-Write-Host "WADDLE_BOOTSTRAP=PASS platform=windows-x64 repo=$repo work=$($workspace.work_root)"
+$tsxBin = Join-Path $dependencies.node_modules 'tsx\dist\cli.mjs'
+$packageScript = Join-Path $repo 'scripts\build-packages.ts'
+$packageInfo = Join-Path $repo 'src\server\game-data\package-info.ts'
+foreach ($required in @($tsxBin,$packageScript)) {
+  if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
+    throw "WADDLE_PACKAGE_INDEX=FAIL missing=$required"
+  }
+}
+$sw = [Diagnostics.Stopwatch]::StartNew()
+Push-Location $repo
+try {
+  & $managedNode.node $tsxBin $packageScript
+  $packageExit = $LASTEXITCODE
+} finally {
+  Pop-Location
+}
+$sw.Stop()
+if ($packageExit -ne 0) {
+  throw "WADDLE_PACKAGE_INDEX=FAIL exit=$packageExit duration_ms=$($sw.ElapsedMilliseconds)"
+}
+if (-not (Test-Path -LiteralPath $packageInfo -PathType Leaf)) {
+  throw "WADDLE_PACKAGE_INDEX=FAIL generated_missing=$packageInfo"
+}
+Write-Host "WADDLE_PACKAGE_INDEX=PASS script=build-packages duration_ms=$($sw.ElapsedMilliseconds) path=$packageInfo"
+
+Write-Host "WADDLE_BOOTSTRAP=PASS platform=windows-x64 repo=$repo work=$($workspace.work_root) runtime_home=$runtimeHome runtime_mode=repo_local_direct runtime_copies=0 mutation_guard=cross_machine"
 Write-Host "WADDLE_NODE=$($toolchain.node)"
 Write-Host "WADDLE_NODE_HOME=$($managedNode.home)"
 Write-Host "WADDLE_YARN=$($toolchain.yarn)"
 Write-Host "WADDLE_FFDEC=$($toolchain.ffdec)"
 Write-Host "WADDLE_ELECTRON=$($electronSource.version)"
 Write-Host "WADDLE_ELECTRON_SOURCE_EXE=$($electronSource.executable)"
-Write-Host "WADDLE_DEPENDENCY_ROOT=$($dependencies.node_modules)"
+Write-Host "WADDLE_BUILD_DEPENDENCY_ROOT=$($dependencies.node_modules)"
 Write-Host "WADDLE_DEPENDENCY_MODE=$($dependencies.mode)"
-Write-Host "WADDLE_RUNTIME_MODE=immutable_snapshot"
+Write-Host "WADDLE_RUNTIME_MODE=repo_local_direct"
+Write-Host "WADDLE_RUNTIME_HOME=$runtimeHome"
+Write-Host "WADDLE_RUNTIME_NODE_MODULES=$($dependencies.node_modules)"
 Write-Host "WADDLE_FLASH_SOURCE=$($flash.path)"
 Write-Host 'WADDLE_VISUAL_STUDIO=NOT_REQUIRED'
-Write-Host 'NEXT=yarn start or Waddle-Start.cmd'
+Write-Host 'NEXT=Waddle-Start.cmd'

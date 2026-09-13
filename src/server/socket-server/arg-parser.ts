@@ -20,26 +20,52 @@ export type GetArgumentsType<T extends ArgumentsIndicator> = T extends readonly 
   [K in keyof T]: MapPrimitive<T[K]>;
 } : T extends 'number' ? number[] : string[];
 
+const parseFiniteNumber = (value: string): number | null => {
+  // Number('') and Number('   ') both evaluate to zero, which is unsafe for a
+  // network protocol: a missing numeric field must never be silently converted
+  // into a valid gameplay value. Infinity is rejected for the same reason.
+  if (value.trim().length === 0) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
 export const parseArgs = <Arguments extends ArgumentsIndicator>(args: Array<string>, types: Arguments): GetArgumentsType<Arguments> | null => {
   if (types === 'string') {
     return args as GetArgumentsType<Arguments>;
   }
+
   if (types === 'number') {
-    const numbers = args.map(arg => Number(arg));
-    if (numbers.every(n => !Number.isNaN(n))) {
-      return numbers as GetArgumentsType<Arguments>;
-    } else {
-      return null;
+    const numbers: number[] = [];
+    for (const arg of args) {
+      const parsed = parseFiniteNumber(arg);
+      if (parsed === null) {
+        return null;
+      }
+      numbers.push(parsed);
     }
+    return numbers as GetArgumentsType<Arguments>;
   }
+
   if (args.length !== types.length) {
     return null;
   }
 
-  const converted = args.map((arg, i) => types[i] === 'number' ? Number(arg) : arg);
-  if (converted.every(arg => typeof arg === 'string' || !Number.isNaN(arg))) {
-    return converted as GetArgumentsType<Arguments>;
+  const converted: PrimitiveTypes[] = [];
+  for (let i = 0; i < args.length; i += 1) {
+    if (types[i] === 'string') {
+      converted.push(args[i]);
+      continue;
+    }
+
+    const parsed = parseFiniteNumber(args[i]);
+    if (parsed === null) {
+      return null;
+    }
+    converted.push(parsed);
   }
 
-  return null;
-}
+  return converted as GetArgumentsType<Arguments>;
+};

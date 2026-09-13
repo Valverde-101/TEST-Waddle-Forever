@@ -41,7 +41,7 @@ function generateNewsPathAssign(n: number, year: number, month: number, day: num
 }
 
 export function getFullDate(year: number, month: number, day: number): string {
-  let monthname = monthNames[month - 1];
+  const monthname = monthNames[month - 1];
   return `${monthname} ${day}, ${year}`
 }
 

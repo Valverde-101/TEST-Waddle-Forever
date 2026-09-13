@@ -13,37 +13,28 @@ permissions:
 env:
   WADDLE_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
+# CI never mutates the shared interactive checkout. It builds the requested SHA
+# in a disposable worktree. node_modules remains a single authoritative install:
+# the isolated repo gets a normal node_modules directory containing top-level
+# read-only junctions to the canonical packages. SWF analysis alone reuses its
+# historical cache because that cache is analysis state, not live runtime state.
 concurrency:
-  group: waddle-canonical-workspace
-  cancel-in-progress: false
+  group: waddle-certification-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
-  local-integration:
+  certify:
     runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
-    timeout-minutes: 300
+    timeout-minutes: 15
 
     steps:
-      - name: Use Waddle reference Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: 20.19.0
-
-      - name: Pin Yarn Classic
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Stop'
-          npm install --global yarn@1.22.22
-          if ((node --version).Trim() -ne 'v20.19.0') { throw "NODE_SETUP=FAIL actual=$(node --version)" }
-          if ((yarn --version).Trim() -ne '1.22.22') { throw "YARN_SETUP=FAIL actual=$(yarn --version)" }
-          Write-Host "NODE_SETUP=PASS version=$(node --version)"
-          Write-Host "YARN_SETUP=PASS version=$(yarn --version)"
-
-      - name: Resolve AndroidBuild Core and Windows-only contract
+      - name: Create isolated exact-SHA certification workspace
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           Set-StrictMode -Version Latest
-          if($env:OS -ne 'Windows_NT' -or -not [Environment]::Is64BitOperatingSystem -or -not [Environment]::Is64BitProcess){throw 'WADDLE_PLATFORM=FAIL windows_x64_required'}
+          if($env:OS -ne 'Windows_NT' -or -not [Environment]::Is64BitOperatingSystem -or -not [Environment]::Is64BitProcess){throw 'WADDLE_CERT=FAIL windows_x64_required'}
+
           $roots=New-Object System.Collections.Generic.List[string]
           if($env:ANDROIDBUILD_ROOT){$roots.Add([string]$env:ANDROIDBUILD_ROOT)}
           foreach($drive in [IO.DriveInfo]::GetDrives()){
@@ -58,197 +49,247 @@ jobs:
             try{$full=(Resolve-Path -LiteralPath $candidate -ErrorAction Stop).Path}catch{continue}
             if(Test-Path -LiteralPath (Join-Path $full 'Core\Current\AndroidBuild.psd1') -PathType Leaf){$root=$full;break}
           }
-          if(-not $root){throw 'ANDROIDBUILD_CORE=FAIL current_not_found'}
+          if(-not $root){throw 'WADDLE_CERT=FAIL androidbuild_core_not_found'}
           $env:ANDROIDBUILD_ROOT=$root
           "ANDROIDBUILD_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Import-Module (Join-Path $root 'Core\Current\AndroidBuild.psd1') -Force
-          $version=[string](Get-AndroidBuildCoreVersion)
-          if([version]$version -lt [version]'3.0.17'){throw "ANDROIDBUILD_CORE=FAIL required=3.0.17 actual=$version"}
+
+          Import-Module (Join-Path $root 'Core\Current\AndroidBuild.psd1') -Force -DisableNameChecking
+          $coreVersion=[string](Get-AndroidBuildCoreVersion)
+          if([version]$coreVersion -lt [version]'3.0.17'){throw "WADDLE_CERT=FAIL core_required=3.0.17 actual=$coreVersion"}
           Enable-AndroidBuildPortableTools -AndroidBuildRoot $root | Out-Null
-          Write-Host "ANDROIDBUILD_CORE=PASS version=$version root=$root platform=windows-x64"
+          $gitExe=[string](Get-Command git.exe -ErrorAction Stop).Source
+          if(-not(Test-Path -LiteralPath $gitExe -PathType Leaf)){throw "WADDLE_CERT=FAIL git_missing=$gitExe"}
+          "WADDLE_GIT_EXE=$gitExe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Capture AUTO_REPO health before heavy sync
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Stop'
-          $profiles=Join-Path $env:ANDROIDBUILD_ROOT 'PC-PROFILES'
-          $machine=[string]$env:COMPUTERNAME
-          $states=@(Get-ChildItem -LiteralPath $profiles -Filter ($machine+'-auto-repo-state*.json') -File -ErrorAction SilentlyContinue | Sort-Object Name)
-          foreach($stateFile in $states){
-            try {
-              $state=Get-Content -LiteralPath $stateFile.FullName -Raw | ConvertFrom-Json
-              Write-Host ("AUTO_REPO_STATE file={0} slot={1} status={2} repo={3} job={4} updated={5} detail={6}" -f $stateFile.Name,$state.slot,$state.status,$state.repository,$state.job,$state.updated_at,$state.detail)
-            } catch {}
-          }
+          $liveRepo=Join-Path $root 'Repositories\TEST-Waddle-Forever'
+          $sourceModules=Join-Path $liveRepo 'node_modules'
+          if(-not(Test-Path -LiteralPath (Join-Path $liveRepo '.git'))){throw "WADDLE_CERT=FAIL canonical_git_missing=$liveRepo"}
+          if(-not(Test-Path -LiteralPath $sourceModules -PathType Container)){throw "WADDLE_CERT=FAIL canonical_node_modules_missing=$sourceModules"}
 
-      - name: Synchronize canonical repository at exact SHA through Core
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Stop'
-          Import-Module (Join-Path $env:ANDROIDBUILD_ROOT 'Core\Current\AndroidBuild.psd1') -Force
-          Enable-AndroidBuildPortableTools -AndroidBuildRoot $env:ANDROIDBUILD_ROOT | Out-Null
-          $repo=Join-Path $env:ANDROIDBUILD_ROOT 'Repositories\TEST-Waddle-Forever'
-          $sync=Sync-AndroidBuildRepositoryExactHead `
-            -RepoRoot $repo `
-            -ExpectedSha $env:WADDLE_EXPECTED_SHA `
-            -AndroidBuildRoot $env:ANDROIDBUILD_ROOT `
-            -AllowTrackedReset `
-            -CleanUntracked `
-            -SourceRemote 'https://github.com/${{ github.repository }}.git' `
-            -FetchTimeoutSeconds 7200 `
-            -FetchDepth 1
-          if([string]$sync.actual_sha -ne [string]$env:WADDLE_EXPECTED_SHA){throw "REPOSITORY_SYNC=FAIL expected=$env:WADDLE_EXPECTED_SHA actual=$($sync.actual_sha)"}
-          "WADDLE_CANONICAL_REPO=$repo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "WADDLE_CORE_SYNC=PASS repo=$repo sha=$($sync.actual_sha)"
+          $userData=Join-Path $liveRepo 'user-data'
+          New-Item -ItemType Directory -Force -Path $userData | Out-Null
+          $probe=Join-Path $userData '.androidbuild-preserve-probe'
+          $probeValue=[guid]::NewGuid().ToString('N')
+          Set-Content -LiteralPath $probe -Value $probeValue -Encoding ASCII
 
-      - name: Initialize Core workspace and project precheck
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Stop'
-          Import-Module (Join-Path $env:ANDROIDBUILD_ROOT 'Core\Current\AndroidBuild.psd1') -Force
-          Initialize-AndroidBuildProjectWork -RepoRoot $env:WADDLE_CANONICAL_REPO -EnsureGitIgnore | Out-Null
-          $ctx=@{
-            repo_root=$env:WADDLE_CANONICAL_REPO
-            androidbuild_root=$env:ANDROIDBUILD_ROOT
-            expected_sha=$env:WADDLE_EXPECTED_SHA
-            repository='${{ github.repository }}'
-            run_id='${{ github.run_id }}'
-            job_id='${{ github.job }}'
-            runner_name=$env:RUNNER_NAME
-          }
-          Invoke-AndroidBuildProjectHook -RepoRoot $env:WADDLE_CANONICAL_REPO -Hook precheck -Context $ctx -TimeoutSeconds 1800 | Out-Host
-
-      - name: Validate Setup and Start failure persistence
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Stop'
-          Push-Location $env:WADDLE_CANONICAL_REPO
+          $certBase=Join-Path $root 'Certification\Waddle-Forever'
+          New-Item -ItemType Directory -Force -Path $certBase | Out-Null
+          $certRepo=Join-Path $certBase ('run-{0}-attempt-{1}-{2}' -f $env:GITHUB_RUN_ID,$env:GITHUB_RUN_ATTEMPT,$env:GITHUB_JOB)
           try {
-            $env:WADDLE_NONINTERACTIVE='1'
-            foreach($action in @('Setup','Start')){
-              $env:WADDLE_LAUNCHER_SELFTEST_FAIL='1'
-              & cmd.exe /d /c "Waddle-$action.cmd"
-              $code=$LASTEXITCODE
-              Remove-Item Env:WADDLE_LAUNCHER_SELFTEST_FAIL -ErrorAction SilentlyContinue
-              if($code -eq 0){throw "LAUNCHER_FAILURE_PERSISTENCE=FAIL action=$action reason=unexpected_success"}
-              $log=Join-Path $env:WADDLE_CANONICAL_REPO ('.work\logs\launcher\'+$action.ToLowerInvariant()+'-last.log')
-              $text=Get-Content -LiteralPath $log -Raw
-              if(-not $text.Contains('WADDLE_LAUNCHER_SELFTEST_FAIL') -or -not $text.Contains('WADDLE_LAUNCHER=FAIL')){throw "LAUNCHER_FAILURE_PERSISTENCE=FAIL action=$action"}
-              Write-Host "LAUNCHER_FAILURE_PERSISTENCE=PASS action=$action exit=$code"
+            & $gitExe -c "safe.directory=$liveRepo" -C $liveRepo fetch --no-tags --depth=1 'https://github.com/${{ github.repository }}.git' $env:WADDLE_EXPECTED_SHA
+            if($LASTEXITCODE -ne 0){throw "WADDLE_CERT=FAIL fetch_exact_sha exit=$LASTEXITCODE sha=$env:WADDLE_EXPECTED_SHA"}
+            $global:LASTEXITCODE=0
+
+            if(Test-Path -LiteralPath $certRepo){
+              & $gitExe -c "safe.directory=$liveRepo" -C $liveRepo worktree remove --force --force $certRepo 2>$null
+              $global:LASTEXITCODE=0
+              if(Test-Path -LiteralPath $certRepo){Remove-Item -LiteralPath $certRepo -Recurse -Force}
             }
-          } finally {
-            Remove-Item Env:WADDLE_LAUNCHER_SELFTEST_FAIL -ErrorAction SilentlyContinue
-            Remove-Item Env:WADDLE_NONINTERACTIVE -ErrorAction SilentlyContinue
-            Pop-Location
-          }
-          $global:LASTEXITCODE=0
+            & $gitExe -c "safe.directory=$liveRepo" -C $liveRepo worktree prune
+            $global:LASTEXITCODE=0
+            & $gitExe -c "safe.directory=$liveRepo" -C $liveRepo worktree add --detach --force $certRepo $env:WADDLE_EXPECTED_SHA
+            if($LASTEXITCODE -ne 0){throw "WADDLE_CERT=FAIL worktree_add exit=$LASTEXITCODE path=$certRepo"}
+            $global:LASTEXITCODE=0
 
-      - name: Validate human local setup and direct Yarn install
+            $actual=(& $gitExe -c "safe.directory=$certRepo" -C $certRepo rev-parse HEAD 2>&1 | Out-String).Trim()
+            if($LASTEXITCODE -ne 0 -or $actual -ne $env:WADDLE_EXPECTED_SHA){throw "WADDLE_CERT=FAIL isolated_exact_head expected=$env:WADDLE_EXPECTED_SHA actual=$actual"}
+            $global:LASTEXITCODE=0
+
+            # Physical facade root; package directories are junctions. Waddle's
+            # workspace code therefore preserves node_modules and dependency
+            # bootstrap adopts the already-valid authoritative package tree.
+            $targetModules=Join-Path $certRepo 'node_modules'
+            New-Item -ItemType Directory -Force -Path $targetModules | Out-Null
+            $junctionCount=0
+            $fileCount=0
+            foreach($entry in @(Get-ChildItem -LiteralPath $sourceModules -Force)){
+              $dest=Join-Path $targetModules $entry.Name
+              if($entry.PSIsContainer){
+                New-Item -ItemType Junction -Path $dest -Target $entry.FullName -ErrorAction Stop | Out-Null
+                $junctionCount++
+              } else {
+                Copy-Item -LiteralPath $entry.FullName -Destination $dest -Force
+                $fileCount++
+              }
+            }
+            if($junctionCount -lt 1){throw "WADDLE_CERT=FAIL dependency_facade_empty source=$sourceModules"}
+
+            if(-not(Test-Path -LiteralPath $probe -PathType Leaf)){throw "WADDLE_USER_DATA_PRESERVATION=FAIL reason=sentinel_removed path=$probe"}
+            if((Get-Content -LiteralPath $probe -Raw).Trim() -ne $probeValue){throw 'WADDLE_USER_DATA_PRESERVATION=FAIL reason=sentinel_changed'}
+            Write-Host "WADDLE_USER_DATA_PRESERVATION=PASS path=$userData canonical_checkout_mutated=false"
+          } finally {
+            Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue
+          }
+
+          "WADDLE_LIVE_REPO=$liveRepo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WADDLE_CERT_REPO=$certRepo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WADDLE_CANONICAL_REPO=$certRepo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "WADDLE_CERT_WORKTREE=PASS mode=isolated sha=$actual repo=$certRepo live_repo=$liveRepo node_modules_facade=junctions:$junctionCount files:$fileCount core=$coreVersion"
+
+      - name: Validate isolated workspace starts clean
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          Push-Location $env:WADDLE_CANONICAL_REPO
-          try {
-            $env:WADDLE_NONINTERACTIVE='1'
-            & cmd.exe /d /c 'Waddle-Setup.cmd'
-            if($LASTEXITCODE -ne 0){throw "LOCAL_SETUP=FAIL setup_cmd_exit=$LASTEXITCODE"}
-            & yarn.cmd install --frozen-lockfile --non-interactive
-            if($LASTEXITCODE -ne 0){throw "DIRECT_YARN_INSTALL=FAIL exit=$LASTEXITCODE"}
-            $target=Join-Path $env:WADDLE_CANONICAL_REPO '.work\dependencies\current\node_modules\electron\package.json'
-            if(-not(Test-Path -LiteralPath $target -PathType Leaf)){throw "DIRECT_YARN_INSTALL=FAIL electron_missing=$target"}
-            $bin=Join-Path $env:WADDLE_CANONICAL_REPO '.work\dependencies\current\node_modules\.bin\copyfiles.cmd'
-            if(-not(Test-Path -LiteralPath $bin -PathType Leaf)){throw "DIRECT_YARN_INSTALL=FAIL copyfiles_wrapper_missing=$bin"}
-            Write-Host 'LOCAL_SETUP=PASS direct_yarn_install=true dependency_generation=current'
-          } finally {
-            Remove-Item Env:WADDLE_NONINTERACTIVE -ErrorAction SilentlyContinue
-            Pop-Location
-          }
+          $repo=$env:WADDLE_CERT_REPO
+          if(-not(Test-Path -LiteralPath $repo -PathType Container)){throw 'WADDLE_CERT=FAIL isolated_repo_unavailable'}
+          $clientState=Join-Path $repo '.work\state\waddle-client.json'
+          $leases=Join-Path $repo '.work\state\runtime-leases'
+          if(Test-Path -LiteralPath $clientState){throw "WADDLE_CERT=FAIL isolated_client_state_preexists=$clientState"}
+          if((Test-Path -LiteralPath $leases) -and @(Get-ChildItem -LiteralPath $leases -File -ErrorAction SilentlyContinue).Count -gt 0){throw "WADDLE_CERT=FAIL isolated_runtime_lease_preexists=$leases"}
+          Write-Host 'WADDLE_CERT_PRECLEAN=PASS mode=isolated_no_live_client_termination'
 
-      - name: Build through AndroidBuild Core
+      - name: Run complete Waddle certification
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          Import-Module (Join-Path $env:ANDROIDBUILD_ROOT 'Core\Current\AndroidBuild.psd1') -Force
-          $result=Invoke-AndroidBuildBuild `
-            -RepoRoot $env:WADDLE_CANONICAL_REPO `
-            -AndroidBuildRoot $env:ANDROIDBUILD_ROOT `
+          $script=Join-Path $env:WADDLE_CERT_REPO '.github\scripts\waddle-certification.ps1'
+          if(-not(Test-Path -LiteralPath $script -PathType Leaf)){throw "WADDLE_CERT=FAIL script_missing=$script"}
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script `
             -ExpectedSha $env:WADDLE_EXPECTED_SHA `
             -Repository '${{ github.repository }}' `
             -RunId '${{ github.run_id }}' `
             -JobId '${{ github.job }}' `
             -RunnerName $env:RUNNER_NAME `
-            -LeaseWaitSeconds 1200
-          if([string]$result.status -ne 'PASS'){throw "LOCAL_BUILD=FAIL status=$($result.status)"}
-          if([string]$result.provenance.source_sha -ne [string]$env:WADDLE_EXPECTED_SHA){throw "LOCAL_BUILD=FAIL provenance=$($result.provenance.source_sha)"}
-          Write-Host "LOCAL_BUILD=PASS sha=$($result.provenance.source_sha)"
+            -AndroidBuildRoot $env:ANDROIDBUILD_ROOT
+          if($LASTEXITCODE -ne 0){throw "WADDLE_CERT=FAIL certification_exit=$LASTEXITCODE"}
 
-      - name: Prove open snapshot cannot lock Yarn dependency tree
+      - name: Verify portable penguin storage recovery
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $repo=$env:WADDLE_CERT_REPO
+          $probe=Join-Path $repo 'scripts\storage-recovery-probe.js'
+          $node=Join-Path $env:ANDROIDBUILD_ROOT 'Tools\Node\20.19.0\x64\node.exe'
+          if(-not(Test-Path -LiteralPath $probe -PathType Leaf)){throw "WADDLE_STORAGE_RECOVERY_PROBE=FAIL script_missing=$probe"}
+          if(-not(Test-Path -LiteralPath $node -PathType Leaf)){throw "WADDLE_STORAGE_RECOVERY_PROBE=FAIL node_missing=$node"}
+          & $node $probe
+          if($LASTEXITCODE -ne 0){throw "WADDLE_STORAGE_RECOVERY_PROBE=FAIL exit=$LASTEXITCODE"}
+          $actual=(& $env:WADDLE_GIT_EXE -c "safe.directory=$repo" -C $repo rev-parse HEAD 2>&1 | Out-String).Trim()
+          if($LASTEXITCODE -ne 0 -or $actual -ne $env:WADDLE_EXPECTED_SHA){throw "WADDLE_STORAGE_RECOVERY_PROBE=FAIL exact_head expected=$env:WADDLE_EXPECTED_SHA actual=$actual"}
+          Write-Host "WADDLE_STORAGE_RECOVERY_PROBE_EXACT_HEAD=PASS sha=$actual verifier=git-direct"
+
+      - name: Build incremental SWF dependency analysis
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           Set-StrictMode -Version Latest
-          $repo=$env:WADDLE_CANONICAL_REPO
-          . (Join-Path $repo '.github\scripts\waddle-common.ps1')
-          . (Join-Path $repo '.github\scripts\waddle-local-runtime.ps1')
-          . (Join-Path $repo '.github\scripts\waddle-workspace-resilience.ps1')
-          $work=Join-Path $repo '.work'
-          $deps=Invoke-WaddleDependencyBootstrap -RepoRoot $repo -WorkRoot $work
-          $sourceElectron=Test-WaddleElectronRuntime -WorkRoot $work -ExpectedVersion $deps.electron
-          $sourceFlash=Test-WaddlePepperFlash -RepoRoot $repo
-          $snapshot=New-WaddleRuntimeSnapshot -RepoRoot $repo -WorkRoot $work -ElectronExecutable $sourceElectron.executable -ElectronVersion $sourceElectron.version -PepperFlashPath $sourceFlash.path -PepperFlashVersion $sourceFlash.version -SourceSha $env:WADDLE_EXPECTED_SHA -DependencyFingerprint $deps.fingerprint
-          $dependencyRoot=Get-WaddleNodeModulesPath -WorkRoot $work
-          if($snapshot.electron_executable.StartsWith($dependencyRoot,[StringComparison]::OrdinalIgnoreCase)){throw 'RUNTIME_ISOLATION=FAIL electron_inside_dependencies'}
-          $hold=Join-Path $work 'tmp\runtime-lock-probe.js'
-          Set-Content -LiteralPath $hold -Value 'setTimeout(() => process.exit(0), 45000);' -Encoding ASCII
-          $process=$null
-          try {
-            $env:ELECTRON_RUN_AS_NODE='1'
-            $process=Start-Process -FilePath $snapshot.electron_executable -ArgumentList ('"'+$hold+'"') -WorkingDirectory $snapshot.root -PassThru
-            Start-Sleep -Seconds 2
-            $process.Refresh()
-            if($process.HasExited){throw "RUNTIME_ISOLATION=FAIL hold_process_exited code=$($process.ExitCode)"}
-            Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
-            Push-Location $repo
-            try {
-              & yarn.cmd install --frozen-lockfile --non-interactive
-              if($LASTEXITCODE -ne 0){throw "RUNTIME_ISOLATION=FAIL yarn_exit=$LASTEXITCODE"}
-            } finally { Pop-Location }
-            Write-Host "RUNTIME_DEPENDENCY_ISOLATION=PASS snapshot=$($snapshot.root) mutable_dependencies=$dependencyRoot yarn_while_electron_open=true"
-          } finally {
-            Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
-            if($process -and -not $process.HasExited){try{$process.Kill()}catch{};try{$process.WaitForExit(5000)}catch{}}
+          $repo=$env:WADDLE_CERT_REPO
+          $analyzer=Join-Path $repo '.github\scripts\waddle-swf-analysis.ps1'
+          if(-not(Test-Path -LiteralPath $analyzer -PathType Leaf)){throw "WADDLE_SWF_ANALYSIS=FAIL analyzer_missing=$analyzer"}
+
+          $ffdec=''
+          $envPath=Join-Path $repo '.env'
+          if(Test-Path -LiteralPath $envPath -PathType Leaf){
+            foreach($raw in Get-Content -LiteralPath $envPath){
+              if(([string]$raw) -match '^\s*FFDEC_PATH\s*=\s*(.+?)\s*$'){$ffdec=([string]$Matches[1]).Trim().Trim('"');break}
+            }
+          }
+          if([string]::IsNullOrWhiteSpace($ffdec) -or -not(Test-Path -LiteralPath $ffdec -PathType Leaf)){throw "WADDLE_SWF_ANALYSIS=FAIL setup_ffdec_missing=$ffdec env=$envPath"}
+
+          # Hash/deep-analysis cache is intentionally shared: it is read/write
+          # analysis metadata only. Runtime/build/state stay isolated. This keeps
+          # the bounded PR gate incremental instead of rehashing 27k SWFs each run.
+          $sharedSwf=Join-Path $env:WADDLE_LIVE_REPO '.work\swf-analysis'
+          $isolatedSwf=Join-Path $repo '.work\swf-analysis'
+          if(Test-Path -LiteralPath $sharedSwf -PathType Container){
+            if(Test-Path -LiteralPath $isolatedSwf){Remove-Item -LiteralPath $isolatedSwf -Recurse -Force}
+            New-Item -ItemType Junction -Path $isolatedSwf -Target $sharedSwf -ErrorAction Stop | Out-Null
+            Write-Host "WADDLE_SWF_ANALYSIS_CACHE=PASS mode=shared_analysis_only source=$sharedSwf"
+          } else {
+            New-Item -ItemType Directory -Force -Path $isolatedSwf | Out-Null
+            Write-Host "WADDLE_SWF_ANALYSIS_CACHE=PASS mode=isolated_cold path=$isolatedSwf"
           }
 
-      - name: Verify local integration contract
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $analyzer `
+            -RepoRoot $repo `
+            -WorkRoot (Join-Path $repo '.work') `
+            -FFDecPath $ffdec `
+            -DeepBudget 2 `
+            -FFDecTimeoutSeconds 8
+          if($LASTEXITCODE -ne 0){throw "WADDLE_SWF_ANALYSIS=FAIL exit=$LASTEXITCODE"}
+          $summary=Join-Path $isolatedSwf 'summary.json'
+          if(-not(Test-Path -LiteralPath $summary -PathType Leaf)){throw "WADDLE_SWF_ANALYSIS=FAIL summary_missing=$summary"}
+          Get-Content -LiteralPath $summary -Raw | Write-Host
+          $actual=(& $env:WADDLE_GIT_EXE -c "safe.directory=$repo" -C $repo rev-parse HEAD 2>&1 | Out-String).Trim()
+          if($LASTEXITCODE -ne 0 -or $actual -ne $env:WADDLE_EXPECTED_SHA){throw "WADDLE_SWF_ANALYSIS=FAIL exact_head expected=$env:WADDLE_EXPECTED_SHA actual=$actual"}
+          Write-Host "WADDLE_SWF_ANALYSIS_EXACT_HEAD=PASS sha=$actual verifier=git-direct"
+
+      - name: Correlate runtime and SWF diagnostics
+        if: always()
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          Import-Module (Join-Path $env:ANDROIDBUILD_ROOT 'Core\Current\AndroidBuild.psd1') -Force
-          Test-AndroidBuildExactHead -RepoRoot $env:WADDLE_CANONICAL_REPO -ExpectedSha $env:WADDLE_EXPECTED_SHA -AndroidBuildRoot $env:ANDROIDBUILD_ROOT | Out-Null
-          $work=Join-Path $env:WADDLE_CANONICAL_REPO '.work'
-          foreach($required in @(
-            '.androidbuild-work-root',
-            'dependencies\current\node_modules',
-            'build\compiled',
-            'dist\package',
-            'cache\yarn',
-            'runtime\interactive',
-            'state\dependencies.json',
-            'state\runtime-snapshot.json',
-            'state\waddle-build-summary.json',
-            'state\build-provenance.json'
-          )){
-            $p=Join-Path $work $required
-            if(-not(Test-Path -LiteralPath $p)){throw "LOCAL_INTEGRATION=FAIL missing=$p"}
+          $repo=$env:WADDLE_CERT_REPO
+          if([string]::IsNullOrWhiteSpace($repo) -or -not(Test-Path -LiteralPath $repo -PathType Container)){Write-Host 'WADDLE_DIAGNOSTICS=SKIP reason=isolated_repo_unavailable';exit 0}
+          $diagnoser=Join-Path $repo '.github\scripts\waddle-diagnostics.ps1'
+          if(-not(Test-Path -LiteralPath $diagnoser -PathType Leaf)){throw "WADDLE_DIAGNOSTICS=FAIL script_missing=$diagnoser"}
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $diagnoser -RepoRoot $repo -WorkRoot (Join-Path $repo '.work') -FailOnCritical
+          if($LASTEXITCODE -ne 0){throw "WADDLE_DIAGNOSTICS=FAIL exit=$LASTEXITCODE"}
+          $summary=Join-Path $repo '.work\diagnostics\latest\summary.json'
+          if(Test-Path -LiteralPath $summary -PathType Leaf){Get-Content -LiteralPath $summary -Raw | Write-Host}
+          $actual=(& $env:WADDLE_GIT_EXE -c "safe.directory=$repo" -C $repo rev-parse HEAD 2>&1 | Out-String).Trim()
+          if($LASTEXITCODE -ne 0 -or $actual -ne $env:WADDLE_EXPECTED_SHA){throw "WADDLE_DIAGNOSTICS=FAIL exact_head expected=$env:WADDLE_EXPECTED_SHA actual=$actual"}
+          Write-Host "WADDLE_DIAGNOSTICS_EXACT_HEAD=PASS sha=$actual verifier=git-direct"
+
+      - name: Emit diagnostic context on failure
+        if: failure()
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          $repo=$env:WADDLE_CERT_REPO
+          if(-not $repo){Write-Host 'WADDLE_FAILURE_CONTEXT=SKIP';exit 0}
+          $work=Join-Path $repo '.work'
+          foreach($relative in @('state\waddle-certification.json','state\flash-runtime-probe.json','state\waddle-client.json','state\waddle-build-summary.json','diagnostics\latest\summary.json','diagnostics\latest\report.txt','logs\certification\setup.stdout.log','logs\certification\setup.stderr.log')){
+            $path=Join-Path $work $relative
+            Write-Host "----- $relative -----"
+            if(Test-Path -LiteralPath $path -PathType Leaf){Get-Content -LiteralPath $path -Tail 200 | Write-Host}else{Write-Host 'MISSING'}
           }
-          $nodeLink=Get-Item -LiteralPath (Join-Path $env:WADDLE_CANONICAL_REPO 'node_modules') -Force
-          if(($nodeLink.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0){throw 'LOCAL_INTEGRATION=FAIL node_modules_not_junction'}
-          $raw=@($nodeLink.Target)[0]
-          $actual=if([IO.Path]::IsPathRooted([string]$raw)){[IO.Path]::GetFullPath([string]$raw)}else{[IO.Path]::GetFullPath((Join-Path $nodeLink.Parent.FullName ([string]$raw)))}
-          $expected=[IO.Path]::GetFullPath((Join-Path $work 'dependencies\current\node_modules'))
-          if($actual.TrimEnd('\') -ine $expected.TrimEnd('\')){throw "LOCAL_INTEGRATION=FAIL node_modules_target=$actual expected=$expected"}
-          $runtime=Get-Content -LiteralPath (Join-Path $work 'state\runtime-snapshot.json') -Raw | ConvertFrom-Json
-          if([string]$runtime.platform -ne 'windows-x64'){throw "LOCAL_INTEGRATION=FAIL runtime_platform=$($runtime.platform)"}
-          if([string]$runtime.source_sha -ne [string]$env:WADDLE_EXPECTED_SHA){throw "LOCAL_INTEGRATION=FAIL runtime_sha=$($runtime.source_sha)"}
-          Write-Host "LOCAL_INTEGRATION=PASS platform=windows-x64 repo=$env:WADDLE_CANONICAL_REPO work=$work sha=$env:WADDLE_EXPECTED_SHA runtime_isolated=true"
-          Write-Host 'ANDROID=NOT_APPLICABLE APK=NOT_APPLICABLE PHYSICAL_ADB=NOT_APPLICABLE'
+
+      - name: Cleanup isolated certification worktree
+        if: always()
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          $certRepo=$env:WADDLE_CERT_REPO
+          $liveRepo=$env:WADDLE_LIVE_REPO
+          $gitExe=$env:WADDLE_GIT_EXE
+          if([string]::IsNullOrWhiteSpace($certRepo) -or -not(Test-Path -LiteralPath $certRepo)){Write-Host 'WADDLE_CERT_CLEANUP=PASS mode=nothing_to_remove';exit 0}
+
+          $state=Join-Path $certRepo '.work\state\waddle-client.json'
+          if(Test-Path -LiteralPath $state -PathType Leaf){
+            Push-Location $certRepo
+            try{$env:WADDLE_NONINTERACTIVE='1';& cmd.exe /d /c 'Waddle-Stop.cmd' | Out-Host;$global:LASTEXITCODE=0}catch{}finally{Remove-Item Env:WADDLE_NONINTERACTIVE -ErrorAction SilentlyContinue;Pop-Location}
+          }
+
+          # Detach shared SWF cache before recursive cleanup.
+          $swfLink=Join-Path $certRepo '.work\swf-analysis'
+          if(Test-Path -LiteralPath $swfLink){
+            try{
+              $swfItem=Get-Item -LiteralPath $swfLink -Force
+              if(($swfItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){& cmd.exe /d /c "rmdir `"$swfLink`"" | Out-Null;$global:LASTEXITCODE=0}
+            }catch{}
+          }
+
+          # Detach every package junction so cleanup can never recurse into the
+          # live repository's authoritative node_modules tree.
+          $modules=Join-Path $certRepo 'node_modules'
+          if(Test-Path -LiteralPath $modules -PathType Container){
+            foreach($entry in @(Get-ChildItem -LiteralPath $modules -Force -ErrorAction SilentlyContinue)){
+              if(($entry.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0 -and $entry.PSIsContainer){& cmd.exe /d /c "rmdir `"$($entry.FullName)`"" | Out-Null;$global:LASTEXITCODE=0}
+              else{Remove-Item -LiteralPath $entry.FullName -Force -Recurse -ErrorAction SilentlyContinue}
+            }
+            Remove-Item -LiteralPath $modules -Force -ErrorAction SilentlyContinue
+          }
+          foreach($name in @('compiled','dist')){
+            $link=Join-Path $certRepo $name
+            if(Test-Path -LiteralPath $link){try{$item=Get-Item -LiteralPath $link -Force;if(($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0){& cmd.exe /d /c "rmdir `"$link`"" | Out-Null;$global:LASTEXITCODE=0}}catch{}}
+          }
+
+          if($gitExe -and $liveRepo -and (Test-Path -LiteralPath $liveRepo -PathType Container)){
+            & $gitExe -c "safe.directory=$liveRepo" -C $liveRepo worktree remove --force --force $certRepo 2>$null
+            $global:LASTEXITCODE=0
+            & $gitExe -c "safe.directory=$liveRepo" -C $liveRepo worktree prune
+            $global:LASTEXITCODE=0
+          }
+          if(Test-Path -LiteralPath $certRepo){Remove-Item -LiteralPath $certRepo -Recurse -Force -ErrorAction SilentlyContinue}
+          if(Test-Path -LiteralPath $certRepo){Write-Host "WADDLE_CERT_CLEANUP=WARN path_still_exists=$certRepo"}else{Write-Host "WADDLE_CERT_CLEANUP=PASS path=$certRepo live_repo_untouched=true"}
