@@ -21,7 +21,7 @@ const drawTrimmedItemPreview = (image: HTMLImageElement) => {
     const source = document.createElement('canvas');
     source.width = image.naturalWidth;
     source.height = image.naturalHeight;
-    const sourceContext = source.getContext('2d', { willReadFrequently: true } as any);
+    const sourceContext = source.getContext('2d', { willReadFrequently: true } as any) as CanvasRenderingContext2D | null;
     if (sourceContext === null) throw new Error('2D canvas context unavailable');
 
     sourceContext.clearRect(0, 0, source.width, source.height);
@@ -68,7 +68,7 @@ const drawTrimmedItemPreview = (image: HTMLImageElement) => {
     preview.height = 160;
     preview.setAttribute('aria-label', image.alt || 'Item preview');
 
-    const previewContext = preview.getContext('2d');
+    const previewContext = preview.getContext('2d') as CanvasRenderingContext2D | null;
     if (previewContext === null) throw new Error('Preview canvas context unavailable');
 
     const targetPadding = 8;
