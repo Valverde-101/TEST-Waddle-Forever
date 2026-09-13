@@ -2,10 +2,7 @@
 setlocal EnableExtensions
 cd /d "%~dp0"
 
-rem Install repository-scoped Git safety hooks. No global Git configuration is changed.
-git -c "safe.directory=%CD%" config --local core.hooksPath .githooks >nul 2>&1
-
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".github\scripts\waddle-source-sync.ps1" -Trigger setup
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".github\scripts\waddle-source-sync.ps1" -Trigger setup -RequireRemote -RequireCore -InstallHooks
 set "WADDLE_SYNC_EXIT=%ERRORLEVEL%"
 if not "%WADDLE_SYNC_EXIT%"=="0" goto :syncfailed
 
@@ -16,7 +13,7 @@ if not "%WADDLE_EXIT%"=="0" goto :failed
 echo.
 echo ============================================================
 echo WADDLE SETUP COMPLETE
-echo Source was synchronized safely before Setup.
+echo Source was synchronized with AndroidBuild Core before Setup.
 echo Dependencies, package index, Electron and Flash were validated.
 echo Next: run Waddle-Start.cmd
 echo Log: %~dp0.work\logs\launcher\setup-last.log
