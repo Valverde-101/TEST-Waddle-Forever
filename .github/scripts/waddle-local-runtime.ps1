@@ -442,3 +442,11 @@ function Import-WaddleLocalEnv {
   if ($env:WADDLE_WORK_ROOT) { Enable-WaddleLocalNodeTooling -WorkRoot $env:WADDLE_WORK_ROOT | Out-Null }
   Write-Host "WADDLE_ENV_IMPORT=PASS path=$Path"
 }
+
+
+# Canonical runtime/dependency overrides
+# External runtime helpers are loaded before the repo-physical dependency layer.
+# The second import intentionally overrides legacy local-runtime dependency and
+# snapshot functions so repo\node_modules is the single authoritative tree.
+. (Join-Path $PSScriptRoot 'waddle-external-runtime.ps1')
+. (Join-Path $PSScriptRoot 'waddle-repo-dependencies.ps1')

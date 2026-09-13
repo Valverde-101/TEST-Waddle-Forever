@@ -1,6 +1,6 @@
 {
   "name": "waddle-forever",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Singleplayer Experience for Club Penguin - Windows",
   "main": "./compiled/client/main.js",
   "scripts": {
@@ -68,6 +68,7 @@
     "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "8.63.0",
     "@typescript-eslint/parser": "8.63.0",
+    "@typescript/typescript-win32-x64": "7.0.2",
     "@yao-pkg/pkg": "^5.15.0",
     "archiver": "^7.0.1",
     "copyfiles": "^2.4.1",

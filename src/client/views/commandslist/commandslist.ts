@@ -3,7 +3,7 @@ import path from "path";
 import { getPopupCreator } from "@client/popups";
 import { getCommandsList } from "@server/commands/commands";
 
-export const createCommandsList = getPopupCreator('commandslist', ['get-commands'], (mainWindow, settings, server
+export const createCommandsList = getPopupCreator('commandslist', ['get-commands'], (mainWindow, _settings, _server
 ) => {
   const commandsWindow = new BrowserWindow({
     width: 500,

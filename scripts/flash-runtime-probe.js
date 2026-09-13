@@ -3,17 +3,27 @@
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
+const Module = require('module');
 const { app, BrowserWindow } = require('electron');
 
-const repoRoot = path.resolve(__dirname, '..');
-process.chdir(repoRoot);
+// Waddle has three intentionally separate roots on Windows:
+// - sourceRoot: persistent repository/content root (media, settings, .env, node_modules)
+// - runtimeAppRoot: immutable deployed executable app (compiled code only)
+// - runtimeModulesRoot: the single canonical dependency tree in sourceRoot/node_modules
+// Keeping cwd at sourceRoot preserves real desktop semantics while Electron and
+// compiled executable code run from the external runtime. Dependencies are not
+// duplicated into .work or into each runtime snapshot.
+const inferredRoot = path.resolve(__dirname, '..');
+const sourceRoot = path.resolve(process.env.WADDLE_SOURCE_ROOT || inferredRoot);
+const runtimeAppRoot = path.resolve(process.env.WADDLE_RUNTIME_APP_ROOT || sourceRoot);
+process.chdir(sourceRoot);
 process.env.NODE_ENV = 'dev';
 
-const envPath = path.join(repoRoot, '.env');
-const settingsPath = path.join(repoRoot, 'settings.json');
+const envPath = path.join(sourceRoot, '.env');
+const settingsPath = path.join(sourceRoot, 'settings.json');
 const resultPath = process.env.WADDLE_FLASH_PROBE_RESULT
   ? path.resolve(process.env.WADDLE_FLASH_PROBE_RESULT)
-  : path.join(repoRoot, '.work', 'state', 'flash-runtime-probe.json');
+  : path.join(sourceRoot, '.work', 'state', 'flash-runtime-probe.json');
 
 function importDotEnv(file) {
   if (!fs.existsSync(file)) return;
@@ -36,10 +46,30 @@ const defaultPlugin = process.arch === 'ia32'
   ? 'pepflashplayer32_32_0_0_303.dll'
   : 'pepflashplayer64_32_0_0_303.dll';
 const pluginPath = path.resolve(
-  process.env.WADDLE_PPAPI_FLASH_PATH || path.join(repoRoot, 'assets', 'flash', defaultPlugin)
+  process.env.WADDLE_PPAPI_FLASH_PATH || path.join(sourceRoot, 'assets', 'flash', defaultPlugin)
 );
 const pluginVersion = (process.env.WADDLE_PPAPI_FLASH_VERSION || '32.0.0.303').trim();
-const compiledRoot = path.join(repoRoot, 'compiled');
+const compiledRoot = path.join(runtimeAppRoot, 'compiled');
+const runtimeModulesRoot = path.resolve(
+  process.env.WADDLE_RUNTIME_NODE_MODULES
+  || process.env.WADDLE_NODE_MODULES
+  || path.join(sourceRoot, 'node_modules')
+);
+
+// Electron 10 embeds Node 12. In this launch mode NODE_PATH is present in the
+// environment but Module.globalPaths can still reflect Electron's earlier
+// initialization. Reinitialize it before loading any compiled Waddle module so
+// their bare imports resolve against the one physical repo node_modules tree.
+process.env.WADDLE_RUNTIME_NODE_MODULES = runtimeModulesRoot;
+process.env.WADDLE_NODE_MODULES = runtimeModulesRoot;
+process.env.NODE_PATH = [runtimeModulesRoot, process.env.NODE_PATH]
+  .filter(Boolean)
+  .join(path.delimiter);
+if (typeof Module._initPaths !== 'function') {
+  throw new Error('WADDLE_FLASH_RUNTIME=FAIL Module._initPaths unavailable');
+}
+Module._initPaths();
+
 const settingsBackup = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath) : null;
 
 let server = null;
@@ -82,7 +112,7 @@ function finish(code, payload) {
 
 function basePayload(status, reason, extra = {}) {
   return {
-    schema: 'waddle-flash-runtime-probe/v3',
+    schema: 'waddle-flash-runtime-probe/v4',
     status,
     reason,
     electron: process.versions.electron || null,
@@ -90,6 +120,13 @@ function basePayload(status, reason, extra = {}) {
     node: process.versions.node || null,
     arch: process.arch,
     platform: process.platform,
+    source_root: sourceRoot,
+    runtime_app_root: runtimeAppRoot,
+    runtime_compiled_root: compiledRoot,
+    runtime_node_modules: runtimeModulesRoot,
+    module_global_paths: Array.from(Module.globalPaths || []),
+    dependency_layout: 'repo_physical',
+    cwd: process.cwd(),
     plugin_path: pluginPath,
     plugin_version: pluginVersion,
     ...extra,
@@ -121,6 +158,15 @@ if (!fs.existsSync(pluginPath)) {
 if (!fs.existsSync(path.join(compiledRoot, 'server', 'file-server', 'index.js'))) {
   finish(41, basePayload('FAIL', 'compiled_fileserver_missing'));
 }
+if (!fs.existsSync(runtimeModulesRoot)) {
+  finish(41, basePayload('FAIL', 'runtime_node_modules_missing'));
+}
+if (path.resolve(runtimeModulesRoot) !== path.resolve(path.join(sourceRoot, 'node_modules'))) {
+  finish(41, basePayload('FAIL', 'runtime_node_modules_not_canonical_repo_root'));
+}
+if (!fs.existsSync(path.join(sourceRoot, 'media', 'default'))) {
+  finish(41, basePayload('FAIL', 'source_media_default_missing'));
+}
 
 const pluginStat = fs.statSync(pluginPath);
 if (!pluginStat.isFile() || pluginStat.size < 1024 * 1024) {
@@ -150,8 +196,6 @@ const appReady = app.whenReady().then(async () => {
     return;
   }
 
-  // Force a deterministic default timeline while preserving any existing local
-  // settings bytes and restoring them before this process exits.
   fs.writeFileSync(settingsPath, JSON.stringify({
     version: '2010-10-25',
     fps30: false,
@@ -161,6 +205,8 @@ const appReady = app.whenReady().then(async () => {
     answered_packages: 'probe',
   }));
 
+  // Prove both the probe and compiled runtime modules resolve dependencies from
+  // the canonical repository tree after Module._initPaths().
   const express = require('express');
   const settingsModule = require(path.join(compiledRoot, 'server', 'settings.js'));
   const settingsManager = settingsModule.default || settingsModule;

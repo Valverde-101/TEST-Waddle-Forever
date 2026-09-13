@@ -51,23 +51,30 @@ export class WorldServer implements MessageHandler {
     this.init();
   }
 
-  public runCommand(penguinId: number, name: string, args: string[]) {
+  /**
+   * Run a command against the authoritative live World registry.
+   * Returns false when the target disappeared between UI refresh and dispatch.
+   */
+  public runCommand(penguinId: number, name: string, args: string[]): boolean {
     const penguin = this._world.getById(penguinId);
-    if (penguin !== undefined) {
-      const client = this._msg.getClient(penguin);
-      this._commandsHandler.run({
-        world: this._world,
-        penguin,
-        prst: this._persister,
-        msg: this._msg,
-        data: this._gameData,
-        db: this._db,
-        settings: this._settings,
-        off: this._off,
-        client,
-        room: this._world.getPenguinRoom(penguin)
-      }, name, args);
+    if (penguin === undefined) {
+      return false;
     }
+
+    const client = this._msg.getClient(penguin);
+    this._commandsHandler.run({
+      world: this._world,
+      penguin,
+      prst: this._persister,
+      msg: this._msg,
+      data: this._gameData,
+      db: this._db,
+      settings: this._settings,
+      off: this._off,
+      client,
+      room: this._world.getPenguinRoom(penguin)
+    }, name, args);
+    return true;
   }
 
   public getAllPlayersInfo() {

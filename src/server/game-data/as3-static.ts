@@ -3,10 +3,40 @@
  * This module is mostly temporary, in the future it should be replaced
  * */
 
+import path from "path";
+import { DEFAULT_DIRECTORY, getFilesInDirectory } from "@common/utils";
 import { RouteRefMap } from ".";
+
+const PUFFLE_ROUTE_PREFIX = "play/v2/content/global/puffle";
+const PUFFLE_FILE_REF_PREFIX = "svanilla:media/play/v2/content/global/puffle";
+const PUFFLE_DIRECTORY = path.join(
+  DEFAULT_DIRECTORY,
+  "svanilla",
+  "media",
+  "play",
+  "v2",
+  "content",
+  "global",
+  "puffle"
+);
+
+/**
+ * Register every canonical puffle SWF already present in Waddle media.
+ * This stays inside AS3_STATIC_FILES; explicit routes below still win
+ * whenever Waddle needs a special per-file override.
+ */
+const PUFFLE_STATIC_FILES: RouteRefMap = {};
+getFilesInDirectory(PUFFLE_DIRECTORY)
+  .filter((file) => file.toLowerCase().endsWith(".swf"))
+  .forEach((file) => {
+    const normalizedFile = file.replace(/\\/g, "/");
+    PUFFLE_STATIC_FILES[`${PUFFLE_ROUTE_PREFIX}/${normalizedFile}`] =
+      `${PUFFLE_FILE_REF_PREFIX}/${normalizedFile}`;
+  });
 
 /** All files to be served during the 2016 versions */
 export const AS3_STATIC_FILES: RouteRefMap = {
+  ...PUFFLE_STATIC_FILES,
   'en/web_service/game_configs/mascots.jsonp': 'svanilla:media/play/en/web_service/game_configs/mascots.jsonp',
   'en/web_service/game_configs/rooms.jsonp': 'svanilla:media/play/en/web_service/game_configs/rooms.jsonp',
   'play/en/web_service/game_configs/cover.json': 'approximation:game_configs/cover.json',

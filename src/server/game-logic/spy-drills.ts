@@ -9,7 +9,7 @@ enum SpyDrillGame {
   RadarStrike = 8,
   RhythmLock = 9,
   Tumblers = 10
-};
+}
 
 /** A huge sample of "experimental" data collected from videos which is used to simulate the RNG of the game */
 export const SPY_DRILLS_DATA: Array<[[SpyDrillGame, SpyDrillGame, SpyDrillGame], number]> = [

@@ -1,24 +1,146 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <link href="../base.css" rel="stylesheet" type="text/css" media="screen"/>
     <link href="commands.css" rel="stylesheet" type="text/css" media="screen"/>
+    <link href="commands-compact.css" rel="stylesheet" type="text/css" media="screen"/>
+    <title>Command Center</title>
   </head>
   <body>
-    <div class="top-buttons">
-        <button id="refresh-button" title="Refresh the player list">
-          Refresh Player List
+    <main class="command-center">
+      <header class="app-header">
+        <div class="header-copy">
+          <div class="eyebrow">WADDLE FOREVER</div>
+          <h1>Command Center</h1>
+          <p>Choose one action, configure it, and apply it directly to your current penguin.</p>
+        </div>
+        <div class="header-actions">
+          <button id="actions-button" class="ghost-button primary-ghost" title="Browse every available action">☰ Actions</button>
+          <button id="commandslist-button" class="ghost-button" title="Open the legacy command reference">Reference</button>
+        </div>
+      </header>
+
+      <section class="quick-actions" aria-label="Quick actions">
+        <button class="quick-action positive" data-command="ac 1000">
+          <strong>+1,000</strong><span>Coins</span>
         </button>
-        <button id="commandslist-button" title="See the list of available commands">
-          List of Commands
+        <button class="quick-action negative" data-command="ac -1000">
+          <strong>-1,000</strong><span>Coins</span>
         </button>
-    </div>
-    <div>Select the player the command will affect (shows all online players):</div>
-    <select id="player-select" class="select">
-    </select>
-    <input type="text" placeholder="Type command here" id="command-input" />
-    <button id="command-button">RUN COMMAND</button>
+        <button class="quick-action" data-select-command="ai">
+          <strong>Add item</strong><span>Clothing</span>
+        </button>
+        <button class="quick-action" data-select-command="af">
+          <strong>Add furniture</strong><span>Furniture</span>
+        </button>
+        <button class="quick-action" data-select-command="jr">
+          <strong>Teleport</strong><span>Room</span>
+        </button>
+        <button class="quick-action menu-action" id="more-actions-button">
+          <strong>All actions</strong><span>Open menu</span>
+        </button>
+      </section>
+
+      <section class="workspace">
+        <section class="command-editor">
+          <div id="empty-state" class="empty-state">
+            <h2>Choose an action</h2>
+            <p>Use a quick action above or open the Actions menu.</p>
+          </div>
+
+          <div id="editor-content" class="editor-content hidden">
+            <div class="editor-heading">
+              <div>
+                <div id="command-category" class="command-category">General</div>
+                <h2 id="command-title">Command</h2>
+              </div>
+              <button id="favorite-button" class="icon-button" title="Add to favorites" aria-label="Favorite command">☆</button>
+            </div>
+
+            <p id="command-description" class="command-description"></p>
+
+            <div id="coin-controls" class="coin-controls hidden">
+              <div class="section-label">Coin operation</div>
+              <div class="segmented-control" role="group" aria-label="Coin operation">
+                <button type="button" class="segment active" data-coin-mode="add">Add coins</button>
+                <button type="button" class="segment" data-coin-mode="remove">Remove coins</button>
+              </div>
+              <label class="field-group coin-amount-field">
+                <span>Amount</span>
+                <input id="coin-amount" type="number" inputmode="numeric" min="0" step="1" value="1000" autocomplete="off" />
+              </label>
+              <div class="coin-presets" aria-label="Coin presets">
+                <button type="button" data-coin-value="100">100</button>
+                <button type="button" data-coin-value="1000">1,000</button>
+                <button type="button" data-coin-value="10000">10,000</button>
+                <button type="button" data-coin-value="100000">100,000</button>
+              </div>
+            </div>
+
+            <div id="argument-fields" class="argument-fields"></div>
+
+            <div id="catalog-search-wrap" class="catalog-search-wrap hidden">
+              <label class="field-group">
+                <span id="catalog-label">Search catalog</span>
+                <input id="catalog-search" type="search" autocomplete="off" placeholder="Type a name or ID…" />
+              </label>
+              <div id="catalog-results" class="catalog-results"></div>
+            </div>
+
+            <details id="advanced-details" class="compact-details">
+              <summary>Advanced options</summary>
+              <div class="advanced-body">
+                <div id="examples-wrap" class="examples-wrap hidden">
+                  <span class="section-label">Examples</span>
+                  <div id="examples" class="examples"></div>
+                </div>
+                <label class="field-group command-preview-group">
+                  <span>Raw command</span>
+                  <input id="command-input" type="text" autocomplete="off" spellcheck="false" placeholder="Command" />
+                </label>
+              </div>
+            </details>
+
+            <div class="run-row">
+              <div id="command-status" class="command-status neutral">Ready</div>
+              <button id="command-button" class="primary-button">Apply <span>Ctrl+Enter</span></button>
+            </div>
+
+            <details class="compact-details history-details">
+              <summary>Recent activity</summary>
+              <div class="history-toolbar">
+                <span class="muted">Stored locally on this PC</span>
+                <button id="clear-history" class="link-button">Clear history</button>
+              </div>
+              <div id="history-list" class="history-list"></div>
+            </details>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <div id="drawer-backdrop" class="drawer-backdrop hidden"></div>
+    <aside id="action-drawer" class="action-drawer hidden" aria-label="Actions menu">
+      <div class="drawer-header">
+        <div>
+          <div class="eyebrow">COMMANDS</div>
+          <h2>Choose an action</h2>
+        </div>
+        <button id="drawer-close" class="icon-button compact-icon" title="Close actions" aria-label="Close actions">×</button>
+      </div>
+      <div class="browser-toolbar">
+        <input id="command-search" type="search" placeholder="Search actions…  Ctrl+K" autocomplete="off" />
+        <select id="category-select" class="select compact-select">
+          <option value="all">All categories</option>
+        </select>
+      </div>
+      <div id="command-list" class="command-list" role="listbox" aria-label="Available commands"></div>
+    </aside>
+
     <script>var exports = {};</script>
-    <script src="commands-static.js" type="module"></script>
+    <script src="commands-compat-static.js"></script>
+    <script src="commands-static.js"></script>
   </body>
 </html>
