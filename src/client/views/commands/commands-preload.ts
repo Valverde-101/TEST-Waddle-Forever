@@ -1,6 +1,7 @@
 import { ipcRenderer } from 'electron';
 import fs from 'fs';
 import path from 'path';
+import { ITEMS } from '@server/game-logic/items';
 
 const dispatch = (name: string, detail: unknown) => {
   window.dispatchEvent(new CustomEvent(name, { detail }));
@@ -16,6 +17,7 @@ const itemIconCache = new Map<number, CachedItemIcon>();
 const itemIconReads = new Map<number, Promise<string | null>>();
 let itemIconCacheBytes = 0;
 let canonicalIconDirectory: string | null | undefined;
+let canonicalItemIconIds: Set<number> | null = null;
 
 const isDirectory = (candidate: string) => {
   try {
@@ -63,6 +65,29 @@ const getCanonicalIconDirectory = (): string | null => {
   canonicalIconDirectory = null;
   console.error('WADDLE_COMMAND_CENTER_ICON_ROOT=FAIL reason=canonical_repository_not_found');
   return null;
+};
+
+const getCanonicalItemIconIds = (): Set<number> => {
+  if (canonicalItemIconIds !== null) return canonicalItemIconIds;
+
+  const ids = new Set<number>();
+  const root = getCanonicalIconDirectory();
+  if (root !== null) {
+    try {
+      for (const fileName of fs.readdirSync(root)) {
+        const match = fileName.match(/^(\d+)\.png$/i);
+        if (match === null) continue;
+        const id = Number(match[1]);
+        if (Number.isInteger(id) && id > 0) ids.add(id);
+      }
+    } catch (error) {
+      console.error(`WADDLE_COMMAND_CENTER_PAGER_INDEX=FAIL error=${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  canonicalItemIconIds = ids;
+  console.log(`WADDLE_COMMAND_CENTER_PAGER_INDEX=PASS icons=${ids.size} source=canonical-repository`);
+  return canonicalItemIconIds;
 };
 
 const touchCachedIcon = (id: number, cached: CachedItemIcon) => {
@@ -126,6 +151,49 @@ const resolveItemIcon = async (rawId: unknown): Promise<string | null> => {
   }
 };
 
+/**
+ * The Club Penguin item database already carries the equipment slot/type.
+ * Pagination therefore comes from the canonical item table, while image
+ * eligibility still comes only from the canonical iconspng directory.
+ */
+const browseItemCatalog = (obj: any) => {
+  const query = obj && typeof obj.query === 'string' ? obj.query.trim().toLowerCase() : '';
+  const requestedType = obj && Number.isInteger(obj.type) ? Number(obj.type) : 0;
+  const requestedPage = obj && Number.isInteger(obj.page) ? Number(obj.page) : 0;
+  const requestedPageSize = obj && Number.isInteger(obj.pageSize) ? Number(obj.pageSize) : 24;
+  const pageSize = Math.max(8, Math.min(requestedPageSize, 60));
+  const iconIds = getCanonicalItemIconIds();
+
+  const filtered = ITEMS.rows.filter(item => {
+    if (!iconIds.has(item.id)) return false;
+    if (requestedType > 0 && item.type !== requestedType) return false;
+    if (query === '') return true;
+    return String(item.id).includes(query) || item.name.toLowerCase().includes(query);
+  });
+
+  const total = filtered.length;
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
+  const page = Math.max(0, Math.min(requestedPage, pageCount - 1));
+  const start = page * pageSize;
+  const items = filtered.slice(start, start + pageSize).map(item => ({
+    id: item.id,
+    name: item.name,
+    type: item.type,
+    cost: item.cost,
+    member: item.isMember
+  }));
+
+  return {
+    items,
+    total,
+    page,
+    pageSize,
+    pageCount,
+    type: requestedType,
+    query
+  };
+};
+
 const fetchCommandCenterData = async () => {
   try {
     const data = await ipcRenderer.invoke('command-center:get-data');
@@ -180,6 +248,7 @@ const runCommand = async (obj: any) => {
   fetchState,
   searchCatalog,
   resolveItemIcon,
+  browseItemCatalog,
   openCommandsList: () => ipcRenderer.send('open-commands-list'),
   runCommand
 };
