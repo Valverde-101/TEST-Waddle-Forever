@@ -83,7 +83,7 @@ function Invoke-RepoGit {
   }
   $text = ($lines -join "`n").Trim()
   if ($exitCode -ne 0 -and -not $AllowFailure) {
-    throw "git $($Arguments -join ' ') failed with exit $exitCode: $text"
+    throw "git $($Arguments -join ' ') failed with exit ${exitCode}: $text"
   }
   return [pscustomobject]@{ exit_code=$exitCode; text=$text }
 }
@@ -103,7 +103,6 @@ if ($env:WADDLE_DISABLE_SOURCE_SYNC -eq '1') {
 }
 
 try {
-  # Repository-only policy. This does not change the user's global Git settings.
   Invoke-RepoGit -Arguments @('config','--local','pull.ff','only') | Out-Null
   Invoke-RepoGit -Arguments @('config','--local','fetch.prune','true') | Out-Null
 
@@ -153,7 +152,6 @@ try {
   }
   $remoteSha = $remoteShaProbe.text.Trim().ToLowerInvariant()
 
-  # Repair missing tracking metadata automatically once the remote branch exists.
   if ($remoteProbe.exit_code -ne 0 -or $mergeProbe.exit_code -ne 0 -or [string]::IsNullOrWhiteSpace($remoteProbe.text) -or [string]::IsNullOrWhiteSpace($mergeProbe.text)) {
     Invoke-RepoGit -Arguments @('branch',"--set-upstream-to=$remote/$remoteBranch",$branch) | Out-Null
     Write-SyncLine "WADDLE_SOURCE_TRACKING=PASS branch=$branch upstream=$remote/$remoteBranch"
