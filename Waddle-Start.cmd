@@ -7,6 +7,9 @@ if errorlevel 1 (
   exit /b 1
 )
 
+rem Install repository-scoped Git safety hooks. No global Git configuration is changed.
+git -c "safe.directory=%CD%" config --local core.hooksPath .githooks >nul 2>&1
+
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ".github\scripts\waddle-source-sync.ps1" -Trigger start
 set "WADDLE_SYNC_EXIT=%ERRORLEVEL%"
 if not "%WADDLE_SYNC_EXIT%"=="0" (
