@@ -1,0 +1,23 @@
+#!/bin/sh
+
+# Keep branch switches aligned with the tracked GitHub branch without ever
+# overwriting real local work. CI exact-SHA worktrees are intentionally skipped.
+case "${GITHUB_ACTIONS:-}" in
+  true|1) exit 0 ;;
+esac
+case "${WADDLE_DISABLE_SOURCE_SYNC:-}" in
+  1) exit 0 ;;
+esac
+
+repo="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+script="$repo/.github/scripts/waddle-source-sync.ps1"
+[ -f "$script" ] || exit 0
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$script" -Trigger post-checkout
+code=$?
+if [ "$code" -ne 0 ]; then
+  echo "WADDLE_SOURCE_SYNC_HOOK=WARN hook=post-checkout exit=$code local_files_preserved=true" >&2
+fi
+
+# A checkout itself must remain successful even when synchronization is blocked.
+exit 0
