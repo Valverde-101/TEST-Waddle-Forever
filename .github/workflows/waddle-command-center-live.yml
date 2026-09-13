@@ -141,8 +141,13 @@ jobs:
           $ErrorActionPreference='Stop'
           Set-StrictMode -Version Latest
           $source=Join-Path $env:WADDLE_COMMAND_BUILD_REPO 'compiled\client\views\commands'
-          $dest=Join-Path $env:WADDLE_LIVE_REPO 'compiled\client\views\commands'
-          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          $canonicalDest=Join-Path $env:WADDLE_LIVE_REPO 'compiled\client\views\commands'
+          $activeWorkDest=Join-Path $env:WADDLE_LIVE_REPO '.work\build\compiled\client\views\commands'
+          $destinations=New-Object System.Collections.Generic.List[string]
+          $destinations.Add($canonicalDest)
+          if(Test-Path -LiteralPath (Split-Path -Parent $activeWorkDest) -PathType Container){
+            $destinations.Add($activeWorkDest)
+          }
 
           $required=@(
             'commands.js',
@@ -154,28 +159,35 @@ jobs:
             'commands.css',
             'commands-compact.css'
           )
-          foreach($name in $required){
-            $src=Join-Path $source $name
-            $dst=Join-Path $dest $name
-            $tmp="$dst.new-$env:GITHUB_RUN_ID"
-            Copy-Item -LiteralPath $src -Destination $tmp -Force
-            Move-Item -LiteralPath $tmp -Destination $dst -Force
-            if((Get-FileHash -LiteralPath $src -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $dst -Algorithm SHA256).Hash){throw "COMMAND_CENTER_LIVE=FAIL publish_hash_mismatch file=$name"}
+
+          foreach($dest in $destinations){
+            New-Item -ItemType Directory -Force -Path $dest | Out-Null
+            foreach($name in $required){
+              $src=Join-Path $source $name
+              $dst=Join-Path $dest $name
+              $tmp="$dst.new-$env:GITHUB_RUN_ID"
+              Copy-Item -LiteralPath $src -Destination $tmp -Force
+              Move-Item -LiteralPath $tmp -Destination $dst -Force
+              if((Get-FileHash -LiteralPath $src -Algorithm SHA256).Hash -ne (Get-FileHash -LiteralPath $dst -Algorithm SHA256).Hash){throw "COMMAND_CENTER_LIVE=FAIL publish_hash_mismatch file=$name destination=$dest"}
+            }
+            Write-Host "COMMAND_CENTER_LIVE_DESTINATION=PASS sha=$env:WADDLE_EXPECTED_SHA destination=$dest files=$($required.Count)"
           }
 
           $stateDir=Join-Path $env:WADDLE_LIVE_REPO '.work\state'
           New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
           [ordered]@{
-            schema='waddle-command-center-live/v2'
+            schema='waddle-command-center-live/v3'
             status='PASS'
             source_sha=$env:WADDLE_EXPECTED_SHA
             run_id=$env:GITHUB_RUN_ID
             files=$required
+            destinations=@($destinations)
             source_workspace=$env:WADDLE_COMMAND_BUILD_REPO
             canonical_git_mutated=$false
+            media_duplicated=$false
             published_utc=[DateTime]::UtcNow.ToString('o')
           } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $stateDir 'command-center-live.json') -Encoding UTF8
-          Write-Host "COMMAND_CENTER_LIVE_PUBLISH=PASS sha=$env:WADDLE_EXPECTED_SHA destination=$dest files=$($required.Count) canonical_git_mutated=false restart_required_for_native_window_code=true reopen_popup_refreshes_html_css=true"
+          Write-Host "COMMAND_CENTER_LIVE_PUBLISH=PASS sha=$env:WADDLE_EXPECTED_SHA destinations=$($destinations.Count) files=$($required.Count) canonical_git_mutated=false media_duplicated=false restart_required_for_native_window_code=true"
 
       - name: Cleanup isolated Command Center build
         if: always()
