@@ -124,6 +124,7 @@ jobs:
             'commands-preload.js',
             'commands-static.js',
             'commands-compat-static.js',
+            'commands-item-preview.js',
             'commands.html',
             'commands.css',
             'commands-compact.css'
@@ -148,6 +149,7 @@ jobs:
             'commands-preload.js',
             'commands-static.js',
             'commands-compat-static.js',
+            'commands-item-preview.js',
             'commands.html',
             'commands.css',
             'commands-compact.css'
