@@ -28,6 +28,20 @@ type CommandServer = {
   runCommand: (penguinId: number, name: string, args: string[]) => boolean;
 };
 
+type CatalogSearchResult = {
+  entries: Array<{
+    id: number;
+    name: string;
+    type?: number;
+    cost?: number;
+    member?: boolean;
+  }>;
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
 const getLivePenguins = (server: CommandServer): LivePenguin[] => {
   return server.getAllPlayersInfo()
     .filter(player => Number.isInteger(player.id) && player.id > 0 && typeof player.name === 'string' && player.name.trim() !== '')
@@ -106,16 +120,38 @@ const matchesCatalogQuery = (id: number, name: string, query: string) => {
   return String(id).includes(query) || name.toLowerCase().includes(query);
 };
 
-const searchCatalog = (kind: string, rawQuery: string, rawLimit: number) => {
+const makePagedResult = <T extends { id: number; name: string }>(rows: T[], rawPage: number, pageSize: number): CatalogSearchResult => {
+  const total = rows.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const requestedPage = Number.isInteger(rawPage) ? Math.max(1, rawPage) : 1;
+  const page = Math.min(requestedPage, totalPages);
+  const start = (page - 1) * pageSize;
+  return {
+    entries: rows.slice(start, start + pageSize),
+    total,
+    page,
+    pageSize,
+    totalPages
+  };
+};
+
+const searchCatalog = (
+  kind: string,
+  rawQuery: string,
+  rawLimit: number,
+  rawPage: number,
+  rawType: number
+): CatalogSearchResult => {
   const query = typeof rawQuery === 'string' ? rawQuery.trim().toLowerCase() : '';
-  const limit = Number.isInteger(rawLimit) ? Math.max(1, Math.min(rawLimit, 60)) : 30;
+  const pageSize = Number.isInteger(rawLimit) ? Math.max(1, Math.min(rawLimit, 60)) : 30;
 
   if (kind === 'items') {
     const iconIds = getItemIconIds();
-    return ITEMS.rows
+    const type = Number.isInteger(rawType) && rawType >= 1 && rawType <= 10 ? rawType : 0;
+    const rows = ITEMS.rows
       .filter(item => iconIds.has(item.id))
+      .filter(item => type === 0 || item.type === type)
       .filter(item => matchesCatalogQuery(item.id, item.name, query))
-      .slice(0, limit)
       .map(item => ({
         id: item.id,
         name: item.name,
@@ -123,12 +159,12 @@ const searchCatalog = (kind: string, rawQuery: string, rawLimit: number) => {
         cost: item.cost,
         member: item.isMember
       }));
+    return makePagedResult(rows, rawPage, pageSize);
   }
 
   if (kind === 'furniture') {
-    return FURNITURE.rows
+    const rows = FURNITURE.rows
       .filter(item => matchesCatalogQuery(item.id, item.name, query))
-      .slice(0, limit)
       .map(item => ({
         id: item.id,
         name: item.name,
@@ -136,16 +172,23 @@ const searchCatalog = (kind: string, rawQuery: string, rawLimit: number) => {
         cost: item.cost,
         member: item.member
       }));
+    return makePagedResult(rows, rawPage, pageSize);
   }
 
   if (kind === 'rooms') {
-    return Object.entries(ROOMS)
+    const rows = Object.entries(ROOMS)
       .map(([name, info]) => ({ name, id: info.id }))
-      .filter(room => matchesCatalogQuery(room.id, room.name, query))
-      .slice(0, limit);
+      .filter(room => matchesCatalogQuery(room.id, room.name, query));
+    return makePagedResult(rows, rawPage, pageSize);
   }
 
-  return [];
+  return {
+    entries: [],
+    total: 0,
+    page: 1,
+    pageSize,
+    totalPages: 1
+  };
 };
 
 type WindowBounds = { x: number; y: number; width: number; height: number };
@@ -229,7 +272,9 @@ export const createCommands = getPopupCreator(
       const kind = arg && typeof arg.kind === 'string' ? arg.kind : '';
       const query = arg && typeof arg.query === 'string' ? arg.query : '';
       const limit = arg && typeof arg.limit === 'number' ? arg.limit : 30;
-      return searchCatalog(kind, query, limit);
+      const page = arg && typeof arg.page === 'number' ? arg.page : 1;
+      const type = arg && typeof arg.type === 'number' ? arg.type : 0;
+      return searchCatalog(kind, query, limit, page, type);
     });
 
     ipcMain.handle(RUN_COMMAND_CHANNEL, async (_, arg) => {
