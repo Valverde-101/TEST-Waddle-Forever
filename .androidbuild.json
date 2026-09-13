@@ -65,6 +65,8 @@
     "sync_on_checkout": true,
     "protect_dirty_worktree": true,
     "protect_local_commits": true,
+    "preserve_untracked_files": true,
+    "repair_shallow_history": true,
     "allow_hard_reset": false,
     "allow_clean": false,
     "install_repo_hooks": true,
@@ -79,9 +81,10 @@
     "build_seconds": 7200
   },
   "core": {
-    "minimum_version": "3.0.17",
+    "minimum_version": "3.0.25",
     "stable_path": "Core/Current",
-    "source_sync_git_provider": "Get-AndroidBuildGitPath"
+    "source_sync_git_provider": "Get-AndroidBuildGitPath",
+    "source_sync_api": "Sync-AndroidBuildRepositoryBranchSafe"
   },
   "toolchain": {
     "node": "20.19.0",
