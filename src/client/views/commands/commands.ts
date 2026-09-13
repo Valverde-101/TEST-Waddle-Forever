@@ -95,10 +95,10 @@ export const createCommands = getPopupCreator(
   ['open-commands-list'],
   (mainWindow, settings, server, wins) => {
     const commandsWindow = new BrowserWindow({
-      width: 1040,
+      width: 470,
       height: 720,
-      minWidth: 860,
-      minHeight: 620,
+      minWidth: 420,
+      minHeight: 520,
       title: "Command Center",
       webPreferences: {
         preload: path.join(__dirname, 'commands-preload.js')
