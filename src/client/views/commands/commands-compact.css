@@ -1,0 +1,270 @@
+/*
+ * Compact layout for the in-game Command Center.
+ * The native window is intentionally about one third of the game width, so the
+ * renderer must remain usable well below desktop-dialog widths.
+ */
+body {
+  min-width: 0 !important;
+  overflow: hidden;
+}
+
+.command-center {
+  gap: 5px;
+  padding: 5px;
+}
+
+.app-header {
+  gap: 5px;
+  padding: 6px 7px;
+  border-radius: 8px;
+}
+
+.app-header h1 {
+  font-size: 15px;
+}
+
+.eyebrow,
+.section-label,
+.command-category,
+.field-group > span {
+  font-size: 7.5px;
+}
+
+.header-actions {
+  gap: 3px;
+}
+
+.ghost-button {
+  padding: 4px 5px;
+  font-size: 9px;
+}
+
+.quick-actions {
+  gap: 3px;
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.quick-action {
+  min-height: 31px;
+  padding: 4px 5px;
+  border-radius: 6px;
+}
+
+.quick-action strong {
+  font-size: 9.5px;
+}
+
+.quick-action span {
+  font-size: 7.5px;
+}
+
+.workspace {
+  border-radius: 8px;
+}
+
+.command-editor {
+  padding: 7px 8px;
+}
+
+.editor-content {
+  gap: 5px;
+}
+
+.editor-heading h2 {
+  font-size: 15px;
+}
+
+.command-description {
+  font-size: 9px;
+  line-height: 1.25;
+}
+
+input,
+select {
+  padding: 5px 6px;
+  font-size: 10px;
+}
+
+.argument-fields {
+  gap: 4px;
+}
+
+.coin-controls {
+  gap: 4px;
+  padding: 5px;
+}
+
+.segment {
+  padding: 5px 3px;
+  font-size: 8.5px;
+}
+
+.coin-amount-field input {
+  font-size: 11px;
+}
+
+.coin-presets {
+  gap: 3px;
+}
+
+.coin-presets button {
+  padding: 3px 2px;
+  font-size: 8px;
+}
+
+.catalog-search-wrap {
+  padding: 5px;
+}
+
+.catalog-results {
+  max-height: 110px;
+}
+
+.catalog-result {
+  padding: 4px 5px;
+  font-size: 9px;
+}
+
+.compact-details > summary {
+  padding: 5px 6px;
+  font-size: 8.5px;
+}
+
+.advanced-body {
+  gap: 4px;
+  padding: 0 6px 6px;
+}
+
+.run-row {
+  gap: 5px;
+  min-height: 27px;
+}
+
+.command-status {
+  font-size: 8.5px;
+}
+
+.primary-button {
+  min-width: 76px;
+  padding: 6px 8px;
+  font-size: 10px;
+}
+
+.primary-button span {
+  font-size: 6.5px;
+}
+
+.icon-button,
+.compact-icon {
+  width: 25px;
+  height: 25px;
+  font-size: 15px;
+}
+
+.action-drawer {
+  width: min(300px, 94vw);
+  min-width: 0;
+}
+
+.drawer-header {
+  padding: 7px;
+}
+
+.drawer-header h2 {
+  font-size: 13px;
+}
+
+.browser-toolbar {
+  grid-template-columns: minmax(0, 1fr) 92px;
+  gap: 3px;
+  padding: 5px;
+}
+
+.browser-toolbar input,
+.browser-toolbar select {
+  padding: 4px 5px;
+  font-size: 8.5px;
+}
+
+@media (max-width: 320px) {
+  .command-center {
+    gap: 4px;
+    padding: 4px;
+  }
+
+  .app-header {
+    align-items: flex-start;
+    padding: 5px 6px;
+  }
+
+  .app-header h1 {
+    font-size: 14px;
+  }
+
+  .header-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .ghost-button {
+    padding: 3px 4px;
+    font-size: 8px;
+  }
+
+  .quick-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .quick-action {
+    min-height: 29px;
+  }
+
+  .coin-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .coin-controls > .section-label,
+  .coin-presets {
+    grid-column: 1;
+  }
+
+  .coin-presets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .run-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .command-status {
+    white-space: normal;
+  }
+
+  .primary-button {
+    width: 100%;
+  }
+
+  .action-drawer {
+    width: 100vw;
+  }
+
+  .browser-toolbar {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-height: 540px) {
+  .quick-action {
+    min-height: 27px;
+  }
+
+  .command-description {
+    display: none;
+  }
+
+  .catalog-results {
+    max-height: 80px;
+  }
+}
