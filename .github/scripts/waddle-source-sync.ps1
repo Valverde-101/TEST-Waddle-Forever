@@ -68,10 +68,14 @@ function Acquire-SyncLock {
   throw "Source synchronization lock timeout: $lockPath"
 }
 function Release-SyncLock{if($null-ne$script:syncLock){try{$script:syncLock.Dispose()}catch{};$script:syncLock=$null}}
+function Normalize-RepoPath([string]$Path){if([string]::IsNullOrWhiteSpace($Path)){return ''};$Path.Trim().Trim('"').Replace('\','/')}
 function Get-TrackedDirtyPaths([string]$GitPath){
-  $text=(Invoke-RepoGit $GitPath @('status','--porcelain=v1','--untracked-files=no')).text
-  if([string]::IsNullOrWhiteSpace($text)){return @()}
-  @($text -split "`r?`n"|Where-Object{-not[string]::IsNullOrWhiteSpace($_)}|ForEach-Object{if($_.Length -ge 4){$_.Substring(3).Trim().Replace('\','/')}}|Sort-Object -Unique)
+  $all=New-Object System.Collections.Generic.List[string]
+  foreach($text in @((Invoke-RepoGit $GitPath @('diff','--name-only','--')).text,(Invoke-RepoGit $GitPath @('diff','--cached','--name-only','--')).text)){
+    if([string]::IsNullOrWhiteSpace($text)){continue}
+    foreach($line in @($text -split "`r?`n")){$path=Normalize-RepoPath $line;if(-not[string]::IsNullOrWhiteSpace($path)){$all.Add($path)}}
+  }
+  @($all|Sort-Object -Unique)
 }
 function Get-UntrackedCount([string]$GitPath){$text=(Invoke-RepoGit $GitPath @('ls-files','--others','--exclude-standard')).text;if([string]::IsNullOrWhiteSpace($text)){0}else{@($text -split "`r?`n"|Where-Object{-not[string]::IsNullOrWhiteSpace($_)}).Count}}
 
@@ -112,7 +116,16 @@ try{
   if($Trigger -eq 'ci-publish' -and $localSha -eq '2520b8593f934187e63ea835e2ad3da7e25bf60f'){
     $known=@('.github/workflows/androidbuild-local-integration.yml','.github/workflows/waddle-command-center-live.yml','src/client/views/commands/commands-compact.css','src/client/views/commands/commands.html','src/client/views/commands/commands.ts')|Sort-Object
     $actual=@($trackedPaths|Sort-Object)
-    if(($actual -join '|') -eq ($known -join '|')){Invoke-RepoGit $git (@('restore','--source=HEAD','--worktree','--')+$known)|Out-Null;Write-SyncLine "WADDLE_SOURCE_MIGRATION=PASS from_sha=$localSha restored_tracked=$($known.Count) untracked_preserved=true";$trackedPaths=Get-TrackedDirtyPaths $git}
+    $unexpected=@($actual|Where-Object{$known -notcontains $_})
+    $missing=@($known|Where-Object{$actual -notcontains $_})
+    if($unexpected.Count -eq 0 -and $missing.Count -eq 0 -and $actual.Count -eq $known.Count){
+      Invoke-RepoGit $git (@('restore','--source=HEAD','--worktree','--')+$known)|Out-Null
+      $trackedPaths=Get-TrackedDirtyPaths $git
+      if($trackedPaths.Count -ne 0){throw "Historical source migration did not clean the expected tracked paths: $($trackedPaths -join ',')"}
+      Write-SyncLine "WADDLE_SOURCE_MIGRATION=PASS from_sha=$localSha restored_tracked=$($known.Count) untracked_preserved=true"
+    }else{
+      Write-SyncLine "WADDLE_SOURCE_MIGRATION=SKIP from_sha=$localSha actual=$($actual -join ',') missing=$($missing -join ',') unexpected=$($unexpected -join ',') mutation=false"
+    }
   }
   $trackedDirtyCount=$trackedPaths.Count;$untrackedCount=Get-UntrackedCount $git
 
