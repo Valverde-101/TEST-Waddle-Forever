@@ -2,6 +2,10 @@
  * Compact layout for the in-game Command Center.
  * The native window is intentionally about one third of the game width, so the
  * renderer must remain usable well below desktop-dialog widths.
+ *
+ * Important: compact controls should size to their content instead of stretching
+ * into equal-width desktop cards. The player should keep as much of the game
+ * visible as possible while the tool is open.
  */
 body {
   min-width: 0 !important;
@@ -9,25 +13,29 @@ body {
 }
 
 .command-center {
-  gap: 5px;
-  padding: 5px;
+  gap: 4px;
+  padding: 4px;
 }
 
 .app-header {
   gap: 5px;
-  padding: 6px 7px;
-  border-radius: 8px;
+  padding: 5px 6px;
+  border-radius: 7px;
+}
+
+.app-header .eyebrow {
+  display: none;
 }
 
 .app-header h1 {
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .eyebrow,
 .section-label,
 .command-category,
 .field-group > span {
-  font-size: 7.5px;
+  font-size: 7px;
 }
 
 .header-actions {
@@ -35,28 +43,53 @@ body {
 }
 
 .ghost-button {
-  padding: 4px 5px;
-  font-size: 9px;
+  width: auto;
+  min-width: 0;
+  padding: 3px 5px;
+  font-size: 8.5px;
+  white-space: nowrap;
 }
 
+/*
+ * Do not divide the whole row into three equal columns. Each shortcut now takes
+ * only the width required by its own label and the row wraps naturally.
+ */
 .quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: flex-start;
   gap: 3px;
   padding: 4px;
   border-radius: 8px;
 }
 
 .quick-action {
-  min-height: 31px;
-  padding: 4px 5px;
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 29px;
+  padding: 3px 6px;
   border-radius: 6px;
 }
 
+.quick-action strong,
+.quick-action span {
+  width: auto;
+  max-width: 100%;
+}
+
 .quick-action strong {
-  font-size: 9.5px;
+  font-size: 9px;
 }
 
 .quick-action span {
-  font-size: 7.5px;
+  font-size: 7px;
+}
+
+.quick-action.menu-action {
+  display: none !important;
 }
 
 .workspace {
@@ -64,7 +97,7 @@ body {
 }
 
 .command-editor {
-  padding: 7px 8px;
+  padding: 6px 7px;
 }
 
 .editor-content {
@@ -72,45 +105,79 @@ body {
 }
 
 .editor-heading h2 {
-  font-size: 15px;
+  font-size: 14px;
 }
 
 .command-description {
-  font-size: 9px;
-  line-height: 1.25;
+  font-size: 8.5px;
+  line-height: 1.2;
 }
 
 input,
 select {
-  padding: 5px 6px;
-  font-size: 10px;
+  padding: 4px 5px;
+  font-size: 9.5px;
 }
 
 .argument-fields {
   gap: 4px;
 }
 
+/* Coin controls also fit their content instead of filling two oversized columns. */
 .coin-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-start;
   gap: 4px;
   padding: 5px;
 }
 
+.coin-controls > .section-label {
+  flex: 0 0 100%;
+}
+
+.segmented-control {
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  align-self: auto;
+}
+
 .segment {
-  padding: 5px 3px;
-  font-size: 8.5px;
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  padding: 4px 6px;
+  font-size: 8px;
+}
+
+.coin-amount-field {
+  flex: 0 0 82px;
+  width: 82px;
 }
 
 .coin-amount-field input {
-  font-size: 11px;
+  width: 82px;
+  font-size: 10.5px;
 }
 
 .coin-presets {
+  display: inline-flex;
+  grid-column: auto;
+  width: max-content;
+  max-width: 100%;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
   gap: 3px;
 }
 
 .coin-presets button {
-  padding: 3px 2px;
-  font-size: 8px;
+  width: auto;
+  min-width: 0;
+  padding: 3px 5px;
+  font-size: 7.5px;
+  white-space: nowrap;
 }
 
 .catalog-search-wrap {
@@ -118,124 +185,129 @@ select {
 }
 
 .catalog-results {
-  max-height: 110px;
+  max-height: 105px;
 }
 
 .catalog-result {
   padding: 4px 5px;
-  font-size: 9px;
+  font-size: 8.5px;
+}
+
+.catalog-result small {
+  font-size: 7.5px;
 }
 
 .compact-details > summary {
-  padding: 5px 6px;
-  font-size: 8.5px;
+  padding: 4px 5px;
+  font-size: 8px;
 }
 
 .advanced-body {
   gap: 4px;
-  padding: 0 6px 6px;
+  padding: 0 5px 5px;
 }
 
 .run-row {
   gap: 5px;
-  min-height: 27px;
+  min-height: 25px;
 }
 
 .command-status {
-  font-size: 8.5px;
+  font-size: 8px;
 }
 
 .primary-button {
-  min-width: 76px;
-  padding: 6px 8px;
-  font-size: 10px;
+  width: auto;
+  min-width: 0;
+  padding: 5px 7px;
+  font-size: 9.5px;
+  white-space: nowrap;
 }
 
 .primary-button span {
-  font-size: 6.5px;
+  font-size: 6px;
 }
 
 .icon-button,
 .compact-icon {
-  width: 25px;
-  height: 25px;
-  font-size: 15px;
+  width: 23px;
+  height: 23px;
+  font-size: 14px;
 }
 
 .action-drawer {
-  width: min(300px, 94vw);
+  width: min(280px, 94vw);
   min-width: 0;
 }
 
 .drawer-header {
-  padding: 7px;
+  padding: 6px;
 }
 
 .drawer-header h2 {
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .browser-toolbar {
-  grid-template-columns: minmax(0, 1fr) 92px;
+  grid-template-columns: minmax(0, 1fr) 86px;
   gap: 3px;
-  padding: 5px;
+  padding: 4px;
 }
 
 .browser-toolbar input,
 .browser-toolbar select {
   padding: 4px 5px;
-  font-size: 8.5px;
+  font-size: 8px;
 }
 
 @media (max-width: 320px) {
   .command-center {
-    gap: 4px;
-    padding: 4px;
+    gap: 3px;
+    padding: 3px;
   }
 
   .app-header {
     align-items: flex-start;
-    padding: 5px 6px;
+    padding: 4px 5px;
   }
 
   .app-header h1 {
-    font-size: 14px;
+    font-size: 13px;
   }
 
   .header-actions {
     flex-direction: column;
-    align-items: stretch;
+    align-items: flex-end;
   }
 
   .ghost-button {
     padding: 3px 4px;
-    font-size: 8px;
+    font-size: 7.5px;
   }
 
   .quick-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    flex-wrap: wrap;
   }
 
   .quick-action {
-    min-height: 29px;
+    width: max-content;
+    min-height: 27px;
+    padding: 3px 5px;
   }
 
   .coin-controls {
-    grid-template-columns: 1fr;
+    align-items: flex-start;
   }
 
-  .coin-controls > .section-label,
-  .coin-presets {
-    grid-column: 1;
-  }
-
-  .coin-presets {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .coin-amount-field,
+  .coin-amount-field input {
+    width: 74px;
+    flex-basis: 74px;
   }
 
   .run-row {
-    align-items: stretch;
-    flex-direction: column;
+    align-items: center;
   }
 
   .command-status {
@@ -243,7 +315,7 @@ select {
   }
 
   .primary-button {
-    width: 100%;
+    width: auto;
   }
 
   .action-drawer {
@@ -257,7 +329,7 @@ select {
 
 @media (max-height: 540px) {
   .quick-action {
-    min-height: 27px;
+    min-height: 25px;
   }
 
   .command-description {
@@ -265,6 +337,6 @@ select {
   }
 
   .catalog-results {
-    max-height: 80px;
+    max-height: 76px;
   }
 }
