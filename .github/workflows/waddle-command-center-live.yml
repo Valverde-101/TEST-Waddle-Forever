@@ -47,7 +47,13 @@ jobs:
           }
           if(-not $root){throw 'COMMAND_CENTER_LIVE=FAIL androidbuild_root_not_found'}
 
-          $gitExe=[string](Get-Command git.exe -ErrorAction Stop).Source
+          $gitExe=Join-Path $root 'Tools\Git\cmd\git.exe'
+          if(-not(Test-Path -LiteralPath $gitExe -PathType Leaf)){
+            $gitCommand=Get-Command git.exe -ErrorAction SilentlyContinue
+            if($gitCommand){$gitExe=[string]$gitCommand.Source}
+          }
+          if([string]::IsNullOrWhiteSpace($gitExe) -or -not(Test-Path -LiteralPath $gitExe -PathType Leaf)){throw "COMMAND_CENTER_LIVE=FAIL git_missing=$gitExe"}
+
           $liveRepo=Join-Path $root 'Repositories\TEST-Waddle-Forever'
           $sourceModules=Join-Path $liveRepo 'node_modules'
           if(-not(Test-Path -LiteralPath (Join-Path $liveRepo '.git'))){throw "COMMAND_CENTER_LIVE=FAIL live_repo_missing=$liveRepo"}
@@ -83,7 +89,7 @@ jobs:
           "WADDLE_LIVE_REPO=$liveRepo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "WADDLE_COMMAND_BUILD_REPO=$workRepo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "WADDLE_GIT_EXE=$gitExe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "COMMAND_CENTER_LIVE_PREP=PASS sha=$actual worktree=$workRepo live_repo=$liveRepo dependency_mode=read_only_junction"
+          Write-Host "COMMAND_CENTER_LIVE_PREP=PASS sha=$actual worktree=$workRepo live_repo=$liveRepo dependency_mode=read_only_junction git=$gitExe"
 
       - name: Build exact-SHA Command Center
         shell: powershell
