@@ -112,7 +112,7 @@ try{
   if($ExpectedSha){$expected=$ExpectedSha.Trim().ToLowerInvariant();if($remoteSha -ne $expected){$mode=if($Trigger -eq 'ci-publish'){'stale_ci_publish'}else{'expected_sha_mismatch'};Write-SyncLine "WADDLE_SOURCE_SYNC=PASS mode=$mode expected=$expected remote_sha=$remoteSha mutation=false";Save-SyncState 'PASS' $mode -Branch $branch -Remote $remote -RemoteBranch $remoteBranch -LocalSha $localSha -RemoteSha $remoteSha -ShallowRepaired $shallowRepaired -CoreVersion $coreVersion -GitPath $git;exit 0}}
   if($remoteProbe.exit_code -ne 0 -or $mergeProbe.exit_code -ne 0 -or [string]::IsNullOrWhiteSpace($remoteProbe.text) -or [string]::IsNullOrWhiteSpace($mergeProbe.text)){Invoke-RepoGit $git @('branch',"--set-upstream-to=$remote/$remoteBranch",$branch)|Out-Null;Write-SyncLine "WADDLE_SOURCE_TRACKING=PASS branch=$branch upstream=$remote/$remoteBranch"}
 
-  $trackedPaths=Get-TrackedDirtyPaths $git
+  $trackedPaths=@(Get-TrackedDirtyPaths $git)
   if($Trigger -eq 'ci-publish' -and $localSha -eq '2520b8593f934187e63ea835e2ad3da7e25bf60f'){
     $known=@('.github/workflows/androidbuild-local-integration.yml','.github/workflows/waddle-command-center-live.yml','src/client/views/commands/commands-compact.css','src/client/views/commands/commands.html','src/client/views/commands/commands.ts')|Sort-Object
     $actual=@($trackedPaths|Sort-Object)
@@ -120,14 +120,14 @@ try{
     $missing=@($known|Where-Object{$actual -notcontains $_})
     if($unexpected.Count -eq 0 -and $missing.Count -eq 0 -and $actual.Count -eq $known.Count){
       Invoke-RepoGit $git (@('restore','--source=HEAD','--worktree','--')+$known)|Out-Null
-      $trackedPaths=Get-TrackedDirtyPaths $git
-      if($trackedPaths.Count -ne 0){throw "Historical source migration did not clean the expected tracked paths: $($trackedPaths -join ',')"}
+      $trackedPaths=@(Get-TrackedDirtyPaths $git)
+      if(@($trackedPaths).Count -ne 0){throw "Historical source migration did not clean the expected tracked paths: $($trackedPaths -join ',')"}
       Write-SyncLine "WADDLE_SOURCE_MIGRATION=PASS from_sha=$localSha restored_tracked=$($known.Count) untracked_preserved=true"
     }else{
       Write-SyncLine "WADDLE_SOURCE_MIGRATION=SKIP from_sha=$localSha actual=$($actual -join ',') missing=$($missing -join ',') unexpected=$($unexpected -join ',') mutation=false"
     }
   }
-  $trackedDirtyCount=$trackedPaths.Count;$untrackedCount=Get-UntrackedCount $git
+  $trackedDirtyCount=@($trackedPaths).Count;$untrackedCount=Get-UntrackedCount $git
 
   $coreSync=Get-Command Sync-AndroidBuildRepositoryBranchSafe -ErrorAction SilentlyContinue
   if($coreSync){
