@@ -10,6 +10,11 @@ import { FileOverrider, OVERRIDERS, REGEX_OVERRIDERS } from './overriders';
 import { getYellowString, logverbose } from '@server/logger';
 import { publishWaddleLiveTrace } from '@common/live-trace';
 
+const CLOTHING_ASSET_ROUTE = /^play\/v2\/content\/global\/clothing\/(?:icons|paper|sprites)\/[^/]+\.swf$/i;
+const CLOTHING_MEMORY_CACHE_MAX_BYTES = 96 * 1024 * 1024;
+const CLOTHING_MEMORY_CACHE_MAX_ENTRIES = 1536;
+const CLOTHING_HTTP_CACHE_SECONDS = 300;
+
 const normalizeRequestRoute = (rawRoute: string): string | undefined => {
   if (rawRoute.includes('\0')) return undefined;
 
@@ -34,6 +39,8 @@ const getAssetKind = (route: string) => {
   return extension || 'ROUTE';
 };
 
+const isClothingAssetRoute = (route: string) => CLOTHING_ASSET_ROUTE.test(route);
+
 const traceFileResolution = (
   route: string,
   phase: 'handled' | 'error',
@@ -57,6 +64,9 @@ export class FileServer {
   private overrider: FileOverrider;
   private dynamicFiles: Map<string, FileGenerator>;
   private postGenerators: Map<string, FileGenerator>;
+  private clothingMemoryCache = new Map<string, Buffer>();
+  private clothingMemoryCacheBytes = 0;
+  private clothingReadsInFlight = new Map<string, Promise<Buffer>>();
 
   constructor(private gameData: GameData, private settings: SettingsManager) {
     this.dynamicFiles = getGeneratorsMap();
@@ -69,7 +79,73 @@ export class FileServer {
     this.overrider = new FileOverrider(gameData, settings, OVERRIDERS, REGEX_OVERRIDERS);
   }
 
+  private clearClothingMemoryCache() {
+    this.clothingMemoryCache.clear();
+    this.clothingMemoryCacheBytes = 0;
+    this.clothingReadsInFlight.clear();
+  }
+
+  private getClothingCacheKey(filePath: string) {
+    const absolute = path.resolve(filePath);
+    return process.platform === 'win32' ? absolute.toLowerCase() : absolute;
+  }
+
+  private rememberClothingAsset(cacheKey: string, binary: Buffer) {
+    if (binary.length > CLOTHING_MEMORY_CACHE_MAX_BYTES) return;
+
+    const previous = this.clothingMemoryCache.get(cacheKey);
+    if (previous !== undefined) {
+      this.clothingMemoryCacheBytes -= previous.length;
+      this.clothingMemoryCache.delete(cacheKey);
+    }
+
+    this.clothingMemoryCache.set(cacheKey, binary);
+    this.clothingMemoryCacheBytes += binary.length;
+
+    while (
+      this.clothingMemoryCache.size > CLOTHING_MEMORY_CACHE_MAX_ENTRIES ||
+      this.clothingMemoryCacheBytes > CLOTHING_MEMORY_CACHE_MAX_BYTES
+    ) {
+      const oldest = this.clothingMemoryCache.keys().next();
+      if (oldest.done || oldest.value === undefined) break;
+      const stale = this.clothingMemoryCache.get(oldest.value);
+      this.clothingMemoryCache.delete(oldest.value);
+      if (stale !== undefined) this.clothingMemoryCacheBytes -= stale.length;
+    }
+  }
+
+  private async readResolvedFile(route: string, filePath: string): Promise<Buffer> {
+    if (!isClothingAssetRoute(route)) return await readFile(filePath);
+
+    const cacheKey = this.getClothingCacheKey(filePath);
+    const cached = this.clothingMemoryCache.get(cacheKey);
+    if (cached !== undefined) {
+      // Refresh insertion order so the bounded Map behaves as an LRU cache.
+      this.clothingMemoryCache.delete(cacheKey);
+      this.clothingMemoryCache.set(cacheKey, cached);
+      return cached;
+    }
+
+    const pending = this.clothingReadsInFlight.get(cacheKey);
+    if (pending !== undefined) return await pending;
+
+    const load = readFile(filePath)
+      .then(binary => {
+        this.rememberClothingAsset(cacheKey, binary);
+        return binary;
+      })
+      .finally(() => {
+        this.clothingReadsInFlight.delete(cacheKey);
+      });
+
+    this.clothingReadsInFlight.set(cacheKey, load);
+    return await load;
+  }
+
   private updateModFiles() {
+    // A mod can replace a clothing SWF without changing its request URL. Drop the
+    // session cache whenever the active mod set changes so no stale asset survives.
+    this.clearClothingMemoryCache();
     this.modFiles = new Map<string, string>();
     for (const mod of this.settings.mods.getActiveMods()) {
       mod.getFiles().forEach(file => {
@@ -117,7 +193,8 @@ export class FileServer {
         }
         traceFileResolution(route, 'handled', 'resolved-game-data', {
           resolver: 'game-data',
-          target: toForwardSlash(String(relativeFile))
+          target: toForwardSlash(String(relativeFile)),
+          memoryCacheEligible: isClothingAssetRoute(route)
         });
       }
     }
@@ -130,7 +207,7 @@ export class FileServer {
       }
     } else {
       try {
-        return await readFile(filePath);
+        return await this.readResolvedFile(route, filePath);
       } catch (error) {
         traceFileResolution(route, 'error', 'read-failed', {
           resolver: modName !== undefined ? 'mod' : 'game-data',
@@ -190,6 +267,13 @@ export class FileServer {
         if (type === undefined) throw new Error('Split somehow returned empty list');
 
         const value = await this.overrider.override(route, binary);
+        if (isClothingAssetRoute(route)) {
+          // The legacy Flash client frequently reconstructs the inventory grid and
+          // asks for the same icon/paper/sprite SWFs again. Keep a short browser
+          // freshness window while the server-side LRU removes repeated SMB reads.
+          res.set('Cache-Control', `public, max-age=${CLOTHING_HTTP_CACHE_SECONDS}`);
+          res.set('X-Waddle-Asset-Cache', 'clothing-memory-lru');
+        }
         res.status(200).type(type).send(value);
       } catch (error) {
         if (route !== undefined) {
