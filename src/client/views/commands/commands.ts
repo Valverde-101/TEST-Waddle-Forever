@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain } from "electron";
+import fs from "fs";
 import path from "path";
 import { getPopupCreator } from "@client/popups";
 import { instrumentRuntimeWindow, writeRuntimeDiagnostic } from "@client/runtime-diagnostics";
@@ -12,6 +13,10 @@ const GET_DATA_CHANNEL = 'command-center:get-data';
 const GET_STATE_CHANNEL = 'command-center:get-state';
 const SEARCH_CATALOG_CHANNEL = 'command-center:search-catalog';
 const RUN_COMMAND_CHANNEL = 'command-center:run-command';
+
+const REPOSITORY_ROOT = path.resolve(process.cwd());
+const ITEM_ICON_DIRECTORY = path.join(REPOSITORY_ROOT, 'media', 'default', 'iconspng');
+let itemIconIds: Set<number> | null = null;
 
 type LivePenguin = {
   id: number;
@@ -41,6 +46,57 @@ const getActivePenguin = (server: CommandServer): LivePenguin | null => {
   return players[0];
 };
 
+/**
+ * Build a numeric index from the one authoritative PNG directory in the
+ * repository. The gallery must never infer that every item crumb has an image:
+ * the item database and the PNG archive are intentionally not 1:1.
+ *
+ * This is cached for the lifetime of the process, so a search does not perform
+ * thousands of filesystem checks. A normal Waddle restart refreshes the index
+ * after new PNGs are added to the repository.
+ */
+const getItemIconIds = (): Set<number> => {
+  if (itemIconIds !== null) return itemIconIds;
+
+  const ids = new Set<number>();
+  try {
+    const stat = fs.statSync(ITEM_ICON_DIRECTORY);
+    if (!stat.isDirectory()) {
+      throw new Error('canonical icon path is not a directory');
+    }
+
+    for (const fileName of fs.readdirSync(ITEM_ICON_DIRECTORY)) {
+      const match = fileName.match(/^(\d+)\.png$/i);
+      if (match === null) continue;
+      const id = Number(match[1]);
+      if (Number.isInteger(id) && id > 0) ids.add(id);
+    }
+
+    console.log(`WADDLE_COMMAND_CENTER_ICON_INDEX=PASS root=${REPOSITORY_ROOT} directory=${ITEM_ICON_DIRECTORY} icons=${ids.size} source=repository-only`);
+    writeRuntimeDiagnostic('command-center-icon-index', {
+      status: 'PASS',
+      repositoryRoot: REPOSITORY_ROOT,
+      directory: ITEM_ICON_DIRECTORY,
+      iconCount: ids.size,
+      source: 'repository-only'
+    });
+  } catch (error) {
+    const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    console.error(`WADDLE_COMMAND_CENTER_ICON_INDEX=FAIL directory=${ITEM_ICON_DIRECTORY} error=${message}`);
+    writeRuntimeDiagnostic('command-center-icon-index', {
+      status: 'FAIL',
+      repositoryRoot: REPOSITORY_ROOT,
+      directory: ITEM_ICON_DIRECTORY,
+      iconCount: 0,
+      source: 'repository-only',
+      error: message
+    });
+  }
+
+  itemIconIds = ids;
+  return itemIconIds;
+};
+
 const getCommandCenterData = () => ({
   commands: getCommandsList()
 });
@@ -55,7 +111,9 @@ const searchCatalog = (kind: string, rawQuery: string, rawLimit: number) => {
   const limit = Number.isInteger(rawLimit) ? Math.max(1, Math.min(rawLimit, 60)) : 30;
 
   if (kind === 'items') {
+    const iconIds = getItemIconIds();
     return ITEMS.rows
+      .filter(item => iconIds.has(item.id))
       .filter(item => matchesCatalogQuery(item.id, item.name, query))
       .slice(0, limit)
       .map(item => ({
