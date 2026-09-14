@@ -6,6 +6,7 @@ on:
     branches: [feat/halloween-party-2015]
     paths:
       - '.github/scripts/waddle-halloween-2015.ps1'
+      - '.github/scripts/waddle-halloween-2015-source.ps1'
       - '.github/workflows/waddle-halloween-2015.yml'
       - 'src/server/updates/2015.ts'
       - 'src/server/game-data/files.ts'
@@ -32,7 +33,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Apply root Halloween 2015 source integration
         shell: powershell
-        run: ./.github/scripts/waddle-halloween-2015.ps1 -Mode source -RepoRoot $env:GITHUB_WORKSPACE
+        run: ./.github/scripts/waddle-halloween-2015-source.ps1 -RepoRoot $env:GITHUB_WORKSPACE
       - name: Commit source integration when needed
         shell: powershell
         run: |
