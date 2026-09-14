@@ -1,4 +1,5 @@
 import { BrowserWindow, ipcMain } from "electron";
+import fs from "fs";
 import path from "path";
 import { getPopupCreator } from "@client/popups";
 import { instrumentRuntimeWindow, writeRuntimeDiagnostic } from "@client/runtime-diagnostics";
@@ -12,6 +13,10 @@ const GET_DATA_CHANNEL = 'command-center:get-data';
 const GET_STATE_CHANNEL = 'command-center:get-state';
 const SEARCH_CATALOG_CHANNEL = 'command-center:search-catalog';
 const RUN_COMMAND_CHANNEL = 'command-center:run-command';
+
+const REPOSITORY_ROOT = path.resolve(process.cwd());
+const ITEM_ICON_DIRECTORY = path.join(REPOSITORY_ROOT, 'media', 'default', 'iconspng');
+let itemIconIds: Set<number> | null = null;
 
 type LivePenguin = {
   id: number;
@@ -41,6 +46,57 @@ const getActivePenguin = (server: CommandServer): LivePenguin | null => {
   return players[0];
 };
 
+/**
+ * Build a numeric index from the one authoritative PNG directory in the
+ * repository. The gallery must never infer that every item crumb has an image:
+ * the item database and the PNG archive are intentionally not 1:1.
+ *
+ * This is cached for the lifetime of the process, so a search does not perform
+ * thousands of filesystem checks. A normal Waddle restart refreshes the index
+ * after new PNGs are added to the repository.
+ */
+const getItemIconIds = (): Set<number> => {
+  if (itemIconIds !== null) return itemIconIds;
+
+  const ids = new Set<number>();
+  try {
+    const stat = fs.statSync(ITEM_ICON_DIRECTORY);
+    if (!stat.isDirectory()) {
+      throw new Error('canonical icon path is not a directory');
+    }
+
+    for (const fileName of fs.readdirSync(ITEM_ICON_DIRECTORY)) {
+      const match = fileName.match(/^(\d+)\.png$/i);
+      if (match === null) continue;
+      const id = Number(match[1]);
+      if (Number.isInteger(id) && id > 0) ids.add(id);
+    }
+
+    console.log(`WADDLE_COMMAND_CENTER_ICON_INDEX=PASS root=${REPOSITORY_ROOT} directory=${ITEM_ICON_DIRECTORY} icons=${ids.size} source=repository-only`);
+    writeRuntimeDiagnostic('command-center-icon-index', {
+      status: 'PASS',
+      repositoryRoot: REPOSITORY_ROOT,
+      directory: ITEM_ICON_DIRECTORY,
+      iconCount: ids.size,
+      source: 'repository-only'
+    });
+  } catch (error) {
+    const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    console.error(`WADDLE_COMMAND_CENTER_ICON_INDEX=FAIL directory=${ITEM_ICON_DIRECTORY} error=${message}`);
+    writeRuntimeDiagnostic('command-center-icon-index', {
+      status: 'FAIL',
+      repositoryRoot: REPOSITORY_ROOT,
+      directory: ITEM_ICON_DIRECTORY,
+      iconCount: 0,
+      source: 'repository-only',
+      error: message
+    });
+  }
+
+  itemIconIds = ids;
+  return itemIconIds;
+};
+
 const getCommandCenterData = () => ({
   commands: getCommandsList()
 });
@@ -55,7 +111,9 @@ const searchCatalog = (kind: string, rawQuery: string, rawLimit: number) => {
   const limit = Number.isInteger(rawLimit) ? Math.max(1, Math.min(rawLimit, 60)) : 30;
 
   if (kind === 'items') {
+    const iconIds = getItemIconIds();
     return ITEMS.rows
+      .filter(item => iconIds.has(item.id))
       .filter(item => matchesCatalogQuery(item.id, item.name, query))
       .slice(0, limit)
       .map(item => ({
@@ -93,12 +151,9 @@ const searchCatalog = (kind: string, rawQuery: string, rawLimit: number) => {
 type WindowBounds = { x: number; y: number; width: number; height: number };
 
 /**
- * The Command Center is an auxiliary tool, not a second full application.
- * Keep it at roughly one third of the game's visible area: one third of the
- * game width and about 82% of its height. This leaves most of Club Penguin
- * visible while still providing enough vertical room for command controls.
- * Electron bounds are expressed in DIP, so the ratio stays correct on Windows
- * display scaling (125%, 150%, 175%, etc.).
+ * The Command Center stays narrow so the game remains visible, but now uses the
+ * full vertical area available inside the game window. Keeping the same margin
+ * at the top and bottom also makes the popup stable across DPI scaling.
  */
 const getCommandCenterBounds = (mainWindow: BrowserWindow): WindowBounds => {
   const parent = mainWindow.getBounds();
@@ -107,9 +162,9 @@ const getCommandCenterBounds = (mainWindow: BrowserWindow): WindowBounds => {
   const availableHeight = Math.max(260, parent.height - margin * 2);
 
   const width = Math.min(availableWidth, Math.max(220, Math.round(parent.width / 3)));
-  const height = Math.min(availableHeight, Math.max(360, Math.round(parent.height * 0.82)));
+  const height = availableHeight;
   const x = parent.x + Math.max(margin, parent.width - width - margin);
-  const y = parent.y + Math.max(margin, Math.round((parent.height - height) / 2));
+  const y = parent.y + margin;
 
   return { x, y, width, height };
 };
@@ -124,7 +179,7 @@ export const createCommands = getPopupCreator(
       minWidth: Math.min(220, initialBounds.width),
       minHeight: Math.min(360, initialBounds.height),
       maxWidth: Math.max(initialBounds.width, Math.round(mainWindow.getBounds().width * 0.42)),
-      maxHeight: Math.max(initialBounds.height, Math.round(mainWindow.getBounds().height * 0.92)),
+      maxHeight: initialBounds.height,
       title: "Command Center",
       webPreferences: {
         preload: path.join(__dirname, 'commands-preload.js')
@@ -136,14 +191,14 @@ export const createCommands = getPopupCreator(
     commandsWindow.setMenu(null);
     instrumentRuntimeWindow(commandsWindow, 'commands');
 
-    // Keep the popup proportional when the game is resized/maximized and pin it
-    // to the right side instead of allowing it to cover the whole game again.
+    // Keep the popup pinned to the game's right edge and consume the complete
+    // available game height whenever the parent moves or changes size.
     const syncWindowToGame = () => {
       if (commandsWindow.isDestroyed() || mainWindow.isDestroyed()) return;
       const next = getCommandCenterBounds(mainWindow);
       commandsWindow.setMaximumSize(
         Math.max(next.width, Math.round(mainWindow.getBounds().width * 0.42)),
-        Math.max(next.height, Math.round(mainWindow.getBounds().height * 0.92))
+        next.height
       );
       commandsWindow.setBounds(next, false);
     };
@@ -274,7 +329,7 @@ export const createCommands = getPopupCreator(
         activePenguinId: player ? player.id : null,
         width: commandsWindow.getBounds().width,
         height: commandsWindow.getBounds().height,
-        sizingMode: 'one-third-game-width'
+        sizingMode: 'one-third-game-width-full-height'
       });
     });
 

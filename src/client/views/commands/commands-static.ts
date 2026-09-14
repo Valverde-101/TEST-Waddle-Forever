@@ -61,6 +61,7 @@ const coinAmount = document.getElementById('coin-amount')! as HTMLInputElement;
 const HISTORY_KEY = 'waddle-command-center-history-v3';
 const FAVORITES_KEY = 'waddle-command-center-favorites-v1';
 const MAX_HISTORY = 12;
+const ITEM_ICON_BASE = '../../../../media/default/iconspng/';
 
 let commandData: CommandCenterData = { commands: [] };
 let selectedCommand: CommandInfo | null = null;
@@ -338,13 +339,23 @@ function catalogKindForSelected(): string | null {
   return null;
 }
 
+function isVisualItemCatalog(): boolean {
+  return selectedCommand !== null && selectedCommand.name === 'ai';
+}
+
+function itemIconSource(id: number): string {
+  return `${ITEM_ICON_BASE}${encodeURIComponent(String(id))}.png`;
+}
+
 function renderCatalogResults(entries: CatalogEntry[]) {
   clearElement(catalogResults);
+  const visualItems = isVisualItemCatalog();
+  catalogResults.classList.toggle('visual-item-grid', visualItems);
 
   if (entries.length === 0) {
     const empty = document.createElement('div');
-    empty.className = 'history-empty';
-    empty.textContent = 'No catalog entries found.';
+    empty.className = 'history-empty catalog-empty';
+    empty.textContent = visualItems ? 'No clothing items match this search.' : 'No catalog entries found.';
     catalogResults.appendChild(empty);
     return;
   }
@@ -352,23 +363,65 @@ function renderCatalogResults(entries: CatalogEntry[]) {
   for (const entry of entries) {
     const button = document.createElement('button');
     button.type = 'button';
-    button.className = 'catalog-result';
+    button.className = visualItems ? 'catalog-result catalog-card' : 'catalog-result';
+    button.dataset.catalogId = String(entry.id);
+    button.title = `${entry.name} · ID ${entry.id}`;
+
+    if (visualItems) {
+      const picture = document.createElement('span');
+      picture.className = 'catalog-card-picture';
+
+      const fallback = document.createElement('span');
+      fallback.className = 'catalog-card-fallback';
+      fallback.textContent = String(entry.id);
+
+      const image = document.createElement('img');
+      image.className = 'catalog-card-image';
+      image.alt = entry.name;
+      image.loading = 'lazy';
+      image.decoding = 'async';
+      image.src = itemIconSource(entry.id);
+      image.addEventListener('load', () => picture.classList.add('image-ready'));
+      image.addEventListener('error', () => {
+        image.remove();
+        picture.classList.add('image-missing');
+      });
+      picture.append(fallback, image);
+      button.appendChild(picture);
+    }
+
+    const text = document.createElement('span');
+    text.className = visualItems ? 'catalog-card-copy' : 'catalog-result-copy';
 
     const name = document.createElement('span');
+    name.className = visualItems ? 'catalog-card-name' : 'catalog-result-name';
     name.textContent = entry.name;
 
     const meta = document.createElement('small');
-    const cost = typeof entry.cost === 'number' ? ` · ${entry.cost} coins` : '';
-    meta.textContent = `ID ${entry.id}${cost}`;
+    meta.className = visualItems ? 'catalog-card-meta' : 'catalog-result-meta';
+    const cost = typeof entry.cost === 'number' ? ` · ${entry.cost}c` : '';
+    const member = entry.member ? ' · M' : '';
+    meta.textContent = `#${entry.id}${cost}${member}`;
 
-    button.append(name, meta);
+    text.append(name, meta);
+    button.appendChild(text);
     button.addEventListener('click', () => {
       if (argumentInputs.length === 0 || !selectedCommand) return;
       argumentInputs[0].value = selectedCommand.name === 'jr' ? entry.name : String(entry.id);
       updatePreviewFromArguments();
-      catalogSearch.value = entry.name;
-      clearElement(catalogResults);
-      if (argumentInputs.length > 1) argumentInputs[1].focus();
+
+      if (visualItems) {
+        for (const card of Array.from(catalogResults.querySelectorAll<HTMLElement>('.catalog-card.selected'))) {
+          card.classList.remove('selected');
+        }
+        button.classList.add('selected');
+        setStatus(`Selected ${entry.name} (#${entry.id})`);
+        commandButton.focus();
+      } else {
+        catalogSearch.value = entry.name;
+        clearElement(catalogResults);
+        if (argumentInputs.length > 1) argumentInputs[1].focus();
+      }
     });
     catalogResults.appendChild(button);
   }
@@ -380,9 +433,10 @@ async function performCatalogSearch() {
 
   const sequence = ++catalogRequestSequence;
   const query = catalogSearch.value.trim();
-  catalogResults.textContent = 'Searching…';
+  catalogResults.classList.toggle('visual-item-grid', kind === 'items');
+  catalogResults.textContent = kind === 'items' ? 'Loading items…' : 'Searching…';
 
-  const entries = await commandsApi.searchCatalog({ kind, query, limit: 40 });
+  const entries = await commandsApi.searchCatalog({ kind, query, limit: kind === 'items' ? 60 : 40 });
   if (sequence !== catalogRequestSequence || kind !== catalogKindForSelected()) return;
   renderCatalogResults(Array.isArray(entries) ? entries : []);
 }
@@ -399,16 +453,21 @@ function renderCatalog() {
   const kind = catalogKindForSelected();
   const enabled = kind !== null;
   catalogSearchWrap.classList.toggle('hidden', !enabled);
+  catalogResults.classList.remove('visual-item-grid');
   clearElement(catalogResults);
   catalogSearch.value = '';
   catalogRequestSequence += 1;
 
   if (!enabled || !selectedCommand) return;
   catalogLabel.textContent = selectedCommand.name === 'ai'
-    ? 'Find clothing by name or ID'
+    ? 'Clothing gallery · search by name or ID'
     : selectedCommand.name === 'af'
       ? 'Find furniture by name or ID'
       : 'Find room by name or ID';
+
+  if (selectedCommand.name === 'ai') {
+    scheduleCatalogSearch(true);
+  }
 }
 
 function renderExamples(command: CommandInfo) {
