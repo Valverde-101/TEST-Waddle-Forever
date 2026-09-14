@@ -127,7 +127,8 @@ jobs:
             'commands-item-preview.js',
             'commands.html',
             'commands.css',
-            'commands-compact.css'
+            'commands-compact.css',
+            'commands-window.css'
           )
           foreach($name in $required){
             $path=Join-Path $compiled $name
@@ -157,7 +158,8 @@ jobs:
             'commands-item-preview.js',
             'commands.html',
             'commands.css',
-            'commands-compact.css'
+            'commands-compact.css',
+            'commands-window.css'
           )
 
           foreach($dest in $destinations){
