@@ -151,12 +151,9 @@ const searchCatalog = (kind: string, rawQuery: string, rawLimit: number) => {
 type WindowBounds = { x: number; y: number; width: number; height: number };
 
 /**
- * The Command Center is an auxiliary tool, not a second full application.
- * Keep it at roughly one third of the game's visible area: one third of the
- * game width and about 82% of its height. This leaves most of Club Penguin
- * visible while still providing enough vertical room for command controls.
- * Electron bounds are expressed in DIP, so the ratio stays correct on Windows
- * display scaling (125%, 150%, 175%, etc.).
+ * The Command Center stays narrow so the game remains visible, but now uses the
+ * full vertical area available inside the game window. Keeping the same margin
+ * at the top and bottom also makes the popup stable across DPI scaling.
  */
 const getCommandCenterBounds = (mainWindow: BrowserWindow): WindowBounds => {
   const parent = mainWindow.getBounds();
@@ -165,9 +162,9 @@ const getCommandCenterBounds = (mainWindow: BrowserWindow): WindowBounds => {
   const availableHeight = Math.max(260, parent.height - margin * 2);
 
   const width = Math.min(availableWidth, Math.max(220, Math.round(parent.width / 3)));
-  const height = Math.min(availableHeight, Math.max(360, Math.round(parent.height * 0.82)));
+  const height = availableHeight;
   const x = parent.x + Math.max(margin, parent.width - width - margin);
-  const y = parent.y + Math.max(margin, Math.round((parent.height - height) / 2));
+  const y = parent.y + margin;
 
   return { x, y, width, height };
 };
@@ -182,7 +179,7 @@ export const createCommands = getPopupCreator(
       minWidth: Math.min(220, initialBounds.width),
       minHeight: Math.min(360, initialBounds.height),
       maxWidth: Math.max(initialBounds.width, Math.round(mainWindow.getBounds().width * 0.42)),
-      maxHeight: Math.max(initialBounds.height, Math.round(mainWindow.getBounds().height * 0.92)),
+      maxHeight: initialBounds.height,
       title: "Command Center",
       webPreferences: {
         preload: path.join(__dirname, 'commands-preload.js')
@@ -194,14 +191,14 @@ export const createCommands = getPopupCreator(
     commandsWindow.setMenu(null);
     instrumentRuntimeWindow(commandsWindow, 'commands');
 
-    // Keep the popup proportional when the game is resized/maximized and pin it
-    // to the right side instead of allowing it to cover the whole game again.
+    // Keep the popup pinned to the game's right edge and consume the complete
+    // available game height whenever the parent moves or changes size.
     const syncWindowToGame = () => {
       if (commandsWindow.isDestroyed() || mainWindow.isDestroyed()) return;
       const next = getCommandCenterBounds(mainWindow);
       commandsWindow.setMaximumSize(
         Math.max(next.width, Math.round(mainWindow.getBounds().width * 0.42)),
-        Math.max(next.height, Math.round(mainWindow.getBounds().height * 0.92))
+        next.height
       );
       commandsWindow.setBounds(next, false);
     };
@@ -332,7 +329,7 @@ export const createCommands = getPopupCreator(
         activePenguinId: player ? player.id : null,
         width: commandsWindow.getBounds().width,
         height: commandsWindow.getBounds().height,
-        sizingMode: 'one-third-game-width'
+        sizingMode: 'one-third-game-width-full-height'
       });
     });
 
