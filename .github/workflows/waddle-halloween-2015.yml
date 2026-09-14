@@ -1,0 +1,79 @@
+name: Waddle Halloween Party 2015 Integration
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/halloween-party-2015]
+    paths:
+      - '.github/scripts/waddle-halloween-2015.ps1'
+      - '.github/workflows/waddle-halloween-2015.yml'
+      - 'src/server/updates/2015.ts'
+      - 'src/server/game-data/files.ts'
+      - 'src/server/game-data/rooms.ts'
+      - 'src/client/views/timeline/timeline-static.ts'
+      - 'src/client/views/timeline/timeline.html'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: waddle-halloween-2015-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  integrate-source:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/halloween-party-2015
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Apply root Halloween 2015 source integration
+        shell: powershell
+        run: ./.github/scripts/waddle-halloween-2015.ps1 -Mode source -RepoRoot $env:GITHUB_WORKSPACE
+      - name: Commit source integration when needed
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          $changes = git status --porcelain
+          if(-not $changes){
+            Write-Host 'WADDLE_PARTY2015_SOURCE_COMMIT=PASS changed=false'
+            exit 0
+          }
+          git add -- src/server/updates/2015.ts src/server/game-data/files.ts src/server/game-data/rooms.ts src/client/views/timeline/timeline-static.ts src/client/views/timeline/timeline.html
+          git commit -m 'feat(halloween2015): integrate party timeline rooms and routes'
+          git push origin HEAD:feat/halloween-party-2015
+          Write-Host 'WADDLE_PARTY2015_SOURCE_COMMIT=PASS changed=true'
+
+  hydrate-canonical-assets:
+    needs: integrate-source
+    runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/halloween-party-2015
+      - name: Download every archived Halloween Party 2015 SWF into canonical media
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $canonical='V:\AndroidBuild\Repositories\TEST-Waddle-Forever'
+          if(-not(Test-Path -LiteralPath (Join-Path $canonical '.git'))){throw "WADDLE_PARTY2015_ASSETS=FAIL expected_canonical_missing=$canonical"}
+          & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015.ps1') -Mode assets -RepoRoot $canonical
+      - name: Verify canonical organized tree
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='V:\AndroidBuild\Repositories\TEST-Waddle-Forever\media\default\party2015'
+          $manifest=Join-Path $root 'manifest.json'
+          if(-not(Test-Path -LiteralPath $manifest -PathType Leaf)){throw 'WADDLE_PARTY2015_VERIFY=FAIL manifest_missing'}
+          $m=Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
+          if([int]$m.total -lt 60){throw "WADDLE_PARTY2015_VERIFY=FAIL total=$($m.total)"}
+          foreach($dir in 'rooms','avatar','client','close_ups','content','membership','other'){
+            if(-not(Test-Path -LiteralPath (Join-Path $root $dir) -PathType Container)){throw "WADDLE_PARTY2015_VERIFY=FAIL category_missing=$dir"}
+          }
+          Write-Host "WADDLE_PARTY2015_VERIFY=PASS total=$($m.total) root=$root"
