@@ -79,30 +79,40 @@ const EMPTY_PARTY_COOKIE = {
   questTaskStatus: []
 };
 
-export const handleRetrievePartyCookie: PenguinHandler<[]> = ({ penguin, msg, data }) => {
+const sendCurrentPartyCookie: PenguinHandler<[]> = ({ penguin, msg, data }) => {
   const config = data.getPartyProgress();
   const cookie = config === null ? EMPTY_PARTY_COOKIE : penguin.partyProgress.getCookie(config);
   msg.send(penguin, 'partycookie', JSON.stringify(cookie));
 }
 
-export const handlePartyMessageViewed: PenguinHandler<[number]> = ({ penguin, prst, data }, messageIndex) => {
+export const handleRetrievePartyCookie: PenguinHandler<[]> = (ctx) => {
+  sendCurrentPartyCookie(ctx);
+}
+
+export const handlePartyMessageViewed: PenguinHandler<[number]> = (ctx, messageIndex) => {
+  const { penguin, prst, data } = ctx;
   const config = data.getPartyProgress();
   if (config !== null && penguin.partyProgress.setMessageViewed(config, messageIndex)) {
     prst(penguin);
+    sendCurrentPartyCookie(ctx);
   }
 }
 
-export const handlePartyCommunicatorViewed: PenguinHandler<[number]> = ({ penguin, prst, data }, messageIndex) => {
+export const handlePartyCommunicatorViewed: PenguinHandler<[number]> = (ctx, messageIndex) => {
+  const { penguin, prst, data } = ctx;
   const config = data.getPartyProgress();
   if (config !== null && penguin.partyProgress.setCommunicatorViewed(config, messageIndex)) {
     prst(penguin);
+    sendCurrentPartyCookie(ctx);
   }
 }
 
-export const handlePartyTaskComplete: PenguinHandler<[number]> = ({ penguin, prst, data }, taskIndex) => {
+export const handlePartyTaskComplete: PenguinHandler<[number]> = (ctx, taskIndex) => {
+  const { penguin, prst, data } = ctx;
   const config = data.getPartyProgress();
   if (config !== null && penguin.partyProgress.setTaskComplete(config, taskIndex)) {
     prst(penguin);
+    sendCurrentPartyCookie(ctx);
   }
 }
 
