@@ -1,3 +1,14 @@
+export type PartyServiceConfig = {
+  /** Date string passed verbatim to the late-AS3 party runtime. */
+  partyStartDate: string;
+  /** Date string passed verbatim to the late-AS3 party runtime. */
+  partyEndDate: string;
+  /** Day made available to the party UI/quest runtime. */
+  unlockDayIndex: number;
+  /** Total number of days exposed to the party runtime. */
+  numOfDaysInParty: number;
+};
+
 export type PartyProgressConfig = {
   /** Stable key used to persist this party independently from other parties. */
   id: string;
@@ -9,18 +20,12 @@ export type PartyProgressConfig = {
   taskCount: number;
   /** Maximum coins accepted in one qtupdate packet. Defaults to 10. */
   maxCoinUpdate?: number;
-};
-
-/**
- * Server-side configuration consumed by the late-AS3 BaseParty runtime through
- * the `partyservice` XT response. Keep this generic: individual parties provide
- * their dates/day settings while the socket bootstrap remains reusable.
- */
-export type PartyServiceConfig = {
-  partyStartDate: string;
-  partyEndDate: string;
-  unlockDayIndex: number;
-  numOfDaysInParty: number;
+  /**
+   * Optional late-AS3 `partyservice` bootstrap. Keeping this with the persisted
+   * party configuration avoids adding Halloween-specific state to GameData and
+   * makes the same bootstrap reusable for later modern parties.
+   */
+  service?: PartyServiceConfig;
 };
 
 export type PartyProgressState = {
