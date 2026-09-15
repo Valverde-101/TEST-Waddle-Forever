@@ -66,28 +66,12 @@ jobs:
 
           $changes = @(git status --porcelain)
           if($LASTEXITCODE -ne 0){throw "WADDLE_PARTY2015_SOURCE_GATE=FAIL git_status_exit=$LASTEXITCODE"}
-          $allowed = @(
-            '.gitignore',
-            '.github/scripts/waddle-halloween-2015-source.ps1',
-            'src/server/updates/2015.ts',
-            'src/server/updates/index.ts',
-            'src/server/timelines/game-data.ts',
-            'src/server/game-data/files.ts',
-            'src/server/game-data/rooms.ts',
-            'src/server/game-data/party.ts',
-            'src/server/game-logic/party-progress.ts',
-            'src/server/database/database.ts',
-            'src/server/socket-server/world/world-penguin.ts',
-            'src/server/socket-server/handlers/party.ts',
-            'src/server/socket-server/handlers/puffle.ts',
-            'src/server/socket-server/world-handlers.ts',
-            'src/client/views/timeline/timeline-static.ts',
-            'src/client/views/timeline/timeline.html'
-          )
-          $changedPaths = @($changes | ForEach-Object { ($_ -replace '^..\s+','').Trim('"') -replace '\\','/' })
-          $unexpected = @($changedPaths | Where-Object { $_ -and $_ -notin $allowed })
-          if($unexpected.Count -gt 0){throw "WADDLE_PARTY2015_SOURCE_GATE=FAIL unexpected_generated_paths=$($unexpected -join ',')"}
-          Write-Host "WADDLE_PARTY2015_SOURCE_GATE=PASS expected_pending=$($changedPaths.Count) architecture=data_driven"
+          if($changes.Count -gt 0){
+            Write-Host 'Generated source/runtime is not idempotent:'
+            $changes | ForEach-Object { Write-Host $_ }
+            throw "WADDLE_PARTY2015_SOURCE_GATE=FAIL generated_diff_count=$($changes.Count)"
+          }
+          Write-Host 'WADDLE_PARTY2015_SOURCE_GATE=PASS generated_diff_count=0 architecture=data_driven'
 
   hydrate-publish-and-verify-assets:
     needs: validate-pr-source
