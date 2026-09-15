@@ -53,7 +53,9 @@ function Get-ScriptEvidence {
   $stderr = Join-Path $WorkRoot ($SafeName + '.export.stderr.txt')
   if (Test-Path -LiteralPath $exportDir) { Remove-Item -LiteralPath $exportDir -Recurse -Force }
   New-Item -ItemType Directory -Force -Path $exportDir | Out-Null
-  $result = Invoke-FFDec -FFDec $FFDec -Arguments @('-cli','-onerror','ignore','-exportTimeout','60','-exportFileTimeout','20','-export','script','"'+$exportDir+'"','"'+$Swf+'"') -Stdout $stdout -Stderr $stderr -TimeoutSeconds 90
+  $quotedOut = '"' + $exportDir.Replace('"','\"') + '"'
+  $quotedSwf = '"' + $Swf.Replace('"','\"') + '"'
+  $result = Invoke-FFDec -FFDec $FFDec -Arguments @('-cli','-onerror','ignore','-exportTimeout','60','-exportFileTimeout','20','-export','script',$quotedOut,$quotedSwf) -Stdout $stdout -Stderr $stderr -TimeoutSeconds 90
   if ($result.timeout) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_export_timeout swf=$Swf" }
   if (-not $result.ok) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_export_exit=$($result.exit) swf=$Swf" }
   $sourceFiles = @(Get-ChildItem -LiteralPath $exportDir -File -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in @('.as','.txt') } | Sort-Object FullName)
