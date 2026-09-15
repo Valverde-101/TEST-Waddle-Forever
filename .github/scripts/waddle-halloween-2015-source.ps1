@@ -83,7 +83,7 @@ Require-Contains $timeline 'const lastSelectableYear = Math.max' 'timeline_selec
 
 $html = Read-Normalized $htmlPath
 foreach ($year in 2013..2017) {
-  Require-Regex $html ("<option(?:\s+value=\"{0}\")?>{0}</option>" -f $year) ("timeline_year_{0}" -f $year)
+  Require-Regex $html ('<option(?:\s+value="{0}")?>{0}</option>' -f $year) ("timeline_year_{0}" -f $year)
 }
 
 Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source media_prefix=party2015 years=2005-2017 modern_room_ids=326,430,431,432,433,435,436,890 party_start=2015-10-21 party_end=2015-11-04 mutation=false"
