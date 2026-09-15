@@ -204,6 +204,7 @@ foreach ($needle in @(
 }
 if (-not $party2015.Contains("date: '2015-10-21'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL halloween_2015_date_missing' }
 if (-not $party2015.Contains("partyName: 'Halloween Party 2015'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL halloween_2015_party_missing' }
+if (-not $party2015.Contains("date: '2015-11-05'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL halloween_2015_exclusive_end_missing' }
 if (-not $updates2016.Contains("date: '2016-01-01'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL year_2016_update_missing' }
 if (-not $updates2016.Contains("indexHtml: 'modern-as3'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL modern_as3_entry_missing' }
 
@@ -212,5 +213,6 @@ $updates2011 = Read-Normalized (Join-Path $RepoRoot 'src/server/updates/2011.ts'
 if (-not $updates2010.Contains("dateReference: 'as3'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL as3_cutover_missing' }
 if (-not $updates2011.Contains("dateReference: 'vanilla-engine'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL vanilla_engine_cutover_missing' }
 
-& $verifyPath -RepoRoot $RepoRoot -RequiredThroughYear 2017 -RequiredDates @('2015-10-21','2015-11-04')
-Write-Host 'WADDLE_TIMELINE_MODERN=PASS years=configured_plus_payload picker_through=2017 halloween=2015-10-21 client_transitions=selectable as3=true vanilla_engine=true legacy_footer=false'
+# Temporary update ends are exclusive: 2015-11-05 keeps 2015-11-04 playable.
+& $verifyPath -RepoRoot $RepoRoot -RequiredThroughYear 2017 -RequiredDates @('2015-10-21','2015-11-05')
+Write-Host 'WADDLE_TIMELINE_MODERN=PASS years=configured_plus_payload picker_through=2017 halloween=2015-10-21 exclusive_end=2015-11-05 client_transitions=selectable as3=true vanilla_engine=true legacy_footer=false'
