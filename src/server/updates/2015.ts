@@ -112,6 +112,10 @@ export const UPDATES_2015: Update[] = [
           // snapshot (notably Halloween 2012) cannot leak into this event.
           'play/v2/content/global/content/party.swf': 'svanilla:media/play/v2/content/global/content/party.swf',
           'play/v2/content/global/content/features.swf': P + 'content/ContentFeatures-HalloweenParty2015.swf',
+          // The modern boot/interface path resolves this canonical resource directly.
+          // Keep it explicit even though globalChanges below also exposes the shell
+          // crumb alias used by SHELL.getPath('party_icon').
+          'play/v2/content/global/content/party_icon.swf': P + 'content/ContentParty_icon-HalloweenParty2015.swf',
           'play/v2/content/global/logo/logo.swf': P + 'content/ContentLogo-HalloweenParty2015.swf',
           'play/v2/content/global/avatar/sprites/penguin_robot.swf': P + 'avatar/PenguinRobot.swf',
           'play/v2/content/global/telescope/telescope.swf': P + 'other/Telescope-HalloweenParty2015.swf',
@@ -161,10 +165,9 @@ export const UPDATES_2015: Update[] = [
           'play/v2/content/global/music/1058.swf': P + 'music/Music1058.swf',
           'play/v2/content/global/music/1067.swf': P + 'music/Music1067.swf'
         },
-        // The modern interface calls SHELL.getPath('party_icon'). Merely routing
-        // party_icon.swf is not enough: the global crumb must expose that key.
-        // Keeping the alias alongside the routed file makes this reusable through
-        // Waddle's normal globalChanges mechanism instead of Halloween UI code.
+        // The modern interface calls SHELL.getPath('party_icon'). The canonical
+        // route above and this global crumb are separate parts of the startup/UI
+        // contract and both are required.
         globalChanges: {
           'content/party_icon.swf': [P + 'content/ContentParty_icon-HalloweenParty2015.swf', 'party_icon']
         },
