@@ -22,10 +22,31 @@ export type PartyProgressConfig = {
   maxCoinUpdate?: number;
   /**
    * Optional late-AS3 `partyservice` bootstrap. Keeping this with the persisted
-   * party configuration avoids adding Halloween-specific state to GameData and
-   * makes the same bootstrap reusable for later modern parties.
+   * party configuration makes the runtime reusable for later modern parties.
    */
   service?: PartyServiceConfig;
+};
+
+/**
+ * Evidence-backed service metadata for archived parties whose initial Waddle
+ * timeline definition predates the generic `service` field. New integrations
+ * should declare `service` directly in PartyProgressConfig; this table is only a
+ * compatibility bridge for already-landed party data.
+ */
+const ARCHIVED_PARTY_SERVICES: Readonly<Record<string, PartyServiceConfig>> = {
+  'halloween-2015': {
+    partyStartDate: '2015-10-21 00:00:00',
+    partyEndDate: '2015-11-05 00:00:00',
+    unlockDayIndex: 16,
+    numOfDaysInParty: 16
+  }
+};
+
+export const getPartyServiceConfig = (config: PartyProgressConfig | null): PartyServiceConfig | undefined => {
+  if (config === null) {
+    return undefined;
+  }
+  return config.service ?? ARCHIVED_PARTY_SERVICES[config.id];
 };
 
 export type PartyProgressState = {
