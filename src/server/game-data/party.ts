@@ -11,6 +11,18 @@ export type PartyProgressConfig = {
   maxCoinUpdate?: number;
 };
 
+/**
+ * Server-side configuration consumed by the late-AS3 BaseParty runtime through
+ * the `partyservice` XT response. Keep this generic: individual parties provide
+ * their dates/day settings while the socket bootstrap remains reusable.
+ */
+export type PartyServiceConfig = {
+  partyStartDate: string;
+  partyEndDate: string;
+  unlockDayIndex: number;
+  numOfDaysInParty: number;
+};
+
 export type PartyProgressState = {
   msgViewedArray: number[];
   communicatorMsgArray: number[];
