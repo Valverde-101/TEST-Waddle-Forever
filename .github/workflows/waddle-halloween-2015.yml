@@ -165,11 +165,11 @@ jobs:
           $ErrorActionPreference='Stop'
           & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-protocol.ps1') -RepoRoot $env:GITHUB_WORKSPACE -CanonicalRoot $env:GITHUB_WORKSPACE
 
-      - name: Audit Halloween 2015 dialogue localization requirements
+      - name: Require complete original Halloween 2015 dialogue localization
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-dialogues.ps1') -RepoRoot $env:GITHUB_WORKSPACE
+          & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-dialogues.ps1') -RepoRoot $env:GITHUB_WORKSPACE -RequireComplete
 
       - name: Verify party media is Git-owned and complete
         shell: powershell
