@@ -1,4 +1,5 @@
 import { World } from "@server/socket-server/world/world";
+import { getPartyServiceConfig } from "@server/game-data/party";
 
 import { sendError } from "./login";
 import { PenguinMessenger } from "../../socket-server/messenger";
@@ -92,7 +93,7 @@ const sendCurrentPartyCookie: PenguinHandler<[]> = ({ penguin, msg, data }) => {
  * that ordering and also works for future modern parties that opt into `service`.
  */
 const sendCurrentPartyService: PenguinHandler<[]> = ({ penguin, msg, data }) => {
-  const service = data.getPartyProgress()?.service;
+  const service = getPartyServiceConfig(data.getPartyProgress());
   if (service === undefined) {
     return;
   }
