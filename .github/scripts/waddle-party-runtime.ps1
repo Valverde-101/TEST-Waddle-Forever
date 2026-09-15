@@ -18,17 +18,22 @@ function Replace-Once([string]$Text,[string]$Old,[string]$New,[string]$Label) {
   if (-not $Text.Contains($Old)) { throw "WADDLE_PARTY_RUNTIME=FAIL anchor=$Label" }
   return $Text.Replace($Old,$New)
 }
+function Ensure-ImportPair([string]$Text,[string]$BrokenPattern,[string]$First,[string]$Second,[string]$Label) {
+  $pair = $First + "`n" + $Second
+  if ($Text -match $BrokenPattern) {
+    return [regex]::Replace($Text,$BrokenPattern,[System.Text.RegularExpressions.MatchEvaluator]{ param($m) $pair },1)
+  }
+  if ($Text.Contains($Second)) { return $Text }
+  if (-not $Text.Contains($First)) { throw "WADDLE_PARTY_RUNTIME=FAIL import_anchor=$Label" }
+  return $Text.Replace($First,$pair)
+}
 
 # Persistence schema shared by every modern party.
 $dbPath = Join-Path $repo 'src/server/database/database.ts'
 $db = Read-N $dbPath
-$db = [regex]::Replace($db,'(?m)^import \{ MASCOTS \} from \\\s*$','import { MASCOTS } from "@server/game-data/mascots";`nimport { PartyProgressStoreData } from "@server/game-data/party";')
-if (-not $db.Contains('PartyProgressStoreData')) {
-  $db = Replace-Once $db 'import { MASCOTS } from "@server/game-data/mascots";' @'
-import { MASCOTS } from "@server/game-data/mascots";
-import { PartyProgressStoreData } from "@server/game-data/party";
-'@.TrimEnd() 'database-import'
-}
+$db = Ensure-ImportPair $db '(?m)^import \{ MASCOTS \} from \\\s*$' `
+  'import { MASCOTS } from "@server/game-data/mascots";' `
+  'import { PartyProgressStoreData } from "@server/game-data/party";' 'database'
 if (-not $db.Contains('partyProgress?: PartyProgressStoreData;')) {
   $db = Replace-Once $db @'
 // MEDIEVAL PARTY 2012
@@ -46,13 +51,9 @@ Write-N $dbPath $db
 # Penguin entity owns one generic store keyed by party id.
 $worldPath = Join-Path $repo 'src/server/socket-server/world/world-penguin.ts'
 $world = Read-N $worldPath
-$world = [regex]::Replace($world,'(?m)^import \{ CardJitsuFireProgress, CardJitsuProgress \} from \\\s*$','import { CardJitsuFireProgress, CardJitsuProgress } from "@server/game-logic/ninja-progress";`nimport { PartyProgressStore } from "@server/game-logic/party-progress";')
-if (-not $world.Contains('import { PartyProgressStore } from "@server/game-logic/party-progress";')) {
-  $world = Replace-Once $world 'import { CardJitsuFireProgress, CardJitsuProgress } from "@server/game-logic/ninja-progress";' @'
-import { CardJitsuFireProgress, CardJitsuProgress } from "@server/game-logic/ninja-progress";
-import { PartyProgressStore } from "@server/game-logic/party-progress";
-'@.TrimEnd() 'world-import'
-}
+$world = Ensure-ImportPair $world '(?m)^import \{ CardJitsuFireProgress, CardJitsuProgress \} from \\\s*$' `
+  'import { CardJitsuFireProgress, CardJitsuProgress } from "@server/game-logic/ninja-progress";' `
+  'import { PartyProgressStore } from "@server/game-logic/party-progress";' 'world'
 if ($world.Contains('class Halloween2015Status {')) {
   $world = [regex]::Replace($world,'(?s)\nclass Halloween2015Status \{.*?\n\}\n\nclass UserPreference \{',"`nclass UserPreference {",1)
 }
@@ -65,13 +66,9 @@ Write-N $worldPath $world
 # Timeline schema declares behavior instead of hardcoding a party in handlers.
 $updatesPath = Join-Path $repo 'src/server/updates/index.ts'
 $updates = Read-N $updatesPath
-$updates = [regex]::Replace($updates,'(?m)^import \{ RoomName \} from \\\s*$','import { RoomName } from "../game-data/rooms";`nimport { PartyProgressConfig } from "../game-data/party";')
-if (-not $updates.Contains('import { PartyProgressConfig } from "../game-data/party";')) {
-  $updates = Replace-Once $updates 'import { RoomName } from "../game-data/rooms";' @'
-import { RoomName } from "../game-data/rooms";
-import { PartyProgressConfig } from "../game-data/party";
-'@.TrimEnd() 'updates-import'
-}
+$updates = Ensure-ImportPair $updates '(?m)^import \{ RoomName \} from \\\s*$' `
+  'import { RoomName } from "../game-data/rooms";' `
+  'import { PartyProgressConfig } from "../game-data/party";' 'updates'
 if (-not $updates.Contains('gameStringChanges?: Record<string, string>;')) {
   $updates = Replace-Once $updates '  gameStrings?: Record<string, string>;' @'
   gameStrings?: Record<string, string>;
@@ -87,13 +84,9 @@ Write-N $updatesPath $updates
 # GameData activates the config for the selected timeline date and merges party strings.
 $gameDataPath = Join-Path $repo 'src/server/timelines/game-data.ts'
 $gameData = Read-N $gameDataPath
-$gameData = [regex]::Replace($gameData,'(?m)^import \{ WaddleRoomInfo \} from \\\s*$','import { WaddleRoomInfo } from "@server/game-logic/waddles";`nimport { PartyProgressConfig } from "@server/game-data/party";')
-if (-not $gameData.Contains('import { PartyProgressConfig } from "@server/game-data/party";')) {
-  $gameData = Replace-Once $gameData 'import { WaddleRoomInfo } from "@server/game-logic/waddles";' @'
-import { WaddleRoomInfo } from "@server/game-logic/waddles";
-import { PartyProgressConfig } from "@server/game-data/party";
-'@.TrimEnd() 'game-data-import'
-}
+$gameData = Ensure-ImportPair $gameData '(?m)^import \{ WaddleRoomInfo \} from \\\s*$' `
+  'import { WaddleRoomInfo } from "@server/game-logic/waddles";' `
+  'import { PartyProgressConfig } from "@server/game-data/party";' 'game-data'
 if (-not $gameData.Contains('partyProgress: PartyProgressConfig | null;')) {
   $gameData = Replace-Once $gameData '  gameStrings: Map<string, string>;' "  gameStrings: Map<string, string>;`n  partyProgress: PartyProgressConfig | null;" 'game-data-state'
 }
@@ -195,9 +188,12 @@ $handlers = $handlers.Replace('handleHalloween2015TaskUpdate)', 'handlePartyTask
 Write-N $handlersPath $handlers
 
 $required = @(
+  @{ path=$dbPath; token='import { MASCOTS } from "@server/game-data/mascots";' },
   @{ path=$dbPath; token='import { PartyProgressStoreData } from "@server/game-data/party";' },
   @{ path=$worldPath; token='import { PartyProgressStore } from "@server/game-logic/party-progress";' },
+  @{ path=$updatesPath; token='import { PartyProgressConfig } from "../game-data/party";' },
   @{ path=$updatesPath; token='partyProgress?: PartyProgressConfig;' },
+  @{ path=$gameDataPath; token='import { PartyProgressConfig } from "@server/game-data/party";' },
   @{ path=$gameDataPath; token='public getPartyProgress()' },
   @{ path=$partyPath; token='handleRetrievePartyCookie' },
   @{ path=$handlersPath; token="party#qtaskcomplete" }
