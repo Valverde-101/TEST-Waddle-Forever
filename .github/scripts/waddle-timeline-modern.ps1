@@ -18,12 +18,13 @@ function Replace-Required([string]$Text,[string]$Old,[string]$New,[string]$Label
 }
 
 $timelinePath = Join-Path $RepoRoot 'src/client/views/timeline/timeline-static.ts'
+$timelineBackendPath = Join-Path $RepoRoot 'src/client/views/timeline/timeline.ts'
 $htmlPath = Join-Path $RepoRoot 'src/client/views/timeline/timeline.html'
 $updatesPath = Join-Path $RepoRoot 'src/server/updates/updates.ts'
 $party2015Path = Join-Path $RepoRoot 'src/server/updates/2015.ts'
 $updates2016Path = Join-Path $RepoRoot 'src/server/updates/2016.ts'
 
-foreach ($required in @($timelinePath,$htmlPath,$updatesPath,$party2015Path,$updates2016Path)) {
+foreach ($required in @($timelinePath,$timelineBackendPath,$htmlPath,$updatesPath,$party2015Path,$updates2016Path)) {
   if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
     throw "WADDLE_TIMELINE_MODERN=FAIL missing=$required"
   }
@@ -107,8 +108,25 @@ $eventWithYears = @'
   const dateInfo = getDateInfo(currentVersion);
 '@
 $timeline = Replace-Required $timeline $eventAnchor $eventWithYears 'timeline-event-years'
-
 Write-Utf8 $timelinePath $timeline
+
+# A year is only selectable when the timeline backend emits at least one visible day.
+# Client/index transitions are real version boundaries, so expose them generically instead
+# of relying on a one-off 2016/2017 button.
+$timelineBackend = Read-Normalized $timelineBackendPath
+$backendAnchor = @'
+  UPDATES.forEach(update => {
+    if (update.update.gameRelease !== undefined) {
+'@
+$backendWithClientVersion = @'
+  UPDATES.forEach(update => {
+    if (update.update.indexHtml !== undefined || update.update.websiteFolder !== undefined) {
+      addEvent(map, update.date, 'A new client version is available', 'other');
+    }
+    if (update.update.gameRelease !== undefined) {
+'@
+$timelineBackend = Replace-Required $timelineBackend $backendAnchor $backendWithClientVersion 'client-version-days'
+Write-Utf8 $timelineBackendPath $timelineBackend
 
 $html = Read-Normalized $htmlPath
 $html = $html -replace '(?m)^\s*<option>2017</option>\s*\n?', ''
@@ -133,6 +151,7 @@ if (-not $party2015.Contains("date: '2015-10-21'")) { throw 'WADDLE_TIMELINE_MOD
 if (-not $party2015.Contains("partyName: 'Halloween Party 2015'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL halloween_2015_party_missing' }
 if (-not $updates2016.Contains("date: '2016-01-01'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL year_2016_update_missing' }
 if (-not $updates2016.Contains("indexHtml: 'modern-as3'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL modern_as3_entry_missing' }
+if (-not $timelineBackend.Contains("addEvent(map, update.date, 'A new client version is available', 'other');")) { throw 'WADDLE_TIMELINE_MODERN=FAIL client_transition_not_selectable' }
 
 # Engine cutovers are generic timeline facts: Halloween 2015 must be after both
 # AS3 (2010-11-19) and the vanilla-engine transition (2011-06-27).
@@ -141,4 +160,4 @@ $updates2011 = Read-Normalized (Join-Path $RepoRoot 'src/server/updates/2011.ts'
 if (-not $updates2010.Contains("dateReference: 'as3'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL as3_cutover_missing' }
 if (-not $updates2011.Contains("dateReference: 'vanilla-engine'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL vanilla_engine_cutover_missing' }
 
-Write-Host 'WADDLE_TIMELINE_MODERN=PASS years=data-driven current_max=2016 halloween=2015-10-21 as3=true vanilla_engine=true legacy_footer=false'
+Write-Host 'WADDLE_TIMELINE_MODERN=PASS years=data-driven current_max=2016 halloween=2015-10-21 client_transitions=selectable as3=true vanilla_engine=true legacy_footer=false'
