@@ -3,6 +3,8 @@ export type XtCompatibilityRule = {
   action: string;
   /** Number of client arguments accepted by this compatibility rule. */
   argumentCount: number;
+  /** Optional exact wire values. Use this for protocol variants whose payload is a fixed selector/version token. */
+  exactArguments?: string[];
   /** Why accepting the variant is safe for the offline server. */
   reason: string;
 };
@@ -34,8 +36,12 @@ const noResponseClientPackets = new Set<string>([
 ]);
 
 /**
- * Explicit compatibility aliases for read-only requests whose modern client
- * variants append metadata that older Waddle handlers do not consume.
+ * Explicit compatibility aliases for client protocol variants whose extra/missing
+ * request fields do not change the authoritative state returned by Waddle.
+ *
+ * Keep these narrow. In particular, fixed selector/version fields should use
+ * exactArguments so a real historical packet is accepted without turning the XT
+ * parser into a permissive catch-all.
  */
 const compatibilityRules: XtCompatibilityRule[] = [
   {
@@ -47,6 +53,22 @@ const compatibilityRules: XtCompatibilityRule[] = [
     action: 's%g#ggd',
     argumentCount: 2,
     reason: 'modern game-data requests append client metadata; the legacy read-only Waddle handler does not consume request arguments'
+  },
+  {
+    action: 's%l#mg',
+    argumentCount: 0,
+    reason: 'late-AS3 mail clients request the inbox without the legacy pagination/count argument; the Waddle mail read handler does not require request metadata'
+  },
+  {
+    action: 's%g#gii',
+    argumentCount: 1,
+    reason: 'late-AS3 igloo inventory queries include a player/owner selector while Waddle resolves the current offline player context server-side'
+  },
+  {
+    action: 's%party#partycookie',
+    argumentCount: 1,
+    exactArguments: ['0'],
+    reason: '2015 ServerCookieService requests the generic party cookie with the fixed selector [0]; the active timeline already selects the persisted party state'
   }
 ];
 
@@ -80,8 +102,16 @@ const readOnlyFallbacks: XtReadOnlyFallback[] = [
 
 export const isNoResponseClientPacket = (action: string): boolean => noResponseClientPackets.has(action);
 
-export const getXtCompatibilityRule = (action: string, argumentCount: number): XtCompatibilityRule | undefined => {
-  return compatibilityRules.find(rule => rule.action === action && rule.argumentCount === argumentCount);
+export const getXtCompatibilityRule = (action: string, args: readonly string[]): XtCompatibilityRule | undefined => {
+  return compatibilityRules.find(rule => {
+    if (rule.action !== action || rule.argumentCount !== args.length) {
+      return false;
+    }
+    if (rule.exactArguments === undefined) {
+      return true;
+    }
+    return rule.exactArguments.length === args.length && rule.exactArguments.every((value, index) => args[index] === value);
+  });
 };
 
 export const getXtReadOnlyFallback = (action: string): XtReadOnlyFallback | undefined => {
