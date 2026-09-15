@@ -1,5 +1,6 @@
-import { World } from "@server/socket-server/world/world";
+import { publishWaddleLiveTrace } from "@common/live-trace";
 import { getPartyServiceConfig } from "@server/game-data/party";
+import { World } from "@server/socket-server/world/world";
 
 import { sendError } from "./login";
 import { PenguinMessenger } from "../../socket-server/messenger";
@@ -80,25 +81,22 @@ const EMPTY_PARTY_COOKIE = {
   questTaskStatus: []
 };
 
-const sendCurrentPartyCookie: PenguinHandler<[]> = ({ penguin, msg, data }) => {
-  const config = data.getPartyProgress();
-  const cookie = config === null ? EMPTY_PARTY_COOKIE : penguin.partyProgress.getCookie(config);
-  msg.send(penguin, 'partycookie', JSON.stringify(cookie));
-}
+const getCurrentPartyCookie = (ctx: Parameters<PenguinHandler<[]>>[0]) => {
+  const config = ctx.data.getPartyProgress();
+  return config === null ? EMPTY_PARTY_COOKIE : ctx.penguin.partyProgress.getCookie(config);
+};
 
-/**
- * Late-AS3 parties initialise BaseParty asynchronously from a server `partyservice`
- * packet. The party SWF installs the listener; the feature layer then asks for its
- * party cookie. Sending the settings directly after that cookie request preserves
- * that ordering and also works for future modern parties that opt into `service`.
- */
-const sendCurrentPartyService: PenguinHandler<[]> = ({ penguin, msg, data }) => {
+const sendCurrentPartyCookie: PenguinHandler<[]> = async (ctx) => {
+  await ctx.msg.send(ctx.penguin, 'partycookie', JSON.stringify(getCurrentPartyCookie(ctx)));
+};
+
+const sendCurrentPartyService: PenguinHandler<[]> = async ({ penguin, msg, data }) => {
   const service = getPartyServiceConfig(data.getPartyProgress());
   if (service === undefined) {
     return;
   }
 
-  msg.send(penguin, 'partyservice', JSON.stringify({
+  await msg.send(penguin, 'partyservice', JSON.stringify({
     partySettings: {
       unlockDayIndex: service.unlockDayIndex,
       numOfDaysInParty: service.numOfDaysInParty
@@ -106,41 +104,72 @@ const sendCurrentPartyService: PenguinHandler<[]> = ({ penguin, msg, data }) => 
     partyStartDate: service.partyStartDate,
     partyEndDate: service.partyEndDate
   }));
-}
+};
 
-export const handleRetrievePartyCookie: PenguinHandler<[]> = (ctx) => {
-  sendCurrentPartyCookie(ctx);
-  sendCurrentPartyService(ctx);
-}
+/**
+ * Late-AS3 Party SWFs install their Airtower listeners during boot and expect the
+ * server to push activefeatures -> partycookie -> partyservice immediately after
+ * j#js. This mirrors the preserved Houdini/CPImagined modern-party contract and
+ * avoids making party activation depend on a later UI-initiated cookie request.
+ */
+export const sendModernPartyBootstrap: PenguinHandler<[]> = async (ctx) => {
+  const config = ctx.data.getPartyProgress();
+  if (config === null) {
+    return;
+  }
 
-export const handlePartyMessageViewed: PenguinHandler<[number]> = (ctx, messageIndex) => {
+  const activeFeatures = ctx.data.getActiveFeatures();
+  const service = getPartyServiceConfig(config);
+
+  await ctx.msg.send(ctx.penguin, 'activefeatures', activeFeatures ?? '');
+  await sendCurrentPartyCookie(ctx);
+  await sendCurrentPartyService(ctx);
+
+  publishWaddleLiveTrace({
+    category: 'XT',
+    phase: 'handled',
+    source: 'party-bootstrap',
+    action: 'modern-party-bootstrap',
+    direction: 'out',
+    status: service === undefined ? 'cookie-only' : 'complete',
+    partyId: config.id,
+    activeFeatures: activeFeatures ?? '',
+    hasPartyService: service !== undefined
+  });
+};
+
+export const handleRetrievePartyCookie: PenguinHandler<[]> = async (ctx) => {
+  await sendCurrentPartyCookie(ctx);
+};
+
+export const handlePartyMessageViewed: PenguinHandler<[number]> = async (ctx, messageIndex) => {
   const { penguin, prst, data } = ctx;
   const config = data.getPartyProgress();
   if (config !== null && penguin.partyProgress.setMessageViewed(config, messageIndex)) {
     prst(penguin);
-    sendCurrentPartyCookie(ctx);
+    await sendCurrentPartyCookie(ctx);
   }
-}
+};
 
-export const handlePartyCommunicatorViewed: PenguinHandler<[number]> = (ctx, messageIndex) => {
+export const handlePartyCommunicatorViewed: PenguinHandler<[number]> = async (ctx, messageIndex) => {
   const { penguin, prst, data } = ctx;
   const config = data.getPartyProgress();
   if (config !== null && penguin.partyProgress.setCommunicatorViewed(config, messageIndex)) {
     prst(penguin);
-    sendCurrentPartyCookie(ctx);
+    await sendCurrentPartyCookie(ctx);
   }
-}
+};
 
-export const handlePartyTaskComplete: PenguinHandler<[number]> = (ctx, taskIndex) => {
+export const handlePartyTaskComplete: PenguinHandler<[number]> = async (ctx, taskIndex) => {
   const { penguin, prst, data } = ctx;
   const config = data.getPartyProgress();
   if (config !== null && penguin.partyProgress.setTaskComplete(config, taskIndex)) {
     prst(penguin);
-    sendCurrentPartyCookie(ctx);
+    await sendCurrentPartyCookie(ctx);
   }
-}
+};
 
-export const handlePartyTaskUpdate: PenguinHandler<[number]> = ({ penguin, msg, prst, data }, coins) => {
+export const handlePartyTaskUpdate: PenguinHandler<[number]> = async ({ penguin, msg, prst, data }, coins) => {
   const config = data.getPartyProgress();
   if (config === null) {
     return;
@@ -149,6 +178,6 @@ export const handlePartyTaskUpdate: PenguinHandler<[number]> = ({ penguin, msg, 
   const requested = Number.isFinite(coins) ? Math.floor(coins) : 0;
   const awarded = Math.max(0, Math.min(requested, maxCoins));
   penguin.currency.add(awarded);
-  msg.send(penguin, 'qtupdate', penguin.currency.coins);
+  await msg.send(penguin, 'qtupdate', penguin.currency.coins);
   prst(penguin);
-}
+};
