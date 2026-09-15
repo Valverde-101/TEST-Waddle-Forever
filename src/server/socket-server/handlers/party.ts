@@ -72,3 +72,29 @@ export const handleGetCookieInventory: PenguinHandler<[]> = ({ penguin, msg }) =
   // current, max
   msg.send(penguin, 'ctc', 500, 1000);
 }
+
+export const handleRetrieveHalloween2015: PenguinHandler<[]> = ({ penguin, msg }) => {
+  msg.send(penguin, 'partycookie', JSON.stringify(penguin.halloween2015.cookie));
+}
+
+export const handleHalloween2015MessageViewed: PenguinHandler<[number]> = ({ penguin, prst }, messageIndex) => {
+  penguin.halloween2015.setMessageViewed(messageIndex);
+  prst(penguin);
+}
+
+export const handleHalloween2015CommunicatorViewed: PenguinHandler<[number]> = ({ penguin, prst }, messageIndex) => {
+  penguin.halloween2015.setCommunicatorViewed(messageIndex);
+  prst(penguin);
+}
+
+export const handleHalloween2015TaskComplete: PenguinHandler<[number]> = ({ penguin, prst }, taskIndex) => {
+  penguin.halloween2015.setTaskComplete(taskIndex);
+  prst(penguin);
+}
+
+export const handleHalloween2015TaskUpdate: PenguinHandler<[number]> = ({ penguin, msg, prst }, coins) => {
+  const awarded = Math.max(0, Math.min(coins, 10));
+  penguin.currency.add(awarded);
+  msg.send(penguin, 'qtupdate', penguin.currency.coins);
+  prst(penguin);
+}

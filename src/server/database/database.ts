@@ -169,6 +169,13 @@ export interface PenguinJson {
 // MEDIEVAL PARTY 2012
   medieval2012Message?: number;
 
+// HALLOWEEN PARTY 2015
+  halloween2015?: {
+    msgViewedArray: number[];
+    communicatorMsgArray: number[];
+    questTaskStatus: number[];
+  };
+
 // USER PREFERENCE
   noSave?: boolean;
   safeChat?: boolean;
