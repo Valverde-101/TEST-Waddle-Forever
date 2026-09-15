@@ -31,10 +31,13 @@ foreach ($required in @($timelinePath,$htmlPath,$updatesPath,$party2015Path,$upd
 
 $timeline = Read-Normalized $timelinePath
 
-$timeline = Replace-Required $timeline `
-  '  const yearStr = (year === undefined && useYear) ? '''' : ``, ${year}``;' `
-  '  const yearStr = useYear && year !== undefined ? ``, ${year}`` : '''';' `
-  'date-year-format'
+$oldYearLine = @'
+  const yearStr = (year === undefined && useYear) ? '' : `, ${year}`;
+'@.TrimEnd()
+$newYearLine = @'
+  const yearStr = useYear && year !== undefined ? `, ${year}` : '';
+'@.TrimEnd()
+$timeline = Replace-Required $timeline $oldYearLine $newYearLine 'date-year-format'
 
 $selectAnchor = @'
 function setSelectElements(month: number, year: number) {
@@ -131,8 +134,8 @@ if (-not $party2015.Contains("partyName: 'Halloween Party 2015'")) { throw 'WADD
 if (-not $updates2016.Contains("date: '2016-01-01'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL year_2016_update_missing' }
 if (-not $updates2016.Contains("indexHtml: 'modern-as3'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL modern_as3_entry_missing' }
 
-# Engine cutovers are intentionally generic timeline facts: Halloween 2015 must be
-# after both AS3 (2010-11-19) and the vanilla-engine transition (2011-06-27).
+# Engine cutovers are generic timeline facts: Halloween 2015 must be after both
+# AS3 (2010-11-19) and the vanilla-engine transition (2011-06-27).
 $updates2010 = Read-Normalized (Join-Path $RepoRoot 'src/server/updates/2010.ts')
 $updates2011 = Read-Normalized (Join-Path $RepoRoot 'src/server/updates/2011.ts')
 if (-not $updates2010.Contains("dateReference: 'as3'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL as3_cutover_missing' }
