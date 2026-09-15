@@ -5,6 +5,8 @@ on:
   pull_request:
     branches: [dev]
     paths:
+      - '.github/scripts/waddle-party-runtime.ps1'
+      - '.github/scripts/waddle-party-hardening.ps1'
       - '.github/scripts/waddle-halloween-2015.ps1'
       - '.github/scripts/waddle-halloween-2015-source.ps1'
       - '.github/scripts/waddle-halloween-2015-postfix.ps1'
@@ -13,6 +15,7 @@ on:
       - '.github/scripts/waddle-halloween-2015-dialogues.ps1'
       - '.github/scripts/waddle-halloween-2015-versioning.ps1'
       - '.github/scripts/waddle-halloween-2015-gameplay.ps1'
+      - '.github/scripts/waddle-halloween-2015-data.ps1'
       - '.github/workflows/waddle-halloween-2015.yml'
       - '.gitignore'
       - 'media/default/party2015/**'
@@ -178,7 +181,7 @@ jobs:
           $ErrorActionPreference='Stop'
           & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-protocol.ps1') -RepoRoot $env:GITHUB_WORKSPACE -CanonicalRoot $env:GITHUB_WORKSPACE
 
-      - name: Verify every Halloween 2015 dialogue has localization data
+      - name: Audit Halloween 2015 dialogue localization requirements
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
