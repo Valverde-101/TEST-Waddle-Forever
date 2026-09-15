@@ -16,7 +16,7 @@ const MONTHS = [
 ];
 
 function getFullDate({ day, month, year }: { day: number, month: number, year?: number }, useYear: boolean = false) {
-  const yearStr = (year === undefined && useYear) ? '' : `, ${year}`;
+  const yearStr = useYear && year !== undefined ? `, ${year}` : '';
   return `${MONTHS[month - 1]} ${day}` + yearStr;
 }
 
@@ -52,6 +52,22 @@ const monthElement = document.getElementById('month')! as HTMLSelectElement;
 function setSelectElements(month: number, year: number) {
   monthElement.value = MONTHS[month - 1];
   yearElement.value = String(year);
+}
+
+/** Keep the year picker in lockstep with the actual timeline data. */
+function syncYearOptions(days: DateInfo[]) {
+  const years = Array.from(new Set(days.map((day) => day.year)))
+    .filter((year) => year > 0)
+    .sort((a, b) => a - b);
+
+  if (years.length === 0) {
+    throw new Error('Timeline contains no selectable years');
+  }
+
+  yearElement.innerHTML = years
+    .map((year) => `<option value="${year}">${year}</option>`)
+    .join('');
+  yearElement.dataset.timelineYears = years.join(',');
 }
 
 type DateEvent = {
@@ -411,7 +427,7 @@ function createCalendar(
           if (month.getBoundingClientRect().top > 0) {
             const year = month.dataset.year;
             const monthNumber = month.dataset.month;
-            if (year !== undefined && month !== undefined)
+            if (year !== undefined && monthNumber !== undefined)
             {
               setSelectElements(Number(monthNumber), Number (year));
             }
@@ -468,16 +484,7 @@ function createCalendar(
   yearElement.onchange = () => createCalendar(days, CalendarScrollAction.ScrollToMonth);
   monthElement.onchange = () => createCalendar(days, CalendarScrollAction.ScrollToMonth);
 
-  const as3Footer = document.getElementById('as3-footer')!;
-  as3Footer.innerHTML = `
-    <button>
-      Click here to play in a 2016/2017 version (still in development)
-    </button>
-  `;
 
-  as3Footer.onclick = (e) => {
-    updateVersion('2016-01-01');
-  }
 }
 
 function updateTimeline(days: DateInfo[], scroll: boolean = true) {
@@ -513,7 +520,7 @@ function updateTimeline(days: DateInfo[], scroll: boolean = true) {
   const timelineRows = document.querySelectorAll('.unselected-day');
 
   if (scroll) {
-    const selected = document.querySelectorAll('.selected-day')[0];
+    const selected = document.querySelectorAll('.selected-list-day')[0];
   
     // is undefined if picked a range where nothing is selected
     if (selected === undefined) {
@@ -556,6 +563,7 @@ async function updateVersion(version: string) {
 window.addEventListener('get-timeline', (e: any) => {
   const { days, settings } = e.detail as { days: DateInfo[], settings: any };
   currentVersion = settings.version;
+  syncYearOptions(days);
   const dateInfo = getDateInfo(currentVersion);
   setSelectElements(dateInfo.month, dateInfo.year);
   setSelectedDateText(currentVersion);
