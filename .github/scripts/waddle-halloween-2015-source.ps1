@@ -77,13 +77,14 @@ foreach ($contract in @(
   "'play/v2/content/global/content/party.swf': 'svanilla:media/play/v2/content/global/content/party.swf'",
   "'play/v2/content/global/content/features.swf'",
   "'play/v2/content/global/logo/logo.swf'",
-  "'play/v2/content/global/content/party_icon.swf'",
+  "'content/party_icon.swf': [P + 'content/ContentParty_icon-HalloweenParty2015.swf', 'party_icon']",
   "'play/v2/content/global/avatar/sprites/penguin_robot.swf'"
 )) {
   Require-Contains $party $contract ("party_" + ($contract -replace '[^A-Za-z0-9]+','_').Trim('_'))
 }
 Require-NotContains $party "'play/v2/client/interface.swf'" 'legacy_wrong_interface_route'
 Require-NotContains $party "'play/v2/content/global/content/logo.swf'" 'legacy_wrong_logo_route'
+Require-NotContains $party "'play/v2/content/global/content/party_icon.swf': P +" 'party_icon_route_without_global_crumb'
 
 $general = Read-Normalized $generalPath
 Require-Contains $general "const MODERN_PARTY_ICON_ROUTE = 'play/v2/content/global/content/party_icon.swf';" 'modern_party_icon_route'
@@ -124,4 +125,4 @@ foreach ($year in 2013..2017) {
   Require-Regex $html ('<option(?:\s+value="{0}")?>{0}</option>' -f $year) ("timeline_year_{0}" -f $year)
 }
 
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source media_prefix=party2015 years=2005-2017 modern_room_ids=326,430,431,432,433,435,436,890 party_start=2015-10-21 party_end=2015-11-04 modern_ui_routes=canonical party_icon_activation=route_driven airtower_empty_array=normalized_zero_arg_only mutation=false"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source media_prefix=party2015 years=2005-2017 modern_room_ids=326,430,431,432,433,435,436,890 party_start=2015-10-21 party_end=2015-11-04 modern_ui_routes=canonical party_icon_activation=route_and_global_crumb airtower_empty_array=normalized_zero_arg_only mutation=false"
