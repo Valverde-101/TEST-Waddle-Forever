@@ -73,27 +73,47 @@ export const handleGetCookieInventory: PenguinHandler<[]> = ({ penguin, msg }) =
   msg.send(penguin, 'ctc', 500, 1000);
 }
 
-export const handleRetrieveHalloween2015: PenguinHandler<[]> = ({ penguin, msg }) => {
-  msg.send(penguin, 'partycookie', JSON.stringify(penguin.halloween2015.cookie));
+const EMPTY_PARTY_COOKIE = {
+  msgViewedArray: [],
+  communicatorMsgArray: [],
+  questTaskStatus: []
+};
+
+export const handleRetrievePartyCookie: PenguinHandler<[]> = ({ penguin, msg, data }) => {
+  const config = data.getPartyProgress();
+  const cookie = config === null ? EMPTY_PARTY_COOKIE : penguin.partyProgress.getCookie(config);
+  msg.send(penguin, 'partycookie', JSON.stringify(cookie));
 }
 
-export const handleHalloween2015MessageViewed: PenguinHandler<[number]> = ({ penguin, prst }, messageIndex) => {
-  penguin.halloween2015.setMessageViewed(messageIndex);
-  prst(penguin);
+export const handlePartyMessageViewed: PenguinHandler<[number]> = ({ penguin, prst, data }, messageIndex) => {
+  const config = data.getPartyProgress();
+  if (config !== null && penguin.partyProgress.setMessageViewed(config, messageIndex)) {
+    prst(penguin);
+  }
 }
 
-export const handleHalloween2015CommunicatorViewed: PenguinHandler<[number]> = ({ penguin, prst }, messageIndex) => {
-  penguin.halloween2015.setCommunicatorViewed(messageIndex);
-  prst(penguin);
+export const handlePartyCommunicatorViewed: PenguinHandler<[number]> = ({ penguin, prst, data }, messageIndex) => {
+  const config = data.getPartyProgress();
+  if (config !== null && penguin.partyProgress.setCommunicatorViewed(config, messageIndex)) {
+    prst(penguin);
+  }
 }
 
-export const handleHalloween2015TaskComplete: PenguinHandler<[number]> = ({ penguin, prst }, taskIndex) => {
-  penguin.halloween2015.setTaskComplete(taskIndex);
-  prst(penguin);
+export const handlePartyTaskComplete: PenguinHandler<[number]> = ({ penguin, prst, data }, taskIndex) => {
+  const config = data.getPartyProgress();
+  if (config !== null && penguin.partyProgress.setTaskComplete(config, taskIndex)) {
+    prst(penguin);
+  }
 }
 
-export const handleHalloween2015TaskUpdate: PenguinHandler<[number]> = ({ penguin, msg, prst }, coins) => {
-  const awarded = Math.max(0, Math.min(coins, 10));
+export const handlePartyTaskUpdate: PenguinHandler<[number]> = ({ penguin, msg, prst, data }, coins) => {
+  const config = data.getPartyProgress();
+  if (config === null) {
+    return;
+  }
+  const maxCoins = Math.max(0, config.maxCoinUpdate ?? 10);
+  const requested = Number.isFinite(coins) ? Math.floor(coins) : 0;
+  const awarded = Math.max(0, Math.min(requested, maxCoins));
   penguin.currency.add(awarded);
   msg.send(penguin, 'qtupdate', penguin.currency.coins);
   prst(penguin);

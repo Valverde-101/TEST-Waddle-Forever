@@ -1,7 +1,7 @@
 import path from "path";
 import fs from 'fs';
 import { readFile, writeFile } from "@common/utils";
-import { MASCOTS } from "@server/game-data/mascots";
+import { MASCOTS } from \
 
 export type StampbookCover = {
   color: number,
@@ -169,12 +169,8 @@ export interface PenguinJson {
 // MEDIEVAL PARTY 2012
   medieval2012Message?: number;
 
-// HALLOWEEN PARTY 2015
-  halloween2015?: {
-    msgViewedArray: number[];
-    communicatorMsgArray: number[];
-    questTaskStatus: number[];
-  };
+// MODERN PARTY PROGRESS
+  partyProgress?: PartyProgressStoreData;
 
 // USER PREFERENCE
   noSave?: boolean;

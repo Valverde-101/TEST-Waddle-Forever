@@ -1,6 +1,6 @@
 import { getDefaultIgloo, Igloo, Mail, PenguinJson, PlayerPuffle, RainbowPuffleStage, StampbookCover } from "@server/database/database";
 import { MASCOTS } from "@server/game-data/mascots";
-import { CardJitsuFireProgress, CardJitsuProgress } from "@server/game-logic/ninja-progress";
+import { CardJitsuFireProgress, CardJitsuProgress } from \
 import { processVersion } from "@server/routes/versions";
 import { SettingsManager } from "@server/settings";
 
@@ -912,49 +912,6 @@ class Medieval2012Status {
   }
 }
 
-class Halloween2015Status {
-  private _messages: number[];
-  private _communicator: number[];
-  private _tasks: number[];
-
-  constructor(data: PenguinJson) {
-    const state = data.halloween2015;
-    this._messages = Halloween2015Status.normalize(state?.msgViewedArray, 10);
-    this._communicator = Halloween2015Status.normalize(state?.communicatorMsgArray, 5);
-    this._tasks = Halloween2015Status.normalize(state?.questTaskStatus, 10);
-  }
-
-  private static normalize(values: number[] | undefined, length: number): number[] {
-    return Array.from({ length }, (_, index) => values?.[index] === 1 ? 1 : 0);
-  }
-
-  private setFlag(values: number[], index: number) {
-    if (Number.isInteger(index) && index >= 0 && index < values.length) {
-      values[index] = 1;
-    }
-  }
-
-  public setMessageViewed(index: number) {
-    this.setFlag(this._messages, index);
-  }
-
-  public setCommunicatorViewed(index: number) {
-    this.setFlag(this._communicator, index);
-  }
-
-  public setTaskComplete(index: number) {
-    this.setFlag(this._tasks, index);
-  }
-
-  public get cookie() {
-    return {
-      msgViewedArray: [...this._messages],
-      communicatorMsgArray: [...this._communicator],
-      questTaskStatus: [...this._tasks]
-    };
-  }
-}
-
 class UserPreference {
   private _save: boolean;
   private _safeChat: boolean;
@@ -1026,7 +983,7 @@ export class WorldPenguin implements UserPenguin {
   private _ninja: NinjaProfile;
   private _battleOfDoom: BattleOfDoomStatus;
   private _medieval2012: Medieval2012Status;
-  private _halloween2015: Halloween2015Status;
+  private _partyProgress: PartyProgressStore;
   private _preference: UserPreference;
   private _avatar = new Avatar();
 
@@ -1055,7 +1012,7 @@ export class WorldPenguin implements UserPenguin {
     this._ninja = new NinjaProfile(json);
     this._battleOfDoom = new BattleOfDoomStatus(json);
     this._medieval2012 = new Medieval2012Status(json);
-    this._halloween2015 = new Halloween2015Status(json);
+    this._partyProgress = new PartyProgressStore(json.partyProgress);
     this._preference = new UserPreference(json);
   }
 
@@ -1099,8 +1056,8 @@ export class WorldPenguin implements UserPenguin {
     return this._medieval2012;
   }
 
-  public get halloween2015() {
-    return this._halloween2015;
+  public get partyProgress() {
+    return this._partyProgress;
   }
 
   public get igloo() {
@@ -1242,7 +1199,7 @@ export class WorldPenguin implements UserPenguin {
 
       medieval2012Message: this._medieval2012.message,
 
-      halloween2015: this._halloween2015.cookie,
+      partyProgress: this._partyProgress.data,
 
       noSave: !this._preference.canSave,
       safeChat: this._preference.isSafeChat

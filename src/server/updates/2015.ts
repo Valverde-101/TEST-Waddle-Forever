@@ -14,6 +14,13 @@ export const UPDATES_2015: Update[] = [
     temp: {
       party: {
         partyName: 'Halloween Party 2015',
+        partyProgress: {
+          id: 'halloween-2015',
+          messageCount: 10,
+          communicatorMessageCount: 5,
+          taskCount: 10,
+          maxCoinUpdate: 10
+        },
         rooms: {
           beach: P + 'rooms/Hallo15_beach.swf',
           beacon: P + 'rooms/Hallo15_beacon.swf',

@@ -15,7 +15,7 @@ import { getStagePlayMusic, StageScript } from "@server/game-data/stage-plays";
 import { ORIGINAL_STAMPBOOK, Stampbook, StampCategory, StampRoom, STAMP_ROOMS } from "@server/game-data/stamps";
 import { FURNITURE } from "@server/game-logic/furniture";
 import { Item, ITEMS, ItemTable } from "@server/game-logic/items";
-import { WaddleRoomInfo } from "@server/game-logic/waddles";
+import { WaddleRoomInfo } from \
 import { isGreater, isGreaterOrEqual, Version } from "@server/routes/versions";
 import { SettingsManager } from "@server/settings";
 import { CatalogItems, CPUpdateE, CrumbIndicator, GameUpdate, HuntCrumbs, IglooList, ListSongPatch, PartyOp, WorldStamp } from "@server/updates";
@@ -90,6 +90,7 @@ type GameState = {
   as3Startscreen: boolean;
   worldStamps: WorldStamp[];
   gameStrings: Map<string, string>;
+  partyProgress: PartyProgressConfig | null;
   iglooMusic: IglooList | null;
   egg: number;
   activeFeatures: string | null;
@@ -147,6 +148,7 @@ function getFreshState(): GameState {
     as3Startscreen: false,
     worldStamps: [],
     gameStrings: new Map<string, string>(),
+    partyProgress: null,
     iglooMusic: null,
     egg: 0,
     activeFeatures: null,
@@ -711,6 +713,12 @@ export class GameData {
       'gameStrings': (v) => {
         this.state.gameStrings = new Map(Object.entries(v));
       },
+      'gameStringChanges': (v) => {
+        iterateEntries(v, (key, value) => this.state.gameStrings.set(key, value));
+      },
+      'partyProgress': (v) => {
+        this.state.partyProgress = v;
+      },
       'activeFeatures': (v) => {
         this.state.activeFeatures = v;
       },
@@ -923,6 +931,10 @@ export class GameData {
 
   public getGameStrings() {
     return this.state.gameStrings;
+  }
+
+  public getPartyProgress() {
+    return this.state.partyProgress;
   }
 
   public getIglooList() {
