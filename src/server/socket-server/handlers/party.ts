@@ -85,8 +85,31 @@ const sendCurrentPartyCookie: PenguinHandler<[]> = ({ penguin, msg, data }) => {
   msg.send(penguin, 'partycookie', JSON.stringify(cookie));
 }
 
+/**
+ * Late-AS3 parties initialise BaseParty asynchronously from a server `partyservice`
+ * packet. The party SWF installs the listener; the feature layer then asks for its
+ * party cookie. Sending the settings directly after that cookie request preserves
+ * that ordering and also works for future modern parties that opt into `service`.
+ */
+const sendCurrentPartyService: PenguinHandler<[]> = ({ penguin, msg, data }) => {
+  const service = data.getPartyProgress()?.service;
+  if (service === undefined) {
+    return;
+  }
+
+  msg.send(penguin, 'partyservice', JSON.stringify({
+    partySettings: {
+      unlockDayIndex: service.unlockDayIndex,
+      numOfDaysInParty: service.numOfDaysInParty
+    },
+    partyStartDate: service.partyStartDate,
+    partyEndDate: service.partyEndDate
+  }));
+}
+
 export const handleRetrievePartyCookie: PenguinHandler<[]> = (ctx) => {
   sendCurrentPartyCookie(ctx);
+  sendCurrentPartyService(ctx);
 }
 
 export const handlePartyMessageViewed: PenguinHandler<[number]> = (ctx, messageIndex) => {
