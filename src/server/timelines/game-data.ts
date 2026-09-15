@@ -15,7 +15,8 @@ import { getStagePlayMusic, StageScript } from "@server/game-data/stage-plays";
 import { ORIGINAL_STAMPBOOK, Stampbook, StampCategory, StampRoom, STAMP_ROOMS } from "@server/game-data/stamps";
 import { FURNITURE } from "@server/game-logic/furniture";
 import { Item, ITEMS, ItemTable } from "@server/game-logic/items";
-import { WaddleRoomInfo } from \
+import { WaddleRoomInfo } from "@server/game-logic/waddles";
+import { PartyProgressConfig } from "@server/game-data/party";
 import { isGreater, isGreaterOrEqual, Version } from "@server/routes/versions";
 import { SettingsManager } from "@server/settings";
 import { CatalogItems, CPUpdateE, CrumbIndicator, GameUpdate, HuntCrumbs, IglooList, ListSongPatch, PartyOp, WorldStamp } from "@server/updates";

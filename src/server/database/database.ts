@@ -1,8 +1,8 @@
 import path from "path";
 import fs from 'fs';
 import { readFile, writeFile } from "@common/utils";
-import { MASCOTS } from \
-
+import { MASCOTS } from "@server/game-data/mascots";
+import { PartyProgressStoreData } from "@server/game-data/party";
 export type StampbookCover = {
   color: number,
   highlight: number,

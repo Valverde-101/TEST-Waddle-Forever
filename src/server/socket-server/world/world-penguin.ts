@@ -1,6 +1,7 @@
 import { getDefaultIgloo, Igloo, Mail, PenguinJson, PlayerPuffle, RainbowPuffleStage, StampbookCover } from "@server/database/database";
 import { MASCOTS } from "@server/game-data/mascots";
-import { CardJitsuFireProgress, CardJitsuProgress } from \
+import { CardJitsuFireProgress, CardJitsuProgress } from "@server/game-logic/ninja-progress";
+import { PartyProgressStore } from "@server/game-logic/party-progress";
 import { processVersion } from "@server/routes/versions";
 import { SettingsManager } from "@server/settings";
 

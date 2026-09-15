@@ -3,7 +3,8 @@ import { As3Newspaper, As3NewspaperFiles, AS3_PAPERS, BoilerRoomPaper, BOILER_RO
 import { Pin, PINS } from "@server/game-data/pins";
 import { FileRef } from "../game-data/files";
 import { GameName } from "../game-data/games";
-import { RoomName } from \
+import { RoomName } from "../game-data/rooms";
+import { PartyProgressConfig } from "../game-data/party";
 import { getStagePlayMusic, StageName, StageScript } from "../game-data/stage-plays";
 import { StampUpdates } from "../game-data/stamps";
 import { WaddleRoomInfo } from "../game-logic/waddles";
