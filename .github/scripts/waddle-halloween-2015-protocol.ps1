@@ -68,6 +68,49 @@ function Get-ScriptEvidence {
   return [pscustomobject]@{ mode='export-script'; text=($chunks -join "`n`n"); files=$sourceFiles.Count }
 }
 
+function Get-TerminalIdentifier([string]$Expression) {
+  if ([string]::IsNullOrWhiteSpace($Expression)) { return '' }
+  $parts = $Expression.Trim() -split '\.'
+  return [string]$parts[$parts.Count - 1]
+}
+
+function Add-ResolvedPairs {
+  param(
+    [string]$Text,
+    [System.Collections.Generic.HashSet[string]]$LocalPairs,
+    [System.Collections.Generic.HashSet[string]]$AllPairs,
+    [System.Collections.Generic.HashSet[string]]$HandlerNames
+  )
+  $constants = @{}
+  foreach ($m in [regex]::Matches($Text,'(?m)(?:static\s+)?var\s+([A-Za-z_][A-Za-z0-9_]*)(?:\s*:\s*[A-Za-z0-9_.<>]+)?\s*=\s*["'']([^"''\r\n]*)["'']')) {
+    $constants[$m.Groups[1].Value] = $m.Groups[2].Value
+  }
+
+  foreach ($m in [regex]::Matches($Text,'(?i)["'']([a-z0-9_]{1,40})#([a-z0-9_]{1,48})["'']')) {
+    $pair = $m.Groups[1].Value + '#' + $m.Groups[2].Value
+    [void]$LocalPairs.Add($pair); [void]$AllPairs.Add($pair); [void]$HandlerNames.Add($m.Groups[1].Value)
+  }
+
+  foreach ($m in [regex]::Matches($Text,'(?i)([A-Za-z_][A-Za-z0-9_.]*)\s*\+\s*["'']#["'']\s*\+\s*([A-Za-z_][A-Za-z0-9_.]*)')) {
+    $leftKey = Get-TerminalIdentifier $m.Groups[1].Value
+    $rightKey = Get-TerminalIdentifier $m.Groups[2].Value
+    if ($constants.ContainsKey($leftKey) -and $constants.ContainsKey($rightKey)) {
+      $left = [string]$constants[$leftKey]
+      $right = [string]$constants[$rightKey]
+      if ($left -match '^[A-Za-z0-9_]{1,40}$' -and $right -match '^[A-Za-z0-9_]{1,48}$') {
+        $pair = $left + '#' + $right
+        [void]$LocalPairs.Add($pair); [void]$AllPairs.Add($pair); [void]$HandlerNames.Add($left)
+      }
+    }
+  }
+
+  foreach ($entry in $constants.GetEnumerator()) {
+    if ($entry.Key -match '(?i)(COOKIE_HANDLER|HANDLER_NAME)$' -and [string]$entry.Value -match '^[A-Za-z0-9_]{1,40}$') {
+      [void]$HandlerNames.Add([string]$entry.Value)
+    }
+  }
+}
+
 $repo = (Resolve-Path -LiteralPath $RepoRoot).Path
 $repoPartyRoot = Join-Path $repo 'media\default\party2015'
 $partyRoot = $null
@@ -93,11 +136,46 @@ foreach ($i in 0..8) { $targets += @{ role="tiles-$i"; path="close_ups\Close_ups
 $work = Join-Path $repo '.work\halloween2015-protocol'
 if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $work | Out-Null
+
+# Inspect the actual Waddle vanilla party bootstrap, because modern room/quest SWFs call
+# _global.getCurrentParty().BaseParty.CURRENT_PARTY and therefore compatibility cannot
+# be proven from event art alone.
+$vanillaCandidates = @(
+  (Join-Path $repo 'media\default\svanilla\media\play\v2\content\global\content\party.swf')
+)
+if ($CanonicalRoot -and (Test-Path -LiteralPath $CanonicalRoot -PathType Container)) {
+  $vanillaCandidates += (Join-Path (Resolve-Path -LiteralPath $CanonicalRoot).Path 'media\default\svanilla\media\play\v2\content\global\content\party.swf')
+}
+$vanillaParty = $vanillaCandidates | Where-Object { Test-Swf $_ } | Select-Object -First 1
+if ($vanillaParty) {
+  $targets += @{ role='runtime-vanilla-party'; absolute=[string]$vanillaParty; source='waddle-svanilla' }
+} else {
+  Write-Host 'WADDLE_PARTY2015_PROTOCOL_RUNTIME=WARN vanilla_party_swf_not_found'
+}
+
+# CPImagined preserves a Halloween-2015-derived party bootstrap in its classic-edition
+# archive. It is reference evidence only: never publish this file into Waddle from here.
+$referenceParty = Join-Path $work 'reference-halloween-party.swf'
+$referenceUrl = 'https://raw.githubusercontent.com/CPImagined/CPImagined-Archive/main/parties/2310%202%20halloween%20classic%20edition/party.swf'
+try {
+  Invoke-WebRequest -UseBasicParsing -Uri $referenceUrl -OutFile $referenceParty -TimeoutSec 45
+  if (Test-Swf $referenceParty) {
+    $targets += @{ role='reference-halloween-party'; absolute=$referenceParty; source='cpimagined-reference' }
+    Write-Host "WADDLE_PARTY2015_PROTOCOL_REFERENCE=PASS source=$referenceUrl bytes=$((Get-Item $referenceParty).Length)"
+  } else {
+    Write-Host 'WADDLE_PARTY2015_PROTOCOL_REFERENCE=WARN downloaded_reference_not_swf'
+  }
+} catch {
+  Write-Host "WADDLE_PARTY2015_PROTOCOL_REFERENCE=WARN download_failed=$($_.Exception.Message)"
+}
+
 $pairSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 $tokenSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 $packetTokenSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 $serviceCallSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 $localizationSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+$handlerNameSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+$classNameSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
 $reports = @()
 $scriptedTargets = 0
 
@@ -106,16 +184,21 @@ $networkRegexes = @(
   '(?is)send(?:Extension)?Message\s*\(\s*["'']([^"'']+)["'']\s*,\s*["'']([^"'']+)["'']',
   '(?is)sendXtMessage\s*\(\s*["'']([^"'']+)["'']'
 )
-$keyword = '(?i)(quest|robot|herbert|herbot|tile|party|masc|bot|progress|state|mission|maze|login|reward|unlock|complete|item|sendXt|extension|packet|message|cookie|communicator)'
+$keyword = '(?i)(quest|robot|herbert|herbot|tile|party|masc|bot|progress|state|mission|maze|login|reward|unlock|complete|item|sendXt|extension|packet|message|cookie|communicator|activefeature|partyservice|CURRENT_PARTY)'
 $packetWord = '(?i)^(partycookie|partyservice|msgviewed|qcmsgviewed|qtaskcomplete|qtupdate|spts|partytask|questtask|party)$'
 
 foreach ($target in $targets) {
-  $swf = Join-Path $partyRoot $target.path
+  $swf = if ($target.ContainsKey('absolute')) { [string]$target.absolute } else { Join-Path $partyRoot $target.path }
+  $displayFile = if ($target.ContainsKey('path')) { [string]$target.path } else { [string]$target.source }
   if (-not (Test-Swf $swf)) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL invalid_target role=$($target.role) path=$swf" }
   $safe = ($target.role -replace '[^A-Za-z0-9_.-]','_')
   $source = Get-ScriptEvidence -FFDec $ffdec -Swf $swf -SafeName $safe -WorkRoot $work
   $text = [string]$source.text
   if (-not [string]::IsNullOrWhiteSpace($text)) { $scriptedTargets++ }
+
+  foreach ($m in [regex]::Matches($text,'(?m)\bclass\s+([A-Za-z_][A-Za-z0-9_.$]*)')) {
+    [void]$classNameSet.Add($m.Groups[1].Value)
+  }
 
   $pairs = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
   foreach ($rx in $networkRegexes) {
@@ -126,6 +209,7 @@ foreach ($target in $targets) {
       } elseif ($m.Groups.Count -ge 2) { [void]$tokenSet.Add($m.Groups[1].Value.Trim()) }
     }
   }
+  Add-ResolvedPairs -Text $text -LocalPairs $pairs -AllPairs $pairSet -HandlerNames $handlerNameSet
 
   foreach ($m in [regex]::Matches($text,'(?i)(?:PARTY_SERVICE|partyService)\.([A-Za-z_][A-Za-z0-9_]*)\s*\(')) {
     [void]$serviceCallSet.Add($m.Groups[1].Value)
@@ -142,21 +226,24 @@ foreach ($target in $targets) {
   }
 
   $lines = @()
-  if ($text) { $lines = @($text -split "`r?`n" | Where-Object { $_ -match $keyword } | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Select-Object -Unique -First 120) }
-  $reports += [pscustomobject]@{ role=$target.role; file=$target.path; bytes=[int64](Get-Item $swf).Length; scriptMode=$source.mode; scriptFiles=[int]$source.files; pairs=@($pairs|Sort-Object); tokens=@($tokens|Sort-Object); evidence=$lines }
+  if ($text) { $lines = @($text -split "`r?`n" | Where-Object { $_ -match $keyword } | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Select-Object -Unique -First 180) }
+  $reports += [pscustomobject]@{ role=$target.role; file=$displayFile; bytes=[int64](Get-Item $swf).Length; scriptMode=$source.mode; scriptFiles=[int]$source.files; pairs=@($pairs|Sort-Object); tokens=@($tokens|Sort-Object); evidence=$lines }
   Write-Host "WADDLE_PARTY2015_PROTOCOL_FILE=PASS role=$($target.role) script_mode=$($source.mode) script_files=$($source.files) pairs=$(@($pairs).Count) tokens=$(@($tokens).Count) evidence=$($lines.Count)"
+  foreach ($pair in @($pairs|Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_FILE_PAIR role=$($target.role) pair=$pair" }
 }
 
 if ($scriptedTargets -lt 1) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL no_script_sources targets=$($targets.Count)" }
 
 $summary = [ordered]@{
-  schema='waddle-modern-party-protocol/v4'
+  schema='waddle-modern-party-protocol/v5'
   party='Halloween Party 2015'
   targetCount=$targets.Count
   scriptedTargetCount=$scriptedTargets
   ffdec=$ffdec
   partyRoot=$partyRoot
   pairs=@($pairSet|Sort-Object)
+  handlerNames=@($handlerNameSet|Sort-Object)
+  classNames=@($classNameSet|Sort-Object)
   packetTokens=@($packetTokenSet|Sort-Object)
   partyServiceCalls=@($serviceCallSet|Sort-Object)
   localizationTokens=@($localizationSet|Sort-Object)
@@ -166,7 +253,9 @@ $summary = [ordered]@{
 $summaryPath = Join-Path $work 'summary.json'
 $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryPath -Encoding UTF8
 foreach ($pair in @($pairSet|Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_PAIR_ALL=$pair" }
+foreach ($handlerName in @($handlerNameSet|Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_HANDLER=$handlerName" }
+foreach ($className in @($classNameSet|Sort-Object | Where-Object { $_ -match '(?i)(party|cookie|october|halloween)' })) { Write-Host "WADDLE_PARTY2015_PROTOCOL_CLASS=$className" }
 foreach ($token in @($packetTokenSet|Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_PACKET_ALL=$token" }
 foreach ($call in @($serviceCallSet|Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_SERVICE_CALL=$call" }
 foreach ($key in @($localizationSet|Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_LOCALIZATION=$key" }
-Write-Host "WADDLE_PARTY2015_PROTOCOL=PASS targets=$($targets.Count) scripted_targets=$scriptedTargets pairs=$(@($pairSet).Count) packet_tokens=$(@($packetTokenSet).Count) service_calls=$(@($serviceCallSet).Count) localization_tokens=$(@($localizationSet).Count) summary=$summaryPath"
+Write-Host "WADDLE_PARTY2015_PROTOCOL=PASS targets=$($targets.Count) scripted_targets=$scriptedTargets pairs=$(@($pairSet).Count) handlers=$(@($handlerNameSet).Count) classes=$(@($classNameSet).Count) packet_tokens=$(@($packetTokenSet).Count) service_calls=$(@($serviceCallSet).Count) localization_tokens=$(@($localizationSet).Count) summary=$summaryPath"
