@@ -10,6 +10,7 @@ on:
       - '.github/scripts/waddle-halloween-2015-postfix.ps1'
       - '.github/scripts/waddle-halloween-2015-verify.ps1'
       - '.github/scripts/waddle-halloween-2015-protocol.ps1'
+      - '.github/scripts/waddle-halloween-2015-dialogues.ps1'
       - '.github/scripts/waddle-halloween-2015-versioning.ps1'
       - '.github/scripts/waddle-halloween-2015-gameplay.ps1'
       - '.github/workflows/waddle-halloween-2015.yml'
@@ -176,6 +177,12 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-protocol.ps1') -RepoRoot $env:GITHUB_WORKSPACE -CanonicalRoot $env:GITHUB_WORKSPACE
+
+      - name: Verify every Halloween 2015 dialogue has localization data
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-dialogues.ps1') -RepoRoot $env:GITHUB_WORKSPACE
 
       - name: Verify party media is Git-owned and complete
         shell: powershell
