@@ -1,46 +1,73 @@
 param([string]$RepoRoot = $env:GITHUB_WORKSPACE)
-$ErrorActionPreference='Stop'
+$ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
-function Write-Utf8([string]$Path,[string]$Text){$enc=New-Object System.Text.UTF8Encoding($false);[IO.File]::WriteAllText($Path,$Text,$enc)}
-function NeedReplace([string]$Text,[string]$Old,[string]$New,[string]$Label){if($Text.Contains($New)){return $Text};if(-not $Text.Contains($Old)){throw "WADDLE_PARTY2015_SOURCE=FAIL patch_not_found=$Label"};return $Text.Replace($Old,$New)}
 
-$filesPath=Join-Path $RepoRoot 'src/server/game-data/files.ts'
-$files=[IO.File]::ReadAllText($filesPath)
-$files=NeedReplace $files "const UNKNOWN = 'unknown';" "const UNKNOWN = 'unknown';`nconst PARTY2015 = 'party2015';" 'files-constant'
-if(-not $files.Contains('  PARTY2015,')){$files=NeedReplace $files "  UNKNOWN,`n  'archives'," "  UNKNOWN,`n  PARTY2015,`n  'archives'," 'files-subdirectory'}
+function Read-Normalized([string]$Path) {
+  return ([IO.File]::ReadAllText($Path) -replace "`r`n", "`n")
+}
+function Write-Utf8([string]$Path,[string]$Text) {
+  $enc = New-Object System.Text.UTF8Encoding($false)
+  [IO.File]::WriteAllText($Path,($Text -replace "`r`n", "`n"),$enc)
+}
+function NeedReplace([string]$Text,[string]$Old,[string]$New,[string]$Label) {
+  if ($Text.Contains($New)) { return $Text }
+  if (-not $Text.Contains($Old)) { throw "WADDLE_PARTY2015_SOURCE=FAIL patch_not_found=$Label" }
+  return $Text.Replace($Old,$New)
+}
+
+# Keep the physically hydrated party media canonical on V: without making the checkout dirty.
+$ignorePath = Join-Path $RepoRoot '.gitignore'
+$ignore = Read-Normalized $ignorePath
+if (-not $ignore.Contains('/media/default/party2015/')) {
+  $ignore = $ignore.TrimEnd() + "`n/media/default/party2015/`n"
+}
+Write-Utf8 $ignorePath $ignore
+
+# Register party2015:<path> as a first-class FileRef subdirectory.
+$filesPath = Join-Path $RepoRoot 'src/server/game-data/files.ts'
+$files = Read-Normalized $filesPath
+$files = NeedReplace $files "const UNKNOWN = 'unknown';" "const UNKNOWN = 'unknown';`nconst PARTY2015 = 'party2015';" 'files-constant'
+if (-not $files.Contains("  PARTY2015,`n")) {
+  $files = NeedReplace $files "  UNKNOWN,`n  'archives'," "  UNKNOWN,`n  PARTY2015,`n  'archives'," 'files-subdirectory'
+}
 Write-Utf8 $filesPath $files
 
-$timelinePath=Join-Path $RepoRoot 'src/client/views/timeline/timeline-static.ts'
-$timeline=[IO.File]::ReadAllText($timelinePath)
-$timeline=NeedReplace $timeline '  const endDate = new Date(2013, 0, 1);' "  // Render through the last real update instead of truncating the calendar at 2012.`n  const endDate = getDateFromDateInfo(days[days.length - 1]);`n  endDate.setDate(endDate.getDate() + 1);" 'timeline-end'
+# Remove the old Jan-2013 visual cutoff. Calendar now renders to the last actual update.
+$timelinePath = Join-Path $RepoRoot 'src/client/views/timeline/timeline-static.ts'
+$timeline = Read-Normalized $timelinePath
+$timeline = NeedReplace $timeline '  const endDate = new Date(2013, 0, 1);' "  const endDate = getDateFromDateInfo(days[days.length - 1]);`n  endDate.setDate(endDate.getDate() + 1);" 'timeline-end'
 Write-Utf8 $timelinePath $timeline
 
-$htmlPath=Join-Path $RepoRoot 'src/client/views/timeline/timeline.html'
-$html=[IO.File]::ReadAllText($htmlPath)
-if(-not $html.Contains('<option>2015</option>')){$html=NeedReplace $html '              <option>2012</option>' "              <option>2012</option>`n              <option>2013</option>`n              <option>2014</option>`n              <option>2015</option>`n              <option>2016</option>`n              <option>2017</option>" 'timeline-years'}
+# Expose every already-supported update year in the picker.
+$htmlPath = Join-Path $RepoRoot 'src/client/views/timeline/timeline.html'
+$html = Read-Normalized $htmlPath
+if (-not $html.Contains('<option>2015</option>')) {
+  $html = NeedReplace $html '              <option>2012</option>' "              <option>2012</option>`n              <option>2013</option>`n              <option>2014</option>`n              <option>2015</option>`n              <option>2016</option>`n              <option>2017</option>" 'timeline-years'
+}
 Write-Utf8 $htmlPath $html
 
-$roomsPath=Join-Path $RepoRoot 'src/server/game-data/rooms.ts'
-$rooms=[IO.File]::ReadAllText($roomsPath)
-if(-not $rooms.Contains("  'hotellobby' |")){
-  $types="  'hotellobby' |`n  'hotelspa' |`n  'hotelroof' |`n  'cloudforest' |`n  'park' |`n  'skatepark' |`n  'pufflewild' |`n  'school' |`n  'mall' |`n  'dojosnow' |`n"
-  $rooms=NeedReplace $rooms "  'party' |" ($types+"  'party' |") 'room-types'
+# Add only rooms with unique modern IDs. School reuses 122 (eco) and Mall reuses 340 (stage),
+# so those two are intentionally represented by the existing keys to keep ID lookup unambiguous.
+$roomsPath = Join-Path $RepoRoot 'src/server/game-data/rooms.ts'
+$rooms = Read-Normalized $roomsPath
+if (-not $rooms.Contains("  'dojosnow' |")) {
+  $types = @"
+  'dojosnow' |
+  'hotellobby' |
+  'hotelspa' |
+  'hotelroof' |
+  'cloudforest' |
+  'skatepark' |
+  'pufflewild' |
+  'pufflepark' |
+"@
+  $rooms = NeedReplace $rooms "  'party' |" ($types + "  'party' |") 'room-types'
 }
-if(-not $rooms.Contains("  'hotellobby': {")){
-$modern=@"
-  'school': {
-    id: 122,
-    name: 'School',
-    preCpipName: null
-  },
+if (-not $rooms.Contains("  'dojosnow': {")) {
+  $records = @"
   'dojosnow': {
     id: 326,
     name: 'Snow Dojo',
-    preCpipName: null
-  },
-  'mall': {
-    id: 340,
-    name: 'Puffle Berry Mall',
     preCpipName: null
   },
   'hotellobby': {
@@ -63,11 +90,6 @@ $modern=@"
     name: 'Cloud Forest',
     preCpipName: null
   },
-  'park': {
-    id: 434,
-    name: 'Puffle Park',
-    preCpipName: null
-  },
   'skatepark': {
     id: 435,
     name: 'Skatepark',
@@ -78,12 +100,17 @@ $modern=@"
     name: 'Puffle Wild',
     preCpipName: null
   },
+  'pufflepark': {
+    id: 890,
+    name: 'Puffle Park',
+    preCpipName: null
+  },
 "@
-  $rooms=NeedReplace $rooms "  'party': {" ($modern+"  'party': {") 'room-records'
+  $rooms = NeedReplace $rooms "  'party': {" ($records + "  'party': {") 'room-records'
 }
 Write-Utf8 $roomsPath $rooms
 
-$updates=@'
+$updates = @'
 import { Update } from ".";
 
 const P = 'party2015:';
@@ -91,7 +118,9 @@ const P = 'party2015:';
 export const UPDATES_2015: Update[] = [
   {
     date: '2015-05-01',
-    rooms: { lake: 'archives:RoomsLake-May2015.swf' }
+    rooms: {
+      lake: 'archives:RoomsLake-May2015.swf'
+    }
   },
   {
     date: '2015-10-21',
@@ -99,49 +128,191 @@ export const UPDATES_2015: Update[] = [
       party: {
         partyName: 'Halloween Party 2015',
         rooms: {
-          beach: P+'rooms/Hallo15_beach.swf', beacon: P+'rooms/Hallo15_beacon.swf', book: P+'rooms/Hallo15_book.swf', cave: P+'rooms/Hallo15_cave.swf', shop: P+'rooms/Hallo15_shop.swf',
-          cloudforest: P+'rooms/Hallo15_cloudforest.swf', coffee: P+'rooms/Hallo15_coffee.swf', cove: P+'rooms/Hallo15_cove.swf', dance: P+'rooms/Hallo15_dance.swf', dock: P+'rooms/Hallo15_dock.swf',
-          dojo: P+'rooms/Hallo15_dojo.swf', dojoext: P+'rooms/Hallo15_dojoext.swf', agentlobbymulti: P+'rooms/Hallo15_agentlobbymulti.swf', dojofire: P+'rooms/Hallo15_dojofire.swf', forest: P+'rooms/Hallo15_forest.swf',
-          party1: P+'rooms/Hallo15_party1.swf', party2: P+'rooms/Hallo15_party2.swf', berg: P+'rooms/Hallo15_berg.swf', light: P+'rooms/Hallo15_light.swf', attic: P+'rooms/Hallo15_attic.swf', lounge: P+'rooms/Hallo15_lounge.swf',
-          shack: P+'rooms/Hallo15_shack.swf', pet: P+'rooms/Hallo15_pet.swf', pizza: P+'rooms/Hallo15_pizza.swf', plaza: P+'rooms/Hallo15_plaza.swf', mall: P+'rooms/Hallo15_mall.swf',
-          hotellobby: P+'rooms/Hallo15_hotellobby.swf', hotelroof: P+'rooms/Hallo15_hotelroof.swf', hotelspa: P+'rooms/Hallo15_hotelspa.swf', park: P+'rooms/Hallo15_park.swf', pufflewild: P+'rooms/Hallo15_pufflewild.swf',
-          school: P+'rooms/Hallo15_school.swf', skatepark: P+'rooms/Hallo15_skatepark.swf', mtn: P+'rooms/Hallo15_mtn.swf', lodge: P+'rooms/Hallo15_lodge.swf', village: P+'rooms/Hallo15_village.swf',
-          dojosnow: P+'rooms/Hallo15_dojosnow.swf', forts: P+'rooms/Hallo15_forts.swf', rink: P+'rooms/Hallo15_rink.swf', town: P+'rooms/RoomsTown-HalloweenParty2015.swf'
+          beach: P + 'rooms/Hallo15_beach.swf',
+          beacon: P + 'rooms/Hallo15_beacon.swf',
+          book: P + 'rooms/Hallo15_book.swf',
+          cave: P + 'rooms/Hallo15_cave.swf',
+          shop: P + 'rooms/Hallo15_shop.swf',
+          cloudforest: P + 'rooms/Hallo15_cloudforest.swf',
+          coffee: P + 'rooms/Hallo15_coffee.swf',
+          cove: P + 'rooms/Hallo15_cove.swf',
+          dance: P + 'rooms/Hallo15_dance.swf',
+          dock: P + 'rooms/Hallo15_dock.swf',
+          dojo: P + 'rooms/Hallo15_dojo.swf',
+          dojoext: P + 'rooms/Hallo15_dojoext.swf',
+          agentlobbymulti: P + 'rooms/Hallo15_agentlobbymulti.swf',
+          dojofire: P + 'rooms/Hallo15_dojofire.swf',
+          forest: P + 'rooms/Hallo15_forest.swf',
+          party1: P + 'rooms/Hallo15_party1.swf',
+          party2: P + 'rooms/Hallo15_party2.swf',
+          berg: P + 'rooms/Hallo15_berg.swf',
+          light: P + 'rooms/Hallo15_light.swf',
+          attic: P + 'rooms/Hallo15_attic.swf',
+          lounge: P + 'rooms/Hallo15_lounge.swf',
+          shack: P + 'rooms/Hallo15_shack.swf',
+          pet: P + 'rooms/Hallo15_pet.swf',
+          pizza: P + 'rooms/Hallo15_pizza.swf',
+          plaza: P + 'rooms/Hallo15_plaza.swf',
+          stage: P + 'rooms/Hallo15_mall.swf',
+          hotellobby: P + 'rooms/Hallo15_hotellobby.swf',
+          hotelroof: P + 'rooms/Hallo15_hotelroof.swf',
+          hotelspa: P + 'rooms/Hallo15_hotelspa.swf',
+          pufflepark: P + 'rooms/Hallo15_park.swf',
+          pufflewild: P + 'rooms/Hallo15_pufflewild.swf',
+          eco: P + 'rooms/Hallo15_school.swf',
+          skatepark: P + 'rooms/Hallo15_skatepark.swf',
+          mtn: P + 'rooms/Hallo15_mtn.swf',
+          lodge: P + 'rooms/Hallo15_lodge.swf',
+          village: P + 'rooms/Hallo15_village.swf',
+          dojosnow: P + 'rooms/Hallo15_dojosnow.swf',
+          forts: P + 'rooms/Hallo15_forts.swf',
+          rink: P + 'rooms/Hallo15_rink.swf',
+          town: P + 'rooms/RoomsTown-HalloweenParty2015.swf'
         },
         music: {
-          beach:1054, beacon:1053, book:669, cave:532, shop:345, cloudforest:1044, coffee:1031, cove:1035, dance:1036, dock:1037,
-          dojo:403, dojoext:1045, agentlobbymulti:922, dojofire:1046, forest:1038, party1:838, party2:1058, berg:1043, light:588, attic:884,
-          lounge:1055, shack:1041, pet:659, pizza:1033, plaza:1052, mall:1032, hotellobby:1048, hotelroof:1049, hotelspa:1050, park:1051,
-          pufflewild:1057, school:1040, skatepark:1034, mtn:1042, lodge:1056, village:1042, dojosnow:1047, forts:1039, rink:1067, town:1052
+          beach: 1054,
+          beacon: 1053,
+          book: 669,
+          cave: 532,
+          shop: 345,
+          cloudforest: 1044,
+          coffee: 1031,
+          cove: 1035,
+          dance: 1036,
+          dock: 1037,
+          dojo: 403,
+          dojoext: 1045,
+          agentlobbymulti: 922,
+          dojofire: 1046,
+          forest: 1038,
+          party1: 838,
+          party2: 1058,
+          berg: 1043,
+          light: 588,
+          attic: 884,
+          lounge: 1055,
+          shack: 1041,
+          pet: 659,
+          pizza: 1033,
+          plaza: 1052,
+          stage: 1032,
+          hotellobby: 1048,
+          hotelroof: 1049,
+          hotelspa: 1050,
+          pufflepark: 1051,
+          pufflewild: 1057,
+          eco: 1040,
+          skatepark: 1034,
+          mtn: 1042,
+          lodge: 1056,
+          village: 1042,
+          dojosnow: 1047,
+          forts: 1039,
+          rink: 1067,
+          town: 1052
         },
         fileChanges: {
-          'play/v2/client/interface.swf': P+'client/ClientInterface-HalloweenParty2015.swf',
-          'play/v2/content/global/content/features.swf': P+'content/ContentFeatures-HalloweenParty2015.swf',
-          'play/v2/content/global/content/logo.swf': P+'content/ContentLogo-HalloweenParty2015.swf',
-          'play/v2/content/global/content/party_icon.swf': P+'content/ContentParty_icon-HalloweenParty2015.swf',
-          'play/v2/content/global/avatar/sprites/penguin_robot.swf': P+'avatar/PenguinRobot.swf',
-          'play/v2/content/global/telescope/telescope.swf': P+'other/Telescope-HalloweenParty2015.swf',
-          'play/v2/content/global/binoculars/binoculars.swf': P+'other/Binoculars-HalloweenParty2015.swf'
+          'play/v2/client/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf',
+          'play/v2/content/global/content/features.swf': P + 'content/ContentFeatures-HalloweenParty2015.swf',
+          'play/v2/content/global/content/logo.swf': P + 'content/ContentLogo-HalloweenParty2015.swf',
+          'play/v2/content/global/content/party_icon.swf': P + 'content/ContentParty_icon-HalloweenParty2015.swf',
+          'play/v2/content/global/avatar/sprites/penguin_robot.swf': P + 'avatar/PenguinRobot.swf',
+          'play/v2/content/global/telescope/telescope.swf': P + 'other/Telescope-HalloweenParty2015.swf',
+          'play/v2/content/global/binoculars/binoculars.swf': P + 'other/Binoculars-HalloweenParty2015.swf',
+          'play/v2/content/global/rooms/mall.swf': P + 'rooms/Hallo15_mall.swf',
+          'play/v2/content/global/rooms/school.swf': P + 'rooms/Hallo15_school.swf',
+          'play/v2/content/global/rooms/park.swf': P + 'rooms/Hallo15_park.swf',
+          'play/v2/content/global/rooms/partysolo1.swf': P + 'rooms/Hallo15_partysolo1.swf',
+          'play/v2/content/global/music/838.swf': P + 'music/Music838.swf',
+          'play/v2/content/global/music/884.swf': P + 'music/Music884.swf',
+          'play/v2/content/global/music/922.swf': P + 'music/Music922.swf',
+          'play/v2/content/global/music/1031.swf': P + 'music/Music1031.swf',
+          'play/v2/content/global/music/1032.swf': P + 'music/Music1032.swf',
+          'play/v2/content/global/music/1033.swf': P + 'music/Music1033.swf',
+          'play/v2/content/global/music/1034.swf': P + 'music/Music1034.swf',
+          'play/v2/content/global/music/1035.swf': P + 'music/Music1035.swf',
+          'play/v2/content/global/music/1036.swf': P + 'music/Music1036.swf',
+          'play/v2/content/global/music/1037.swf': P + 'music/Music1037.swf',
+          'play/v2/content/global/music/1038.swf': P + 'music/Music1038.swf',
+          'play/v2/content/global/music/1039.swf': P + 'music/Music1039.swf',
+          'play/v2/content/global/music/1040.swf': P + 'music/Music1040.swf',
+          'play/v2/content/global/music/1041.swf': P + 'music/Music1041.swf',
+          'play/v2/content/global/music/1042.swf': P + 'music/Music1042.swf',
+          'play/v2/content/global/music/1043.swf': P + 'music/Music1043.swf',
+          'play/v2/content/global/music/1044.swf': P + 'music/Music1044.swf',
+          'play/v2/content/global/music/1045.swf': P + 'music/Music1045.swf',
+          'play/v2/content/global/music/1046.swf': P + 'music/Music1046.swf',
+          'play/v2/content/global/music/1047.swf': P + 'music/Music1047.swf',
+          'play/v2/content/global/music/1048.swf': P + 'music/Music1048.swf',
+          'play/v2/content/global/music/1049.swf': P + 'music/Music1049.swf',
+          'play/v2/content/global/music/1050.swf': P + 'music/Music1050.swf',
+          'play/v2/content/global/music/1051.swf': P + 'music/Music1051.swf',
+          'play/v2/content/global/music/1052.swf': P + 'music/Music1052.swf',
+          'play/v2/content/global/music/1053.swf': P + 'music/Music1053.swf',
+          'play/v2/content/global/music/1054.swf': P + 'music/Music1054.swf',
+          'play/v2/content/global/music/1055.swf': P + 'music/Music1055.swf',
+          'play/v2/content/global/music/1056.swf': P + 'music/Music1056.swf',
+          'play/v2/content/global/music/1057.swf': P + 'music/Music1057.swf',
+          'play/v2/content/global/music/1058.swf': P + 'music/Music1058.swf',
+          'play/v2/content/global/music/1067.swf': P + 'music/Music1067.swf'
         },
         localChanges: {
-          'close_ups/quest_interface.swf': { en: P+'close_ups/Close_upsQuest_interface-HalloweenParty2015.swf' },
-          'close_ups/tiles_minigame0.swf': { en: P+'close_ups/Close_upsTiles_minigame0-HalloweenParty2015.swf' },
-          'close_ups/tiles_minigame1.swf': { en: P+'close_ups/Close_upsTiles_minigame1-HalloweenParty2015.swf' },
-          'close_ups/tiles_minigame2.swf': { en: P+'close_ups/Close_upsTiles_minigame2-HalloweenParty2015.swf' },
-          'close_ups/tiles_minigame3.swf': { en: P+'close_ups/Close_upsTiles_minigame3-HalloweenParty2015.swf' },
-          'close_ups/tiles_minigame4.swf': { en: P+'close_ups/Close_upsTiles_minigame4-HalloweenParty2015.swf' },
-          'close_ups/tiles_minigame5.swf': { en: P+'close_ups/Close_upsTiles_minigame5-HalloweenParty2015.swf' },
-          'close_ups/tiles_minigame6.swf': { en: P+'close_ups/Close_upsTiles_minigame6-HalloweenParty2015.swf' },
-          'close_ups/tiles_minigame7.swf': { en: P+'close_ups/Close_upsTiles_minigame7-HalloweenParty2015.swf' },
-          'close_ups/tiles_minigame8.swf': { en: P+'close_ups/Close_upsTiles_minigame8-HalloweenParty2015.swf' },
-          'membership/party1.swf': { en: P+'membership/MembershipParty1-HalloweenParty2015.swf' },
-          'membership/party2.swf': { en: P+'membership/MembershipParty2-HalloweenParty2015.swf' }
+          'close_ups/quest_interface.swf': { en: P + 'close_ups/Close_upsQuest_interface-HalloweenParty2015.swf' },
+          'close_ups/tiles_minigame0.swf': { en: P + 'close_ups/Close_upsTiles_minigame0-HalloweenParty2015.swf' },
+          'close_ups/tiles_minigame1.swf': { en: P + 'close_ups/Close_upsTiles_minigame1-HalloweenParty2015.swf' },
+          'close_ups/tiles_minigame2.swf': { en: P + 'close_ups/Close_upsTiles_minigame2-HalloweenParty2015.swf' },
+          'close_ups/tiles_minigame3.swf': { en: P + 'close_ups/Close_upsTiles_minigame3-HalloweenParty2015.swf' },
+          'close_ups/tiles_minigame4.swf': { en: P + 'close_ups/Close_upsTiles_minigame4-HalloweenParty2015.swf' },
+          'close_ups/tiles_minigame5.swf': { en: P + 'close_ups/Close_upsTiles_minigame5-HalloweenParty2015.swf' },
+          'close_ups/tiles_minigame6.swf': { en: P + 'close_ups/Close_upsTiles_minigame6-HalloweenParty2015.swf' },
+          'close_ups/tiles_minigame7.swf': { en: P + 'close_ups/Close_upsTiles_minigame7-HalloweenParty2015.swf' },
+          'close_ups/tiles_minigame8.swf': { en: P + 'close_ups/Close_upsTiles_minigame8-HalloweenParty2015.swf' },
+          'close_ups/dialogue_login.swf': { en: P + 'close_ups/Hallo15_dialogue_login.swf' },
+          'close_ups/dialogue_AA_start.swf': { en: P + 'close_ups/Hallo15_dialogue_AA_start.swf' },
+          'close_ups/dialogue_AA_instruct.swf': { en: P + 'close_ups/Hallo15_dialogue_AA_instruct.swf' },
+          'close_ups/dialogue_AA_congrats.swf': { en: P + 'close_ups/Hallo15_dialogue_AA_congrats.swf' },
+          'close_ups/dialogue_Cad_start.swf': { en: P + 'close_ups/Hallo15_dialogue_Cad_start.swf' },
+          'close_ups/dialogue_Cad_instruct.swf': { en: P + 'close_ups/Hallo15_dialogue_Cad_instruct.swf' },
+          'close_ups/dialogue_Cad_congrats.swf': { en: P + 'close_ups/Hallo15_dialogue_Cad_congrats.swf' },
+          'close_ups/dialogue_Dot_start.swf': { en: P + 'close_ups/Hallo15_dialogue_Dot_start.swf' },
+          'close_ups/dialogue_Dot_instruct.swf': { en: P + 'close_ups/Hallo15_dialogue_Dot_instruct.swf' },
+          'close_ups/dialogue_Dot_congrats.swf': { en: P + 'close_ups/Hallo15_dialogue_Dot_congrats.swf' },
+          'close_ups/dialogue_PH_start.swf': { en: P + 'close_ups/Hallo15_dialogue_PH_start.swf' },
+          'close_ups/dialogue_PH_instruct.swf': { en: P + 'close_ups/Hallo15_dialogue_PH_instruct.swf' },
+          'close_ups/dialogue_PH_congrats.swf': { en: P + 'close_ups/Hallo15_dialogue_PH_congrats.swf' },
+          'close_ups/dialogue_RH_start.swf': { en: P + 'close_ups/Hallo15_dialogue_RH_start.swf' },
+          'close_ups/dialogue_RH_instruct.swf': { en: P + 'close_ups/Hallo15_dialogue_RH_instruct.swf' },
+          'close_ups/dialogue_RH_congrats.swf': { en: P + 'close_ups/Hallo15_dialogue_RH_congrats.swf' },
+          'close_ups/dialogue_Rook_start.swf': { en: P + 'close_ups/Hallo15_dialogue_Rook_start.swf' },
+          'close_ups/dialogue_Rook_instruct.swf': { en: P + 'close_ups/Hallo15_dialogue_Rook_instruct.swf' },
+          'close_ups/dialogue_Rook_congrats.swf': { en: P + 'close_ups/Hallo15_dialogue_Rook_congrats.swf' },
+          'close_ups/dialogue_Rookie_bot.swf': { en: P + 'close_ups/Hallo15_dialogue_Rookie_bot.swf' },
+          'close_ups/dialogue_Sen_start.swf': { en: P + 'close_ups/Hallo15_dialogue_Sen_start.swf' },
+          'close_ups/dialogue_Sen_instruct.swf': { en: P + 'close_ups/Hallo15_dialogue_Sen_instruct.swf' },
+          'close_ups/dialogue_Sen_congrats.swf': { en: P + 'close_ups/Hallo15_dialogue_Sen_congrats.swf' },
+          'close_ups/dialogue_Gary_instruct.swf': { en: P + 'close_ups/Hallo15_dialogue_Gary_instruct.swf' },
+          'close_ups/dialogue_Gary_instruct_2.swf': { en: P + 'close_ups/Hallo15_dialogue_Gary_instruct_2.swf' },
+          'close_ups/dialogue_Gary_instruct_3.swf': { en: P + 'close_ups/Hallo15_dialogue_Gary_instruct_3.swf' },
+          'close_ups/dialogue_Gary_lair.swf': { en: P + 'close_ups/Hallo15_dialogue_Gary_lair.swf' },
+          'close_ups/dialogue_Gary_congrats.swf': { en: P + 'close_ups/Hallo15_dialogue_Gary_congrats.swf' },
+          'close_ups/dialogue_Gary_final.swf': { en: P + 'close_ups/Hallo15_dialogue_Gary_final.swf' },
+          'close_ups/dialogue_Herbert_caged.swf': { en: P + 'close_ups/Hallo15_dialogue_Herbert_caged.swf' },
+          'close_ups/dialogue_Herbert_escape.swf': { en: P + 'close_ups/Hallo15_dialogue_Herbert_escape.swf' },
+          'close_ups/dialogue_Herbot.swf': { en: P + 'close_ups/Hallo15_dialogue_Herbot.swf' },
+          'close_ups/dialogue_Herbert_monologue.swf': { en: P + 'close_ups/Hallo15_dialogue_Herbert_monologue.swf' },
+          'close_ups/dialogue_Herbert_monologue_2.swf': { en: P + 'close_ups/Hallo15_dialogue_Herbert_monologue_2.swf' },
+          'membership/party1.swf': { en: P + 'membership/MembershipParty1-HalloweenParty2015.swf' },
+          'membership/party2.swf': { en: P + 'membership/MembershipParty2-HalloweenParty2015.swf' }
         }
       }
     }
   },
-  { date: '2015-11-04', end: ['party'] }
+  {
+    date: '2015-11-04',
+    end: ['party']
+  }
 ];
 '@
 Write-Utf8 (Join-Path $RepoRoot 'src/server/updates/2015.ts') $updates
-Write-Host 'WADDLE_PARTY2015_SOURCE=PASS calendar=dynamic years=2005-2017 modern_rooms=10 party_start=2015-10-21 party_end=2015-11-04 media_prefix=party2015'
+
+Write-Host 'WADDLE_PARTY2015_SOURCE=PASS media_prefix=party2015 calendar=through-last-update years=2005-2017 modern_room_ids=326,430,431,432,433,435,436,890 party_start=2015-10-21 party_end=2015-11-04'
