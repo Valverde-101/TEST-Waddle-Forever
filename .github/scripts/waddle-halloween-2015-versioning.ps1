@@ -34,6 +34,26 @@ if ($PatchGenerator) {
   if ($patched -ne $source) {
     [IO.File]::WriteAllText($sourcePath, $patched, $utf8)
   }
+
+  # The local hydration manifest contains run-local metadata such as absolute
+  # paths, reuse counts and generation timestamps. Those values are useful on
+  # the canonical workstation but would create a meaningless Git commit on
+  # every CI pass. Commit only the reproducible inventory and hashes.
+  $manifestPath = Join-Path $repo 'media\default\party2015\manifest.json'
+  if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
+    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    $assets = @($manifest.assets | Sort-Object relativePath)
+    $stableManifest = [ordered]@{
+      schema = 3
+      party = [string]$manifest.party
+      sourcePage = [string]$manifest.sourcePage
+      requiredCount = [int]$manifest.requiredCount
+      total = [int]$manifest.total
+      assets = $assets
+    }
+    $json = $stableManifest | ConvertTo-Json -Depth 6
+    [IO.File]::WriteAllText($manifestPath, ($json -replace "`r`n", "`n") + "`n", $utf8)
+  }
 }
 
 $remaining = [IO.File]::ReadAllText($ignorePath)
@@ -41,4 +61,4 @@ if ($remaining -match '(?m)^/media/default/party2015/\s*$') {
   throw 'WADDLE_PARTY2015_VERSIONING=FAIL party2015_still_ignored'
 }
 
-Write-Host "WADDLE_PARTY2015_VERSIONING=PASS tracked_media=true patch_generator=$([bool]$PatchGenerator)"
+Write-Host "WADDLE_PARTY2015_VERSIONING=PASS tracked_media=true deterministic_manifest=true patch_generator=$([bool]$PatchGenerator)"
