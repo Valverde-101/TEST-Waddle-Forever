@@ -179,7 +179,8 @@ jobs:
           $previewRoot=Join-Path $env:ANDROIDBUILD_ROOT ("Previews\Waddle-Forever\$safeTarget")
           $verify=Join-Path $previewRoot '.github\scripts\waddle-modern-timeline-verify.ps1'
           if(-not(Test-Path -LiteralPath $verify -PathType Leaf)){throw "VALIDATED_SOURCE_SYNC=FAIL timeline_verifier_missing=$verify"}
-          & $verify -RepoRoot $previewRoot -RequiredThroughYear 2017 -RequiredDates @('2015-10-21','2015-11-04')
+          # Temporary update end dates are exclusive. Nov 5 means Nov 4 remains playable.
+          & $verify -RepoRoot $previewRoot -RequiredThroughYear 2017 -RequiredDates @('2015-10-21','2015-11-05')
           if($LASTEXITCODE -ne 0){throw 'VALIDATED_SOURCE_SYNC=FAIL compiled_timeline_verification'}
           $global:LASTEXITCODE=0
-          Write-Host "VALIDATED_SOURCE_SYNC_TIMELINE=PASS preview=$previewRoot picker_through=2017 compiled=true"
+          Write-Host "VALIDATED_SOURCE_SYNC_TIMELINE=PASS preview=$previewRoot picker_through=2017 compiled=true exclusive_party_end=2015-11-05"
