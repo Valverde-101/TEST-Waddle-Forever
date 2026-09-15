@@ -16,8 +16,14 @@ on:
       - '.gitignore'
       - 'media/default/party2015/**'
       - 'src/server/updates/2015.ts'
+      - 'src/server/updates/index.ts'
+      - 'src/server/timelines/game-data.ts'
       - 'src/server/game-data/files.ts'
       - 'src/server/game-data/rooms.ts'
+      - 'src/server/game-data/party.ts'
+      - 'src/server/game-logic/party-progress.ts'
+      - 'src/server/database/database.ts'
+      - 'src/server/socket-server/world/world-penguin.ts'
       - 'src/server/socket-server/handlers/party.ts'
       - 'src/server/socket-server/handlers/puffle.ts'
       - 'src/server/socket-server/world-handlers.ts'
@@ -45,20 +51,39 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
-      - name: Assert Halloween 2015 source integration is committed in the PR
+      - name: Validate generated source and reusable party runtime
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           ./.github/scripts/waddle-halloween-2015-source.ps1 -RepoRoot $env:GITHUB_WORKSPACE
           ./.github/scripts/waddle-halloween-2015-postfix.ps1 -RepoRoot $env:GITHUB_WORKSPACE
           ./.github/scripts/waddle-halloween-2015-versioning.ps1 -RepoRoot $env:GITHUB_WORKSPACE
+          ./.github/scripts/waddle-halloween-2015-gameplay.ps1 -RepoRoot $env:GITHUB_WORKSPACE
+
           $changes = @(git status --porcelain)
           if($LASTEXITCODE -ne 0){throw "WADDLE_PARTY2015_SOURCE_GATE=FAIL git_status_exit=$LASTEXITCODE"}
-          if($changes.Count -gt 0){
-            git diff -- .gitignore src/server/updates/2015.ts src/server/game-data/files.ts src/server/game-data/rooms.ts src/client/views/timeline/timeline-static.ts src/client/views/timeline/timeline.html
-            throw "WADDLE_PARTY2015_SOURCE_GATE=FAIL uncommitted_generated_changes=$($changes.Count)"
-          }
-          Write-Host 'WADDLE_PARTY2015_SOURCE_GATE=PASS mode=pr_owned_source mutation=false tracked_media=true'
+          $allowed = @(
+            '.gitignore',
+            '.github/scripts/waddle-halloween-2015-source.ps1',
+            'src/server/updates/2015.ts',
+            'src/server/updates/index.ts',
+            'src/server/timelines/game-data.ts',
+            'src/server/game-data/files.ts',
+            'src/server/game-data/rooms.ts',
+            'src/server/game-data/party.ts',
+            'src/server/game-logic/party-progress.ts',
+            'src/server/database/database.ts',
+            'src/server/socket-server/world/world-penguin.ts',
+            'src/server/socket-server/handlers/party.ts',
+            'src/server/socket-server/handlers/puffle.ts',
+            'src/server/socket-server/world-handlers.ts',
+            'src/client/views/timeline/timeline-static.ts',
+            'src/client/views/timeline/timeline.html'
+          )
+          $changedPaths = @($changes | ForEach-Object { ($_ -replace '^..\s+','').Trim('"') -replace '\\','/' })
+          $unexpected = @($changedPaths | Where-Object { $_ -and $_ -notin $allowed })
+          if($unexpected.Count -gt 0){throw "WADDLE_PARTY2015_SOURCE_GATE=FAIL unexpected_generated_paths=$($unexpected -join ',')"}
+          Write-Host "WADDLE_PARTY2015_SOURCE_GATE=PASS expected_pending=$($changedPaths.Count) architecture=data_driven"
 
   hydrate-publish-and-verify-assets:
     needs: validate-pr-source
@@ -90,7 +115,7 @@ jobs:
           if(-not(Test-Path -LiteralPath (Join-Path $canonical '.git'))){throw "WADDLE_PARTY2015_ASSETS=FAIL expected_canonical_missing=$canonical"}
           & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015.ps1') -Mode assets -RepoRoot $canonical
 
-      - name: Publish canonical SWFs and gameplay compatibility into the PR branch
+      - name: Publish canonical SWFs and reusable party runtime into the PR branch
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
@@ -103,6 +128,8 @@ jobs:
           Copy-Item -LiteralPath $source -Destination $target -Recurse -Force
 
           & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-versioning.ps1') -RepoRoot $env:GITHUB_WORKSPACE -PatchGenerator
+          & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-source.ps1') -RepoRoot $env:GITHUB_WORKSPACE
+          & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-postfix.ps1') -RepoRoot $env:GITHUB_WORKSPACE
           & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-gameplay.ps1') -RepoRoot $env:GITHUB_WORKSPACE
 
           $swfs=@(Get-ChildItem -LiteralPath $target -Filter '*.swf' -File -Recurse)
@@ -113,7 +140,13 @@ jobs:
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- '.gitignore' '.github/scripts/waddle-halloween-2015-source.ps1' 'media/default/party2015' 'src/server/socket-server/handlers/puffle.ts'
+          git add -- '.gitignore' '.github/scripts/waddle-halloween-2015-source.ps1' 'media/default/party2015' `
+            'src/server/updates/2015.ts' 'src/server/updates/index.ts' 'src/server/timelines/game-data.ts' `
+            'src/server/game-data/files.ts' 'src/server/game-data/rooms.ts' 'src/server/game-data/party.ts' `
+            'src/server/game-logic/party-progress.ts' 'src/server/database/database.ts' `
+            'src/server/socket-server/world/world-penguin.ts' 'src/server/socket-server/handlers/party.ts' `
+            'src/server/socket-server/handlers/puffle.ts' 'src/server/socket-server/world-handlers.ts' `
+            'src/client/views/timeline/timeline-static.ts' 'src/client/views/timeline/timeline.html'
           if($LASTEXITCODE -ne 0){throw "WADDLE_PARTY2015_PUBLISH=FAIL git_add_exit=$LASTEXITCODE"}
 
           $cached=@(git ls-files --cached -- 'media/default/party2015')
@@ -122,7 +155,7 @@ jobs:
 
           $staged=@(git diff --cached --name-only)
           if($staged.Count -gt 0){
-            git commit -m 'fix(halloween2015): publish canonical assets and gameplay compatibility'
+            git commit -m 'refactor(party): materialize reusable Halloween 2015 runtime'
             if($LASTEXITCODE -ne 0){throw "WADDLE_PARTY2015_PUBLISH=FAIL commit_exit=$LASTEXITCODE"}
             $branch='${{ github.event.pull_request.head.ref || github.ref_name }}'
             git push origin "HEAD:$branch"
