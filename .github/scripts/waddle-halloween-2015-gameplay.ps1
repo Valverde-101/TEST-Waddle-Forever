@@ -21,8 +21,6 @@ function Replace-Once([string]$Text,[string]$Old,[string]$New,[string]$Label) {
   return $Text.Replace($Old,$New)
 }
 
-# Ghost Puffle 1022 is an event creature with canonical cost 0. Other creature
-# puffles keep the values already defined by PUFFLES (normally 800).
 $pufflePath = Join-Path $repo 'src\server\socket-server\handlers\puffle.ts'
 $puffle = Read-Normalized $pufflePath
 $puffleOld = @'
@@ -53,7 +51,6 @@ $puffleNew = @'
 $puffle = Replace-Once $puffle $puffleOld $puffleNew 'ghost-puffle-price'
 Write-Normalized $pufflePath $puffle
 
-# Persist the generic modern-party cookie used by the 2015 quest interface.
 $databasePath = Join-Path $repo 'src\server\database\database.ts'
 $database = Read-Normalized $databasePath
 $databaseOld = @'
@@ -174,8 +171,6 @@ $world = Replace-Once $world @'
 '@ 'world-status-json'
 Write-Normalized $worldPath $world
 
-# Implement the modern party-cookie protocol used by the quest UI. Features.swf
-# supplies PARTY_SERVICE locally; the server owns only the progress cookie.
 $partyPath = Join-Path $repo 'src\server\socket-server\handlers\party.ts'
 $party = Read-Normalized $partyPath
 if (-not $party.Contains('handleRetrieveHalloween2015')) {
@@ -250,4 +245,15 @@ foreach ($check in $checks) {
   }
 }
 
-Write-Host 'WADDLE_PARTY2015_GAMEPLAY=PASS ghost_puffle=1022 partycookie=persistent quest_tasks=10 messages=10 communicator=5 packets=5'
+# The self-hosted PR publisher commits every gameplay file atomically with the
+# versioned party assets. `git add` is a no-op when this script is later reused
+# as an idempotence gate on already-integrated source.
+& git -C $repo add -- `
+  'src/server/socket-server/handlers/puffle.ts' `
+  'src/server/database/database.ts' `
+  'src/server/socket-server/world/world-penguin.ts' `
+  'src/server/socket-server/handlers/party.ts' `
+  'src/server/socket-server/world-handlers.ts'
+if ($LASTEXITCODE -ne 0) { throw "WADDLE_PARTY2015_GAMEPLAY=FAIL git_add_exit=$LASTEXITCODE" }
+
+Write-Host 'WADDLE_PARTY2015_GAMEPLAY=PASS ghost_puffle=1022 partycookie=persistent quest_tasks=10 messages=10 communicator=5 packets=5 staged=true'
