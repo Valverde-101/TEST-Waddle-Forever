@@ -15,14 +15,6 @@ function NeedReplace([string]$Text,[string]$Old,[string]$New,[string]$Label) {
   return $Text.Replace($Old,$New)
 }
 
-# Keep the physically hydrated party media canonical on V: without making the checkout dirty.
-$ignorePath = Join-Path $RepoRoot '.gitignore'
-$ignore = Read-Normalized $ignorePath
-if (-not $ignore.Contains('/media/default/party2015/')) {
-  $ignore = $ignore.TrimEnd() + "`n/media/default/party2015/`n"
-}
-Write-Utf8 $ignorePath $ignore
-
 # Register party2015:<path> as a first-class FileRef subdirectory.
 $filesPath = Join-Path $RepoRoot 'src/server/game-data/files.ts'
 $files = Read-Normalized $filesPath

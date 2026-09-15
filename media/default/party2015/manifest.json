@@ -1,0 +1,1201 @@
+﻿{
+    "schema":  2,
+    "party":  "Halloween Party 2015",
+    "sourcePage":  "https://toolbox.solero.me/cparchives/wiki/Halloween_Party_2015.html",
+    "canonicalRoot":  "V:\\AndroidBuild\\Repositories\\TEST-Waddle-Forever\\media\\default\\party2015",
+    "requiredCount":  132,
+    "total":  132,
+    "downloaded":  0,
+    "reused":  132,
+    "generatedAt":  "2026-09-15T03:19:09.9932834Z",
+    "assets":  [
+                   {
+                       "category":  "other",
+                       "name":  "Binoculars-HalloweenParty2015.swf",
+                       "relativePath":  "other/Binoculars-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/9/94/Binoculars-HalloweenParty2015.swf",
+                       "bytes":  9411,
+                       "sha256":  "09DEAA5E4FBE4E33CAE61FD2F614EC60EB71E1DE805C73B45696B301037FA250",
+                       "required":  true
+                   },
+                   {
+                       "category":  "client",
+                       "name":  "ClientInterface-HalloweenParty2015.swf",
+                       "relativePath":  "client/ClientInterface-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/78/ClientInterface-HalloweenParty2015.swf",
+                       "bytes":  869419,
+                       "sha256":  "F37D9B77BDEFC97B7DB9E73C8B3C99E4D32D25E38851C3BCB3A5AADD679B8187",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Close_upsQuest_interface-HalloweenParty2015.swf",
+                       "relativePath":  "close_ups/Close_upsQuest_interface-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/c/c8/Close_upsQuest_interface-HalloweenParty2015.swf",
+                       "bytes":  1409841,
+                       "sha256":  "7610CE6A1632007D09BEFCA464AB5954191CA6A6CA27CAB3BF19133DCB670563",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Close_upsTiles_minigame0-HalloweenParty2015.swf",
+                       "relativePath":  "close_ups/Close_upsTiles_minigame0-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/3/35/Close_upsTiles_minigame0-HalloweenParty2015.swf",
+                       "bytes":  513219,
+                       "sha256":  "FC1C97E30DAE2BA4B8674D1BE078F35BC5044139D3D966938559D3D0CC2620E7",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Close_upsTiles_minigame1-HalloweenParty2015.swf",
+                       "relativePath":  "close_ups/Close_upsTiles_minigame1-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/4/4f/Close_upsTiles_minigame1-HalloweenParty2015.swf",
+                       "bytes":  513107,
+                       "sha256":  "AB99CEF57049100D64E0C29B90E82A34C1D7F53E9770675F733450801118F8BD",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Close_upsTiles_minigame2-HalloweenParty2015.swf",
+                       "relativePath":  "close_ups/Close_upsTiles_minigame2-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/70/Close_upsTiles_minigame2-HalloweenParty2015.swf",
+                       "bytes":  513095,
+                       "sha256":  "23E6DD32611F086289F2D7B91C48987393049596EB9C962757823A2937A6539B",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Close_upsTiles_minigame3-HalloweenParty2015.swf",
+                       "relativePath":  "close_ups/Close_upsTiles_minigame3-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/1/16/Close_upsTiles_minigame3-HalloweenParty2015.swf",
+                       "bytes":  513062,
+                       "sha256":  "6DB8117F390CA6723F1138AA99B4DE0B266C5F48412144FA004046EC98B7231A",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Close_upsTiles_minigame4-HalloweenParty2015.swf",
+                       "relativePath":  "close_ups/Close_upsTiles_minigame4-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/8f/Close_upsTiles_minigame4-HalloweenParty2015.swf",
+                       "bytes":  513023,
+                       "sha256":  "D51A37710B1BDBE4B2B5F12F34FFFD388B54DB22F7DB3913145A9A0F7A2CF9B5",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Close_upsTiles_minigame5-HalloweenParty2015.swf",
+                       "relativePath":  "close_ups/Close_upsTiles_minigame5-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/85/Close_upsTiles_minigame5-HalloweenParty2015.swf",
+                       "bytes":  513059,
+                       "sha256":  "5AA64A5B4CDFF19541592DAECD9CFF801D3743540303E3A8E8D4D2E31DB9FF93",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Close_upsTiles_minigame6-HalloweenParty2015.swf",
+                       "relativePath":  "close_ups/Close_upsTiles_minigame6-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/f/fc/Close_upsTiles_minigame6-HalloweenParty2015.swf",
+                       "bytes":  511256,
+                       "sha256":  "06C85D287B9364D3AF6006398A76B812C277B652C34F4C1DAB0EBD2849508620",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Close_upsTiles_minigame7-HalloweenParty2015.swf",
+                       "relativePath":  "close_ups/Close_upsTiles_minigame7-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/f/f5/Close_upsTiles_minigame7-HalloweenParty2015.swf",
+                       "bytes":  511252,
+                       "sha256":  "3DC8A969990F0FA5CEB8FEA49143236AE9085171E04C54B6884901721A236EBF",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Close_upsTiles_minigame8-HalloweenParty2015.swf",
+                       "relativePath":  "close_ups/Close_upsTiles_minigame8-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/b/bb/Close_upsTiles_minigame8-HalloweenParty2015.swf",
+                       "bytes":  512302,
+                       "sha256":  "C3AE69C1FA6EF4EA37AFDFDB31C86C519D688BBC754101EAB2B6B06F1CD0A957",
+                       "required":  true
+                   },
+                   {
+                       "category":  "content",
+                       "name":  "ContentFeatures-HalloweenParty2015.swf",
+                       "relativePath":  "content/ContentFeatures-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/d/db/ContentFeatures-HalloweenParty2015.swf",
+                       "bytes":  1337,
+                       "sha256":  "24398415EF15BC6677433D4927242ABF2E803319B4AD7AD423A15FEDF1D10EA8",
+                       "required":  true
+                   },
+                   {
+                       "category":  "content",
+                       "name":  "ContentLogo-HalloweenParty2015.swf",
+                       "relativePath":  "content/ContentLogo-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/3/38/ContentLogo-HalloweenParty2015.swf",
+                       "bytes":  214181,
+                       "sha256":  "D476BE7292CE74E8F73721C22D1E1B4599F46CFF1A88E52DD408BBE598A7DCDC",
+                       "required":  true
+                   },
+                   {
+                       "category":  "content",
+                       "name":  "ContentParty_icon-HalloweenParty2015.swf",
+                       "relativePath":  "content/ContentParty_icon-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/6/67/ContentParty_icon-HalloweenParty2015.swf",
+                       "bytes":  3811,
+                       "sha256":  "A9176675A7B7CE48CEB47F08AE4563A9E61F59A768F37ECDF5D53E2C63782219",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_agentlobbymulti.swf",
+                       "relativePath":  "rooms/Hallo15_agentlobbymulti.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/1/10/Hallo15_agentlobbymulti.swf",
+                       "bytes":  425989,
+                       "sha256":  "C338E836785DB29885430B2CFDA76DCF0EFAD77D8C18C472B9F9DB548D78B9AE",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_attic.swf",
+                       "relativePath":  "rooms/Hallo15_attic.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/a/aa/Hallo15_attic.swf",
+                       "bytes":  283673,
+                       "sha256":  "EFC82CD731A6ECB50C2B07BD251656FF9EC03320417A434C3D3E8B819BCF4CA6",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_beach.swf",
+                       "relativePath":  "rooms/Hallo15_beach.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/d/d3/Hallo15_beach.swf",
+                       "bytes":  1180827,
+                       "sha256":  "0BA26BCE3F7BA44A220CAFE5928FC2CB2525DDDA1E2AAADBD6DB0A732DDBC592",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_beacon.swf",
+                       "relativePath":  "rooms/Hallo15_beacon.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/d/d3/Hallo15_beacon.swf",
+                       "bytes":  175957,
+                       "sha256":  "DD287A13EE5F807F1343663BC3B6E75F3009BB99E46DEE875AF5B59A6F474A70",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_berg.swf",
+                       "relativePath":  "rooms/Hallo15_berg.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/5/52/Hallo15_berg.swf",
+                       "bytes":  67847,
+                       "sha256":  "C6467A053B7657CEFD61A4D8459CD8CDCAF9BFEEC111832DC42CD1397A22A5B7",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_book.swf",
+                       "relativePath":  "rooms/Hallo15_book.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/1/15/Hallo15_book.swf",
+                       "bytes":  202035,
+                       "sha256":  "D30DAC4DB780CD9EE7ECCA0E34B3D89FBEE190E3BA3393C2F4B76AC9BF3C83E0",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_cave.swf",
+                       "relativePath":  "rooms/Hallo15_cave.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/f/f9/Hallo15_cave.swf",
+                       "bytes":  267222,
+                       "sha256":  "37E622B2A3C45189BA28CF2508188093779317D8FEEE47F871F4A887CEB004B8",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_cloudforest.swf",
+                       "relativePath":  "rooms/Hallo15_cloudforest.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/4/40/Hallo15_cloudforest.swf",
+                       "bytes":  204318,
+                       "sha256":  "7DD2390680556F9E31B7FD848E48A3422A200023D81896A55435A19C8D5255BE",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_coffee.swf",
+                       "relativePath":  "rooms/Hallo15_coffee.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/2/2a/Hallo15_coffee.swf",
+                       "bytes":  416417,
+                       "sha256":  "174422A61DDD8F2954CAD373513C0FBFC64113703F7D7224B4E6D017F93570F2",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_cove.swf",
+                       "relativePath":  "rooms/Hallo15_cove.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/2/2c/Hallo15_cove.swf",
+                       "bytes":  1156228,
+                       "sha256":  "276DAC44B724722CC09CD0CDA92DF19D015C61FD92EAF8747CD375657C38EC52",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_dance.swf",
+                       "relativePath":  "rooms/Hallo15_dance.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/9/95/Hallo15_dance.swf",
+                       "bytes":  243843,
+                       "sha256":  "C0580839B5DD2C263C7B0DAC2BCA01F26605FBB57F4FE4A3BEBBE6B165001F53",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_AA_congrats.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_AA_congrats.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/a/a3/Hallo15_dialogue_AA_congrats.swf",
+                       "bytes":  147528,
+                       "sha256":  "D8AFFAD528644186A0B7D80B0A3D7752E8194CC6FDFC18DA0B407548B27949D8",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_AA_instruct.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_AA_instruct.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/5/5f/Hallo15_dialogue_AA_instruct.swf",
+                       "bytes":  87536,
+                       "sha256":  "2D2FB184C7BC6ADF487C0F71DA8E93BF7DA0B51659DF19A844649240231858A0",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_AA_start.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_AA_start.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/c/c6/Hallo15_dialogue_AA_start.swf",
+                       "bytes":  86219,
+                       "sha256":  "ED8823420156FDA9AA1EB1570F9E50C6BD08A38F49695B29C041A18BE343F157",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Cad_congrats.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Cad_congrats.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/e/e8/Hallo15_dialogue_Cad_congrats.swf",
+                       "bytes":  199383,
+                       "sha256":  "3D3B194CA0EF0AE8965D7DD05991724C638F14213B8D0ECAC28A432D8FA25E1D",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Cad_instruct.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Cad_instruct.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/8c/Hallo15_dialogue_Cad_instruct.swf",
+                       "bytes":  86590,
+                       "sha256":  "D9B89C8D3C8858ABED52B1ACDAAA380452AB1A7CB25795F02653EB5A41BDE6D9",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Cad_start.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Cad_start.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/a/a6/Hallo15_dialogue_Cad_start.swf",
+                       "bytes":  99693,
+                       "sha256":  "07263A2362051E5FD4FDF6D6FB77E00C6477E485573E55DDA59CB47D2D6E7740",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Dot_congrats.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Dot_congrats.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/a/ad/Hallo15_dialogue_Dot_congrats.swf",
+                       "bytes":  198931,
+                       "sha256":  "7BF97DCF37C0B2817AF4EC7C72909BDAAA29F0AA34EE526813DF48797837FD92",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Dot_instruct.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Dot_instruct.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/1/1c/Hallo15_dialogue_Dot_instruct.swf",
+                       "bytes":  85693,
+                       "sha256":  "CC3177F0D580F395E15B1E42325288B855327283B7A432A976632D6D1401ABCB",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Dot_start.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Dot_start.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/8a/Hallo15_dialogue_Dot_start.swf",
+                       "bytes":  98845,
+                       "sha256":  "46411EBEAA2C207470AD63E0D28ED72D71AC9307DD9B4AA3545C015B6D21C9FD",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Gary_congrats.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Gary_congrats.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/85/Hallo15_dialogue_Gary_congrats.swf",
+                       "bytes":  138671,
+                       "sha256":  "F94A6BD3E9D290068B3B493DFB397676E2807095EDDF363B8216DED3F7630705",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Gary_final.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Gary_final.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/f/f0/Hallo15_dialogue_Gary_final.swf",
+                       "bytes":  176442,
+                       "sha256":  "0521F992225D588629EDD5925D7A9A0A439063F47B5EAA8C5C1BBB4A69693384",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Gary_instruct.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Gary_instruct.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/c/cf/Hallo15_dialogue_Gary_instruct.swf",
+                       "bytes":  79914,
+                       "sha256":  "30778ABD47F48183B33566F705415E005F18941D43418E1BF962A7C59A7E19B1",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Gary_instruct_2.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Gary_instruct_2.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/0/05/Hallo15_dialogue_Gary_instruct_2.swf",
+                       "bytes":  78162,
+                       "sha256":  "9CC2968186D8E8BC83E64AC66127A46A56AAB4A27F2FE514AB6B4A445F98C9A4",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Gary_instruct_3.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Gary_instruct_3.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/78/Hallo15_dialogue_Gary_instruct_3.swf",
+                       "bytes":  73673,
+                       "sha256":  "31D887D24694500D73D2A815A36DBEF028E1FC8F65D40CE845F032B4BE81E13B",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Gary_lair.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Gary_lair.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/3/32/Hallo15_dialogue_Gary_lair.swf",
+                       "bytes":  86648,
+                       "sha256":  "C1375E2EEA1D5AD28F725F84FB5A77F67ABDE82F79CE35E4EDD95521999782E3",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Herbert_caged.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Herbert_caged.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/e/e0/Hallo15_dialogue_Herbert_caged.swf",
+                       "bytes":  68913,
+                       "sha256":  "1E098CBAA2CC67146590426DEBE1587E3A397BB696FB01A5BC2FC4F17951F6FF",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Herbert_escape.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Herbert_escape.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/0/0e/Hallo15_dialogue_Herbert_escape.swf",
+                       "bytes":  96983,
+                       "sha256":  "14D53FA6FD922E9C8A2FAA2BB727D3995012560E5907896D4E97AD84E3C27A64",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Herbert_monologue.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Herbert_monologue.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/e/e8/Hallo15_dialogue_Herbert_monologue.swf",
+                       "bytes":  66419,
+                       "sha256":  "1918BDBC8234E199830F4E107C68346E073F1EF9D57A74F8350384996F1D9B54",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Herbert_monologue_2.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Herbert_monologue_2.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/c/ce/Hallo15_dialogue_Herbert_monologue_2.swf",
+                       "bytes":  76737,
+                       "sha256":  "4283875EC03C2CC57D726794E01005F1D3884B38ACC2057FDF133C5523DE98A1",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Herbot.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Herbot.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/72/Hallo15_dialogue_Herbot.swf",
+                       "bytes":  141531,
+                       "sha256":  "71A3E1A5DF596920A55B0BDAEB38228F29017B9ABEE0788B8A9E0203B71E1AB9",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_login.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_login.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/f/fc/Hallo15_dialogue_login.swf",
+                       "bytes":  82311,
+                       "sha256":  "F7B79EE64E1697B6C2BE74F9B7B2DBC02ED9EB631991D266AD0BA14E3CF21DF1",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_PH_congrats.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_PH_congrats.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/1/12/Hallo15_dialogue_PH_congrats.swf",
+                       "bytes":  191949,
+                       "sha256":  "8D88AFE13DF6F959FD4746A4CDC51676AC9800F314E5B02B22536985E83150BF",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_PH_instruct.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_PH_instruct.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/6/6e/Hallo15_dialogue_PH_instruct.swf",
+                       "bytes":  95027,
+                       "sha256":  "47AA1E61BB39CD8D3671CE1222F8A19A99ED16DC0D0AC7A668B52F6575C3F873",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_PH_start.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_PH_start.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/d/d6/Hallo15_dialogue_PH_start.swf",
+                       "bytes":  86339,
+                       "sha256":  "2878F347147213ED842274F42C2930A74D339852BF6149117A509857DE4F81AC",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_RH_congrats.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_RH_congrats.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/9/92/Hallo15_dialogue_RH_congrats.swf",
+                       "bytes":  184458,
+                       "sha256":  "E60E1C9FF6BABDB38C65A87340C7F8BA57CA5BB3AB45CD8B4E173D2CAAE48F1C",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_RH_instruct.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_RH_instruct.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/1/11/Hallo15_dialogue_RH_instruct.swf",
+                       "bytes":  72364,
+                       "sha256":  "48108DC1BD0EDF829AED054A83ECF095E4DB5B8403BFE69AA24F725C20DE4177",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_RH_start.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_RH_start.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/9/99/Hallo15_dialogue_RH_start.swf",
+                       "bytes":  85680,
+                       "sha256":  "8F841E3D55D6DDF46418C0A881C20CC0D9521A86BF5243A0ABF8967106C78BEF",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Rook_congrats.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Rook_congrats.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/c/c7/Hallo15_dialogue_Rook_congrats.swf",
+                       "bytes":  261582,
+                       "sha256":  "6FC2486A6ECCD73B7711739CBD9CDF709487E1BB88F019216EFEC1BF30A0DF80",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Rook_instruct.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Rook_instruct.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/0/05/Hallo15_dialogue_Rook_instruct.swf",
+                       "bytes":  75267,
+                       "sha256":  "CEAE99355F752CB8462FE433F3058A56039C0BABA8E28F220E350DF49E50DB41",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Rook_start.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Rook_start.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/9/9b/Hallo15_dialogue_Rook_start.swf",
+                       "bytes":  88756,
+                       "sha256":  "22582007D595A2F7F877CF9E1CE92CDEE23207B27B9ACE86C73DD4162B5A701D",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Rookie_bot.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Rookie_bot.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/5/52/Hallo15_dialogue_Rookie_bot.swf",
+                       "bytes":  132067,
+                       "sha256":  "F06D5ABDF7D3135B3B7F2FEBBDA4B63A47966A31B998C6C08F086898FC4E269D",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Sen_congrats.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Sen_congrats.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/1/1c/Hallo15_dialogue_Sen_congrats.swf",
+                       "bytes":  188327,
+                       "sha256":  "EAFA4B31596D761870FB4671916F52DB3C33E66934530EA693B6A3E3E6029956",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Sen_instruct.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Sen_instruct.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/c/c9/Hallo15_dialogue_Sen_instruct.swf",
+                       "bytes":  66625,
+                       "sha256":  "49AB8D7D53229F87F0490BD046C99C13EF68236DC58828BB6FADF9B6A9B4BC6D",
+                       "required":  true
+                   },
+                   {
+                       "category":  "close_ups",
+                       "name":  "Hallo15_dialogue_Sen_start.swf",
+                       "relativePath":  "close_ups/Hallo15_dialogue_Sen_start.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/71/Hallo15_dialogue_Sen_start.swf",
+                       "bytes":  80124,
+                       "sha256":  "B71F63C023BB5FF9CB96E0593FFA2AC45EE83AE16E6D35294F86D3D1C28BC1C9",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_dock.swf",
+                       "relativePath":  "rooms/Hallo15_dock.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/5/56/Hallo15_dock.swf",
+                       "bytes":  999467,
+                       "sha256":  "B2B016A24000D0D266F099796C870D80077F9BA4222B02F2ACF3F5735ECA3EF5",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_dojo.swf",
+                       "relativePath":  "rooms/Hallo15_dojo.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/82/Hallo15_dojo.swf",
+                       "bytes":  414956,
+                       "sha256":  "7DBD41196F186AAC7B86BDA0AE9E28C3A395664E3138698F1015E9EC8870B26F",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_dojoext.swf",
+                       "relativePath":  "rooms/Hallo15_dojoext.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/3/38/Hallo15_dojoext.swf",
+                       "bytes":  315740,
+                       "sha256":  "A38A1436ED50388A3BD3A885DB36CBA3EA31E93ACC4D62474239A4E6A1F9E06B",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_dojofire.swf",
+                       "relativePath":  "rooms/Hallo15_dojofire.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/1/10/Hallo15_dojofire.swf",
+                       "bytes":  221111,
+                       "sha256":  "04B7A5BA5757EB33638B2DA179DCE0D53CEA033AFA63CEE96896638EDDA79AE8",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_dojosnow.swf",
+                       "relativePath":  "rooms/Hallo15_dojosnow.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/e/e5/Hallo15_dojosnow.swf",
+                       "bytes":  290223,
+                       "sha256":  "6F8E3B40A537A3E276F3BA9EC4B19BADA8E4E805783952147785D9B05C4E879B",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_forest.swf",
+                       "relativePath":  "rooms/Hallo15_forest.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/4/44/Hallo15_forest.swf",
+                       "bytes":  995578,
+                       "sha256":  "8BB6CC933F3A5D730186F88E9A910B63B2172CF8C2639E6A2EB39577F8A220A1",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_forts.swf",
+                       "relativePath":  "rooms/Hallo15_forts.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/73/Hallo15_forts.swf",
+                       "bytes":  1219351,
+                       "sha256":  "D9D872FAC6BF9A94CEDA36FCD24BB4E6E4A60E3C0263B95DF7D885C96256C52E",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_hotellobby.swf",
+                       "relativePath":  "rooms/Hallo15_hotellobby.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/d/db/Hallo15_hotellobby.swf",
+                       "bytes":  396526,
+                       "sha256":  "DBE9851D9EE2D80B9F53BDE1C472867EFC93C0E4E8E35ECDF557150E96649DBD",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_hotelroof.swf",
+                       "relativePath":  "rooms/Hallo15_hotelroof.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/1/1d/Hallo15_hotelroof.swf",
+                       "bytes":  500212,
+                       "sha256":  "808A9923D67F7E1BEC6E358045C0D25E45E2460DEAE87283A140CFC050136543",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_hotelspa.swf",
+                       "relativePath":  "rooms/Hallo15_hotelspa.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/d/db/Hallo15_hotelspa.swf",
+                       "bytes":  350964,
+                       "sha256":  "8119C793CB0976F1A8ADE248B51F924411A3FA6EF1C9BF975E20BB4DDF5C542F",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_light.swf",
+                       "relativePath":  "rooms/Hallo15_light.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/c/c2/Hallo15_light.swf",
+                       "bytes":  187460,
+                       "sha256":  "16604BDE5DDB5431E1C420845F56097A8469CDAFDA4B91FC7529FB661D601017",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_lodge.swf",
+                       "relativePath":  "rooms/Hallo15_lodge.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/a/a1/Hallo15_lodge.swf",
+                       "bytes":  306956,
+                       "sha256":  "92B3222A63E4173E226B870E4B9E826299CF2A6310F5FE50CE4F6A0A78AF0C7F",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_lounge.swf",
+                       "relativePath":  "rooms/Hallo15_lounge.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/2/27/Hallo15_lounge.swf",
+                       "bytes":  220495,
+                       "sha256":  "63E7BA68AE9EF12FAAF8A28081900A6032309B67A108237B5144CF6B1BA61AE3",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_mall.swf",
+                       "relativePath":  "rooms/Hallo15_mall.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/6/62/Hallo15_mall.swf",
+                       "bytes":  292405,
+                       "sha256":  "646E18271ECE30EA39BBE99D3EB9E70B2120EB8EBE2A302496065AE7035A8CE6",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_mtn.swf",
+                       "relativePath":  "rooms/Hallo15_mtn.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/81/Hallo15_mtn.swf",
+                       "bytes":  217922,
+                       "sha256":  "9048BFD52EB49841F121C9F4C91FE1A38D8EDB5BE7D4118B2F37F8186FE3929B",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_park.swf",
+                       "relativePath":  "rooms/Hallo15_park.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/0/0f/Hallo15_park.swf",
+                       "bytes":  598859,
+                       "sha256":  "D4808C831DDBDE2D1A030678FAEC98DD0384D4AA4F0DFE09BE9D83BACD0AA361",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_party1.swf",
+                       "relativePath":  "rooms/Hallo15_party1.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/d/d6/Hallo15_party1.swf",
+                       "bytes":  2971971,
+                       "sha256":  "B0970395D6EF6F8A92EB132242A7CAFCEAB0687B78C19E60DE9707507CD0DE1F",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_party2.swf",
+                       "relativePath":  "rooms/Hallo15_party2.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/2/2a/Hallo15_party2.swf",
+                       "bytes":  138276,
+                       "sha256":  "E484482CBB857538B51A8949B7C8EC8C339F785E86767A31543A284EE2942379",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_partysolo1.swf",
+                       "relativePath":  "rooms/Hallo15_partysolo1.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/0/05/Hallo15_partysolo1.swf",
+                       "bytes":  2972018,
+                       "sha256":  "FCA5B3A0547A6E39D80C6959414E0BD4C1E1287C7914DE97EEBE26C866FD65FD",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_pet.swf",
+                       "relativePath":  "rooms/Hallo15_pet.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/83/Hallo15_pet.swf",
+                       "bytes":  469773,
+                       "sha256":  "61213A192C41514FA5E6E029D7480FB3630F4DF29071CBF305CC2B947914C909",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_pizza.swf",
+                       "relativePath":  "rooms/Hallo15_pizza.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/c/c5/Hallo15_pizza.swf",
+                       "bytes":  278728,
+                       "sha256":  "2D087EC6A99F72FF859D2D16F9288E63E6925CD72363669AA7AC0B9C127A380A",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_plaza.swf",
+                       "relativePath":  "rooms/Hallo15_plaza.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/7a/Hallo15_plaza.swf",
+                       "bytes":  1251656,
+                       "sha256":  "B64BCE96E8D99EE3817FF6261537CEF9D404FE2B226F205049932477B5F8B2AD",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_pufflewild.swf",
+                       "relativePath":  "rooms/Hallo15_pufflewild.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/8b/Hallo15_pufflewild.swf",
+                       "bytes":  507985,
+                       "sha256":  "919E43219A09D9819EE158DF8B48E683EBA3B29109E591FFC8F8868F0B2A1B90",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_rink.swf",
+                       "relativePath":  "rooms/Hallo15_rink.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/3/36/Hallo15_rink.swf",
+                       "bytes":  321991,
+                       "sha256":  "AFE20188A43EC08AA4F57FAC8A625170D23FCD69949B82C43F9EE4B17AF52207",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_school.swf",
+                       "relativePath":  "rooms/Hallo15_school.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/76/Hallo15_school.swf",
+                       "bytes":  350182,
+                       "sha256":  "F168C3011AB7050E9426102867C380D2AE3588F94FE1485431F8191CD7F0BB4A",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_shack.swf",
+                       "relativePath":  "rooms/Hallo15_shack.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/75/Hallo15_shack.swf",
+                       "bytes":  977852,
+                       "sha256":  "9540A95FBF81BD6FCD9CF58D8B5BFB176FF399D00AC8B7830A8B4D9CBD41670E",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_shop.swf",
+                       "relativePath":  "rooms/Hallo15_shop.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/5/5f/Hallo15_shop.swf",
+                       "bytes":  424714,
+                       "sha256":  "D3517003CD2AB2AC7E5CCB19CEEE60417164ABBD79FFF68DF60BB5CA141D6844",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_skatepark.swf",
+                       "relativePath":  "rooms/Hallo15_skatepark.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/77/Hallo15_skatepark.swf",
+                       "bytes":  378005,
+                       "sha256":  "5DDB591F53D7A883428AD07AFE9968C0A58485225C4AFEFCC35C7CC6627736F8",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_village.swf",
+                       "relativePath":  "rooms/Hallo15_village.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/3/31/Hallo15_village.swf",
+                       "bytes":  1158263,
+                       "sha256":  "D03B9529F32DB179AB07201C6525C2456A1178DBD2F64AA7E0CCEA7BDF7532A2",
+                       "required":  true
+                   },
+                   {
+                       "category":  "membership",
+                       "name":  "MembershipParty1-HalloweenParty2015.swf",
+                       "relativePath":  "membership/MembershipParty1-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/5/57/MembershipParty1-HalloweenParty2015.swf",
+                       "bytes":  1556476,
+                       "sha256":  "23AEFC3C14278DDAB01B38AC7404677A0158D07FF980C6B762E3DFC14253F87C",
+                       "required":  true
+                   },
+                   {
+                       "category":  "membership",
+                       "name":  "MembershipParty2-HalloweenParty2015.swf",
+                       "relativePath":  "membership/MembershipParty2-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/4/47/MembershipParty2-HalloweenParty2015.swf",
+                       "bytes":  209004,
+                       "sha256":  "BEF16062214A07FAAFB86680AA87FF0EB1BCA3BFD426814FA99F66E3D50C64DF",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1031.swf",
+                       "relativePath":  "music/Music1031.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/f/f7/Music1031.swf",
+                       "bytes":  592041,
+                       "sha256":  "80A27F8F94224819FE8C679A21CD1662AAED4BEE7712D31B129B032D289731B6",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1032.swf",
+                       "relativePath":  "music/Music1032.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/4/46/Music1032.swf",
+                       "bytes":  567101,
+                       "sha256":  "F602ACBE0640CDFDF3DC2462611E53B4A9D1320B68E142D9CDC162754889A431",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1033.swf",
+                       "relativePath":  "music/Music1033.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/f/fa/Music1033.swf",
+                       "bytes":  642945,
+                       "sha256":  "894FF42523CBCDDCAA13A7A1B5474FE477F55D2A1CB3804882B1AC81D6486207",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1034.swf",
+                       "relativePath":  "music/Music1034.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/9/96/Music1034.swf",
+                       "bytes":  1110457,
+                       "sha256":  "3B6ACCA38CE4B0CF5793595B8B2FC180A99BB66A10908A03B2E45BBFB46D4276",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1035.swf",
+                       "relativePath":  "music/Music1035.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/e/e1/Music1035.swf",
+                       "bytes":  521776,
+                       "sha256":  "F6A86F44DBFBCD750DA43527AF1E16A4F90BDDFBFE6BD3F898381A27BCAAFD94",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1036.swf",
+                       "relativePath":  "music/Music1036.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/b/bc/Music1036.swf",
+                       "bytes":  903450,
+                       "sha256":  "AA5A0FB341C5B53450A7F0F3D8CDBC8D5B6D4C7207FC364A382391CC0A7D3180",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1037.swf",
+                       "relativePath":  "music/Music1037.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/b/b5/Music1037.swf",
+                       "bytes":  605725,
+                       "sha256":  "2334C2F60926B236F3ED776DA9759DEC5E8B2808D6DB10B4A7839E362D85F287",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1038.swf",
+                       "relativePath":  "music/Music1038.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/2/24/Music1038.swf",
+                       "bytes":  592812,
+                       "sha256":  "13D5F5A092AAFE6D283B16515FBF050086BEE80B510B63E994F30198275545BF",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1039.swf",
+                       "relativePath":  "music/Music1039.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/4/45/Music1039.swf",
+                       "bytes":  705445,
+                       "sha256":  "EB6BE5038D888796875418A47DE9235CA2E1468337900D675E9758527EB4E686",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1040.swf",
+                       "relativePath":  "music/Music1040.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/1/16/Music1040.swf",
+                       "bytes":  466873,
+                       "sha256":  "353BD320B0C253054D37EB4182D446411A665D950904D0173321452BADCEFD15",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1041.swf",
+                       "relativePath":  "music/Music1041.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/81/Music1041.swf",
+                       "bytes":  392210,
+                       "sha256":  "2EEDD58452EE31FB4A0AC739657E9811F6053E5C567C6BDDA967FE7016B18329",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1042.swf",
+                       "relativePath":  "music/Music1042.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/f/fc/Music1042.swf",
+                       "bytes":  370547,
+                       "sha256":  "1CE05419790AD75F8EB5FE9C449F49A18CB8A84BA2F319A11FB12EF276815015",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1043.swf",
+                       "relativePath":  "music/Music1043.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/5/54/Music1043.swf",
+                       "bytes":  306865,
+                       "sha256":  "0B97FC10977DC7A6D2DF0AEEB18410763D283A340B76E8497E96B2A896DE00E9",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1044.swf",
+                       "relativePath":  "music/Music1044.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/3/38/Music1044.swf",
+                       "bytes":  422248,
+                       "sha256":  "94529449CBFD710FCA47376DF715B6EA9BEFA058ECB1BCE17C59EF3CB65CF167",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1045.swf",
+                       "relativePath":  "music/Music1045.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/b/b4/Music1045.swf",
+                       "bytes":  408285,
+                       "sha256":  "343277C37AC31AB05CA2679E23D8AB70212D26960DEB95F7BED49651506AED06",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1046.swf",
+                       "relativePath":  "music/Music1046.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/3/3b/Music1046.swf",
+                       "bytes":  378301,
+                       "sha256":  "DE70B5408829E8D19D8F8268C85E49B6B31A2972EC59A1DD415A67FA956238FC",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1047.swf",
+                       "relativePath":  "music/Music1047.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/3/3f/Music1047.swf",
+                       "bytes":  501236,
+                       "sha256":  "1D9B7162445B94F45949C6EE1E6CB16658BFCB9FED5C6C69428459ED9BB3C0E6",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1048.swf",
+                       "relativePath":  "music/Music1048.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/9/9d/Music1048.swf",
+                       "bytes":  371480,
+                       "sha256":  "8507F00593F44CA17206341F1D67994C4A7DAC1DB8ABC4FD6AD347F4A608D7E2",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1049.swf",
+                       "relativePath":  "music/Music1049.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/3/3c/Music1049.swf",
+                       "bytes":  777755,
+                       "sha256":  "97B635B34FB831EC01BB9C75AF964CC27AA4977CB1C255A1B464A38FB2BDDACA",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1050.swf",
+                       "relativePath":  "music/Music1050.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/6/6c/Music1050.swf",
+                       "bytes":  817860,
+                       "sha256":  "0CCB7A1462C3A8BE69579396C64F094D1293C81BD07CE3F828E6176CC145B845",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1051.swf",
+                       "relativePath":  "music/Music1051.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/2/29/Music1051.swf",
+                       "bytes":  521873,
+                       "sha256":  "D209F716761E6F4AA4EE9FCD06E04472F1A8FC6E8EDD42B0847D4C1A957663FF",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1052.swf",
+                       "relativePath":  "music/Music1052.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/9/97/Music1052.swf",
+                       "bytes":  757195,
+                       "sha256":  "18D1F1049F551A129DAB3AF884063783ABA96163720ADAB70D4A59F18F0A4732",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1053.swf",
+                       "relativePath":  "music/Music1053.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/84/Music1053.swf",
+                       "bytes":  410715,
+                       "sha256":  "4D93FF7250CBBA0088FA3770BB03C3EF8F95257748C64C8635EDD58174071E4C",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1054.swf",
+                       "relativePath":  "music/Music1054.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/c/c8/Music1054.swf",
+                       "bytes":  315105,
+                       "sha256":  "26B63C6A5496A3F38DD6516E59F7EFF1F9874A3FE40E5BABB020059132BD2979",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1055.swf",
+                       "relativePath":  "music/Music1055.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/e/ea/Music1055.swf",
+                       "bytes":  566480,
+                       "sha256":  "5DE845268030677FCD2454D19ACAC08EF102998434287EF17D55E65F16DC6205",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1056.swf",
+                       "relativePath":  "music/Music1056.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/9/93/Music1056.swf",
+                       "bytes":  760929,
+                       "sha256":  "3EB76624CEF1FCE2465CA712075ECC719112C2D18CA28BE8FAEE9561FA4B7416",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1057.swf",
+                       "relativePath":  "music/Music1057.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/e/e1/Music1057.swf",
+                       "bytes":  679458,
+                       "sha256":  "5E34FC288E43B99BEC210458D47156482D076B205692F31D49EDD6ED387D0EAB",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1058.swf",
+                       "relativePath":  "music/Music1058.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/5/57/Music1058.swf",
+                       "bytes":  586326,
+                       "sha256":  "023B54A02B1BCC59B2BD81D350039CF4949F6290D7430E95E4F495F54BCD81AA",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music1067.swf",
+                       "relativePath":  "music/Music1067.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/f/fb/Music1067.swf",
+                       "bytes":  713406,
+                       "sha256":  "3DD6E62E5C823AFDEA262D516565AD7A18BA5D92A5DF0B1D20D8CCA875296254",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music345.swf",
+                       "relativePath":  "music/Music345.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/a/af/Music345.swf",
+                       "bytes":  284775,
+                       "sha256":  "47B781E3D1BCC6D75D7214B691E2CA524289A95BA27C8B56E6E094CFF5FC6476",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music403.swf",
+                       "relativePath":  "music/Music403.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/1/16/Music403.swf",
+                       "bytes":  334875,
+                       "sha256":  "87ACE18829A52BF85CB38A80DCD67BCE5AA6280DB5D468AD477AFC480DC53053",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music532.swf",
+                       "relativePath":  "music/Music532.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/d/d2/Music532.swf",
+                       "bytes":  660958,
+                       "sha256":  "21B62630A09C4D35551B2B516438319BA39E049CBD90CF03CDBC4FA455287513",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music588.swf",
+                       "relativePath":  "music/Music588.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/e/e4/Music588.swf",
+                       "bytes":  357696,
+                       "sha256":  "5D94160B4C967D824354AA7A01DA68582294E0C99F3083B7D4A0B25529C195B9",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music659.swf",
+                       "relativePath":  "music/Music659.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/5/5e/Music659.swf",
+                       "bytes":  945757,
+                       "sha256":  "3FC813A6BD16CC9D11840AC41E9C00CF266FE5D2B8B77BD10280EE33B0B3ABE4",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music669.swf",
+                       "relativePath":  "music/Music669.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/80/Music669.swf",
+                       "bytes":  398202,
+                       "sha256":  "3A5AC528D01B5692EBB8B322C64D475F067670B31CED63935C17D4E664C4DCE7",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music838.swf",
+                       "relativePath":  "music/Music838.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/e/e9/Music838.swf",
+                       "bytes":  737933,
+                       "sha256":  "D6120003B35C02A2C010EEEBD21250643CF4560803820C0B73F06CFB1194224C",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music884.swf",
+                       "relativePath":  "music/Music884.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/3/32/Music884.swf",
+                       "bytes":  790100,
+                       "sha256":  "4B78E24A107A5BD47D8AE95E2F4D8199B82134EA23B0378BDCB69602D2C13430",
+                       "required":  true
+                   },
+                   {
+                       "category":  "music",
+                       "name":  "Music922.swf",
+                       "relativePath":  "music/Music922.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/d/d4/Music922.swf",
+                       "bytes":  417365,
+                       "sha256":  "570DCDCB289796116F9A90D0357CA9EAC629FB59D8461C79561592915006FBD4",
+                       "required":  true
+                   },
+                   {
+                       "category":  "avatar",
+                       "name":  "PenguinRobot.swf",
+                       "relativePath":  "avatar/PenguinRobot.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/77/PenguinRobot.swf",
+                       "bytes":  967722,
+                       "sha256":  "CAF87FEE04C97B903BD7564F5175340EE015DCA4F97C18835FFDE0D34939903D",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "RoomsTown-HalloweenParty2015.swf",
+                       "relativePath":  "rooms/RoomsTown-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/89/RoomsTown-HalloweenParty2015.swf",
+                       "bytes":  279675,
+                       "sha256":  "9101E280EF5E0A7007290EE752F26A3D987CDDF78179D5BFBDDFD9163364CCF3",
+                       "required":  true
+                   },
+                   {
+                       "category":  "other",
+                       "name":  "Telescope-HalloweenParty2015.swf",
+                       "relativePath":  "other/Telescope-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/80/Telescope-HalloweenParty2015.swf",
+                       "bytes":  7121,
+                       "sha256":  "C4B1E7B0794CAA70086FE22770B76419D1075CDF6FB10F41F5BE8922362C3BC7",
+                       "required":  true
+                   }
+               ]
+}
