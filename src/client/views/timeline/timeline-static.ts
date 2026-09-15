@@ -54,15 +54,23 @@ function setSelectElements(month: number, year: number) {
   yearElement.value = String(year);
 }
 
-/** Keep the year picker in lockstep with the actual timeline data. */
+/** Keep configured years visible while allowing future timeline data to extend the range. */
 function syncYearOptions(days: DateInfo[]) {
-  const years = Array.from(new Set(days.map((day) => day.year)))
-    .filter((year) => year > 0)
-    .sort((a, b) => a - b);
+  const configuredYears = Array.from(yearElement.options)
+    .map((option) => Number(option.value || option.text))
+    .filter((year) => Number.isFinite(year) && year > 0);
+  const payloadYears = days
+    .map((day) => day.year)
+    .filter((year) => Number.isFinite(year) && year > 0);
+  const allYears = [...configuredYears, ...payloadYears];
 
-  if (years.length === 0) {
+  if (allYears.length === 0) {
     throw new Error('Timeline contains no selectable years');
   }
+
+  const minYear = Math.min(...allYears);
+  const maxYear = Math.max(...allYears);
+  const years = Array.from({ length: maxYear - minYear + 1 }, (_, index) => minYear + index);
 
   yearElement.innerHTML = years
     .map((year) => `<option value="${year}">${year}</option>`)
@@ -254,7 +262,12 @@ function createCalendar(
   // to also have every day in between those
   const daysToUse: DateInfo[] = [];
 
-  const endDate = getDateFromDateInfo(days[days.length - 1]);
+  const payloadEndDate = getDateFromDateInfo(days[days.length - 1]);
+  const selectableYears = Array.from(yearElement.options)
+    .map((option) => Number(option.value || option.text))
+    .filter((year) => Number.isFinite(year) && year > 0);
+  const lastSelectableYear = Math.max(...selectableYears, payloadEndDate.getFullYear());
+  const endDate = new Date(lastSelectableYear, 11, 31);
   endDate.setDate(endDate.getDate() + 1);
   // iterating through every day between start and end
 
