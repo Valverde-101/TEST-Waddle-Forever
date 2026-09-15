@@ -56,6 +56,42 @@ function Resolve-PathAgainst {
   return [IO.Path]::GetFullPath((Join-Path $Base $Path))
 }
 
+function Stop-OtherWaddleClients {
+  param([Parameter(Mandatory)][string]$Root)
+
+  $managedRoots = @(
+    ([IO.Path]::GetFullPath((Join-Path $Root 'Repositories\TEST-Waddle-Forever')).TrimEnd('\') + '\'),
+    ([IO.Path]::GetFullPath((Join-Path $Root 'Previews\Waddle-Forever')).TrimEnd('\') + '\'),
+    ([IO.Path]::GetFullPath((Join-Path $Root 'Certification\Waddle-Forever')).TrimEnd('\') + '\')
+  )
+  $killed = New-Object System.Collections.Generic.List[int]
+
+  foreach ($candidate in @(Get-CimInstance Win32_Process -Filter "Name='electron.exe'" -ErrorAction SilentlyContinue)) {
+    $cmd = [string]$candidate.CommandLine
+    if ([string]::IsNullOrWhiteSpace($cmd) -or $cmd -notmatch '[\\/]compiled[\\/]client[\\/]main\.js') { continue }
+
+    $belongsToWaddle = $false
+    foreach ($rootPrefix in $managedRoots) {
+      if ($cmd.IndexOf($rootPrefix,[StringComparison]::OrdinalIgnoreCase) -ge 0) {
+        $belongsToWaddle = $true
+        break
+      }
+    }
+    if (-not $belongsToWaddle) { continue }
+
+    $processId = [int]$candidate.ProcessId
+    & taskkill.exe /PID $processId /T /F | Out-Null
+    $code = $LASTEXITCODE
+    $global:LASTEXITCODE = 0
+    if ($code -ne 0 -and (Get-Process -Id $processId -ErrorAction SilentlyContinue)) {
+      throw "WADDLE_CERTIFIED_PREVIEW=FAIL exclusive_stop pid=$processId exit=$code"
+    }
+    $killed.Add($processId)
+  }
+
+  Write-Host "WADDLE_CERTIFIED_PREVIEW_EXCLUSIVE=PASS killed=$($killed.Count) pids=$($killed -join ',') scope=managed_waddle_only"
+}
+
 $module = Join-Path $AndroidBuildRoot 'Core\Current\AndroidBuild.psd1'
 if (-not (Test-Path -LiteralPath $module -PathType Leaf)) {
   throw "WADDLE_CERTIFIED_PREVIEW=FAIL core_missing=$module"
@@ -173,6 +209,11 @@ if (-not [string]::IsNullOrWhiteSpace($previewDirty)) { throw "WADDLE_CERTIFIED_
 
 Assert-CanonicalUnchanged -Repo $source -Before $canonicalBefore
 
+# The interactive preview is authoritative for this project. Remove only other
+# verified Waddle Forever Electron clients under AndroidBuild-managed roots so a
+# stale canonical checkout cannot remain visible while the certified preview runs.
+Stop-OtherWaddleClients -Root $AndroidBuildRoot
+
 $startScript = Join-Path $previewRoot '.github\scripts\waddle-start.ps1'
 if (-not (Test-Path -LiteralPath $startScript -PathType Leaf)) {
   throw "WADDLE_CERTIFIED_PREVIEW=FAIL start_script_missing=$startScript"
@@ -212,8 +253,9 @@ $state = [ordered]@{
   preview_head=$previewHead
   runtime_pid=[int]$runtimeState.pid
   runtime_status='RUNNING'
+  exclusive_runtime=$true
   activated_utc=[DateTime]::UtcNow.ToString('o')
 }
 $statePath = Join-Path $stateRoot ("$safeTarget.json")
 $state | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $statePath -Encoding UTF8
-Write-Host "VALIDATED_SOURCE_SYNC=PASS mode=isolated_certified_preview branch=$TargetBranch sha=$expected preview=$previewRoot canonical_branch=$($canonicalBefore.branch) canonical_head=$($canonicalBefore.head) canonical_preserved=true pid=$($runtimeState.pid)"
+Write-Host "VALIDATED_SOURCE_SYNC=PASS mode=isolated_certified_preview branch=$TargetBranch sha=$expected preview=$previewRoot canonical_branch=$($canonicalBefore.branch) canonical_head=$($canonicalBefore.head) canonical_preserved=true exclusive_runtime=true pid=$($runtimeState.pid)"
