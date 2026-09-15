@@ -42,19 +42,28 @@ function Invoke-Dump([string]$FFDec,[string]$Swf,[string]$Out,[string]$Err) {
     throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_timeout swf=$Swf"
   }
   $proc.Refresh()
-  if ($proc.ExitCode -ne 0) {
+  $exitText = [string]$proc.ExitCode
+  if (-not [string]::IsNullOrWhiteSpace($exitText) -and [int]$exitText -ne 0) {
     $message = if (Test-Path -LiteralPath $Err) { (Get-Content -LiteralPath $Err -Raw -ErrorAction SilentlyContinue) } else { '' }
-    throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_exit=$($proc.ExitCode) swf=$Swf error=$message"
+    throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_exit=$exitText swf=$Swf error=$message"
   }
   if (-not (Test-Path -LiteralPath $Out -PathType Leaf) -or (Get-Item -LiteralPath $Out).Length -eq 0) {
-    throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_empty swf=$Swf"
+    $message = if (Test-Path -LiteralPath $Err) { (Get-Content -LiteralPath $Err -Raw -ErrorAction SilentlyContinue) } else { '' }
+    throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_empty swf=$Swf error=$message"
   }
 }
 
 $repo = (Resolve-Path -LiteralPath $RepoRoot).Path
-$canonical = (Resolve-Path -LiteralPath $CanonicalRoot).Path
-$partyRoot = Join-Path $canonical 'media\default\party2015'
-if (-not (Test-Path -LiteralPath $partyRoot -PathType Container)) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL party_root_missing=$partyRoot" }
+$repoPartyRoot = Join-Path $repo 'media\default\party2015'
+$partyRoot = $null
+if (Test-Path -LiteralPath $repoPartyRoot -PathType Container) {
+  $partyRoot = $repoPartyRoot
+} elseif ($CanonicalRoot -and (Test-Path -LiteralPath $CanonicalRoot -PathType Container)) {
+  $canonical = (Resolve-Path -LiteralPath $CanonicalRoot).Path
+  $candidate = Join-Path $canonical 'media\default\party2015'
+  if (Test-Path -LiteralPath $candidate -PathType Container) { $partyRoot = $candidate }
+}
+if (-not $partyRoot) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL party_root_missing repo=$repo canonical=$CanonicalRoot" }
 $ffdec = Resolve-FFDec $FFDecPath
 
 $targets = @(
@@ -137,11 +146,12 @@ $summary = [ordered]@{
   party = 'Halloween Party 2015'
   targetCount = $targets.Count
   ffdec = $ffdec
+  partyRoot = $partyRoot
   pairs = @($pairSet | Sort-Object)
   tokens = @($tokenSet | Sort-Object)
   files = $reports
 }
 $summaryPath = Join-Path $work 'summary.json'
 $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryPath -Encoding UTF8
-Write-Host "WADDLE_PARTY2015_PROTOCOL=PASS targets=$($targets.Count) pairs=$(@($pairSet).Count) tokens=$(@($tokenSet).Count) summary=$summaryPath"
+Write-Host "WADDLE_PARTY2015_PROTOCOL=PASS targets=$($targets.Count) pairs=$(@($pairSet).Count) tokens=$(@($tokenSet).Count) party_root=$partyRoot summary=$summaryPath"
 foreach ($pair in @($pairSet | Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_PAIR_ALL=$pair" }
