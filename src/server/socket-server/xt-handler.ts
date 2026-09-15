@@ -221,7 +221,7 @@ export class XtHandler {
       const emptyArrayFraming = Array.isArray(signature) && signature.length === 0 && args.length === 1 && args[0] === '';
       const argsForParsing = emptyArrayFraming ? [] : args;
       const parsedArgs = parseArgs(argsForParsing, signature);
-      const compatibility = parsedArgs === null ? getXtCompatibilityRule(name, args.length) : undefined;
+      const compatibility = parsedArgs === null ? getXtCompatibilityRule(name, args) : undefined;
       if (parsedArgs === null && compatibility === undefined) {
         logverbose(getRedString('incorrect type signature: ' + name));
         publishWaddleLiveTrace({
