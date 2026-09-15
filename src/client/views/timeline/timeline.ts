@@ -97,6 +97,9 @@ function getTimeline(): Day[] {
   let daysOfFunStartDate = '';
 
   UPDATES.forEach(update => {
+    if (update.update.indexHtml !== undefined || update.update.websiteFolder !== undefined) {
+      addEvent(map, update.date, 'A new client version is available', 'other');
+    }
     if (update.update.gameRelease !== undefined) {
 
       addEvent(map, update.date, `${update.update.gameRelease} releases`, 'game');

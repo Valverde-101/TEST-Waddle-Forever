@@ -16,7 +16,7 @@ const MONTHS = [
 ];
 
 function getFullDate({ day, month, year }: { day: number, month: number, year?: number }, useYear: boolean = false) {
-  const yearStr = (year === undefined && useYear) ? '' : `, ${year}`;
+  const yearStr = useYear && year !== undefined ? `, ${year}` : '';
   return `${MONTHS[month - 1]} ${day}` + yearStr;
 }
 
@@ -52,6 +52,30 @@ const monthElement = document.getElementById('month')! as HTMLSelectElement;
 function setSelectElements(month: number, year: number) {
   monthElement.value = MONTHS[month - 1];
   yearElement.value = String(year);
+}
+
+/** Keep configured years visible while allowing future timeline data to extend the range. */
+function syncYearOptions(days: DateInfo[]) {
+  const configuredYears = Array.from(yearElement.options)
+    .map((option) => Number(option.value || option.text))
+    .filter((year) => Number.isFinite(year) && year > 0);
+  const payloadYears = days
+    .map((day) => day.year)
+    .filter((year) => Number.isFinite(year) && year > 0);
+  const allYears = [...configuredYears, ...payloadYears];
+
+  if (allYears.length === 0) {
+    throw new Error('Timeline contains no selectable years');
+  }
+
+  const minYear = Math.min(...allYears);
+  const maxYear = Math.max(...allYears);
+  const years = Array.from({ length: maxYear - minYear + 1 }, (_, index) => minYear + index);
+
+  yearElement.innerHTML = years
+    .map((year) => `<option value="${year}">${year}</option>`)
+    .join('');
+  yearElement.dataset.timelineYears = years.join(',');
 }
 
 type DateEvent = {
@@ -238,7 +262,13 @@ function createCalendar(
   // to also have every day in between those
   const daysToUse: DateInfo[] = [];
 
-  const endDate = new Date(2013, 0, 1);
+  const payloadEndDate = getDateFromDateInfo(days[days.length - 1]);
+  const selectableYears = Array.from(yearElement.options)
+    .map((option) => Number(option.value || option.text))
+    .filter((year) => Number.isFinite(year) && year > 0);
+  const lastSelectableYear = Math.max(...selectableYears, payloadEndDate.getFullYear());
+  const endDate = new Date(lastSelectableYear, 11, 31);
+  endDate.setDate(endDate.getDate() + 1);
   // iterating through every day between start and end
 
   let partyCount = 0;
@@ -410,7 +440,7 @@ function createCalendar(
           if (month.getBoundingClientRect().top > 0) {
             const year = month.dataset.year;
             const monthNumber = month.dataset.month;
-            if (year !== undefined && month !== undefined)
+            if (year !== undefined && monthNumber !== undefined)
             {
               setSelectElements(Number(monthNumber), Number (year));
             }
@@ -467,16 +497,7 @@ function createCalendar(
   yearElement.onchange = () => createCalendar(days, CalendarScrollAction.ScrollToMonth);
   monthElement.onchange = () => createCalendar(days, CalendarScrollAction.ScrollToMonth);
 
-  const as3Footer = document.getElementById('as3-footer')!;
-  as3Footer.innerHTML = `
-    <button>
-      Click here to play in a 2016/2017 version (still in development)
-    </button>
-  `;
 
-  as3Footer.onclick = (e) => {
-    updateVersion('2016-01-01');
-  }
 }
 
 function updateTimeline(days: DateInfo[], scroll: boolean = true) {
@@ -512,7 +533,7 @@ function updateTimeline(days: DateInfo[], scroll: boolean = true) {
   const timelineRows = document.querySelectorAll('.unselected-day');
 
   if (scroll) {
-    const selected = document.querySelectorAll('.selected-day')[0];
+    const selected = document.querySelectorAll('.selected-list-day')[0];
   
     // is undefined if picked a range where nothing is selected
     if (selected === undefined) {
@@ -555,6 +576,7 @@ async function updateVersion(version: string) {
 window.addEventListener('get-timeline', (e: any) => {
   const { days, settings } = e.detail as { days: DateInfo[], settings: any };
   currentVersion = settings.version;
+  syncYearOptions(days);
   const dateInfo = getDateInfo(currentVersion);
   setSelectElements(dateInfo.month, dateInfo.year);
   setSelectedDateText(currentVersion);

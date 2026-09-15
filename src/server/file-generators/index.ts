@@ -27,6 +27,27 @@ import { getWorldAchievementsXml } from "./worldachievements.xml";
 
 export type FileGenerator = (d: GameData, s: SettingsManager) => Buffer | string;
 
+/**
+ * paths.json historically merged timeline `localChanges` but silently ignored
+ * `globalChanges`. Late-AS3 party code resolves most party UI through
+ * SHELL.getPath() against the global table, so an asset could be routable by URL
+ * yet impossible for the client to discover. Merge the generated global paths at
+ * the generator boundary so this works for every modern party, not just Halloween.
+ */
+const getRuntimePathsJson: FileGenerator = (d) => {
+  const paths = JSON.parse(getPathsJson(d)) as {
+    global?: Record<string, string>;
+    [key: string]: unknown;
+  };
+
+  paths.global = {
+    ...(paths.global ?? {}),
+    ...Object.fromEntries(d.getGlobalPaths())
+  };
+
+  return JSON.stringify(paths);
+};
+
 const GET_GENERATORS: Record<string, FileGenerator> = {
   'en/web_service/stamps.json': getStampsJson,
   'play/en/web_service/game_configs/stamps.json': getStampsJson,
@@ -35,7 +56,7 @@ const GET_GENERATORS: Record<string, FileGenerator> = {
   'play/v2/client/dependencies.json': getDependenciesJson,
   'play/v2/content/local/en/crumbs/local_crumbs.swf': getLocalCrumbsSwf,
   'play/en/web_service/game_configs/stage_script_messages.json': getStageScriptMessagesJson,
-  'play/en/web_service/game_configs/paths.json': getPathsJson,
+  'play/en/web_service/game_configs/paths.json': getRuntimePathsJson,
   'play/v2/content/global/crumbs/global_crumbs.swf': getGlobalCrumbsSwf,
   'play/en/web_service/game_configs/games.json': getGamesJson,
   'en/web_service/games.json': getGamesJson,

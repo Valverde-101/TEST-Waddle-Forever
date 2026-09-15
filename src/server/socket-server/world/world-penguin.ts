@@ -1,6 +1,7 @@
 import { getDefaultIgloo, Igloo, Mail, PenguinJson, PlayerPuffle, RainbowPuffleStage, StampbookCover } from "@server/database/database";
 import { MASCOTS } from "@server/game-data/mascots";
 import { CardJitsuFireProgress, CardJitsuProgress } from "@server/game-logic/ninja-progress";
+import { PartyProgressStore } from "@server/game-logic/party-progress";
 import { processVersion } from "@server/routes/versions";
 import { SettingsManager } from "@server/settings";
 
@@ -983,6 +984,7 @@ export class WorldPenguin implements UserPenguin {
   private _ninja: NinjaProfile;
   private _battleOfDoom: BattleOfDoomStatus;
   private _medieval2012: Medieval2012Status;
+  private _partyProgress: PartyProgressStore;
   private _preference: UserPreference;
   private _avatar = new Avatar();
 
@@ -1011,6 +1013,7 @@ export class WorldPenguin implements UserPenguin {
     this._ninja = new NinjaProfile(json);
     this._battleOfDoom = new BattleOfDoomStatus(json);
     this._medieval2012 = new Medieval2012Status(json);
+    this._partyProgress = new PartyProgressStore(json.partyProgress);
     this._preference = new UserPreference(json);
   }
 
@@ -1052,6 +1055,10 @@ export class WorldPenguin implements UserPenguin {
 
   public get medieval2012() {
     return this._medieval2012;
+  }
+
+  public get partyProgress() {
+    return this._partyProgress;
   }
 
   public get igloo() {
@@ -1192,6 +1199,8 @@ export class WorldPenguin implements UserPenguin {
       battleOfDoom: this._battleOfDoom.completed,
 
       medieval2012Message: this._medieval2012.message,
+
+      partyProgress: this._partyProgress.data,
 
       noSave: !this._preference.canSave,
       safeChat: this._preference.isSafeChat

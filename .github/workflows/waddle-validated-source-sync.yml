@@ -23,7 +23,6 @@ jobs:
     env:
       WADDLE_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       GH_READ_TOKEN: ${{ github.token }}
-
     steps:
       - id: gate
         name: Wait for exact-SHA certification success
@@ -47,7 +46,7 @@ jobs:
             } | Sort-Object {[DateTime]$_.created_at} -Descending | Select-Object -First 1)
             if($cert.Count -gt 0){
               $run=$cert[0]
-              Write-Host "VALIDATED_SOURCE_SYNC_GATE=WAIT run_id=$($run.id) event=$($run.event) status=$($run.status) conclusion=$($run.conclusion) sha=$sha"
+              Write-Host "VALIDATED_SOURCE_SYNC_GATE=WAIT run_id=$($run.id) status=$($run.status) conclusion=$($run.conclusion) sha=$sha"
               if($run.status -eq 'completed'){
                 if($run.conclusion -ne 'success'){throw "VALIDATED_SOURCE_SYNC=FAIL certification_run=$($run.id) conclusion=$($run.conclusion) sha=$sha"}
                 "run_id=$($run.id)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
@@ -64,12 +63,12 @@ jobs:
   sync-live:
     needs: wait-certification
     runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
-    timeout-minutes: 8
+    timeout-minutes: 45
     env:
       WADDLE_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       WADDLE_TARGET_BRANCH: ${{ github.head_ref || github.ref_name }}
       WADDLE_CERT_RUN_ID: ${{ needs.wait-certification.outputs.certification_run_id }}
-
+      WADDLE_PREVIEW_BRANCH: feat/halloween-party-2015
     steps:
       - name: Resolve AndroidBuild Core and canonical repository
         shell: powershell
@@ -99,119 +98,89 @@ jobs:
           $repo=Join-Path $root 'Repositories\TEST-Waddle-Forever'
           if(-not(Test-Path -LiteralPath (Join-Path $repo '.git'))){throw "VALIDATED_SOURCE_SYNC=FAIL canonical_repo_missing=$repo"}
           "ANDROIDBUILD_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "WADDLE_LIVE_REPO=$repo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WADDLE_CANONICAL_REPO=$repo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "WADDLE_MANAGED_GIT=$git" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "WADDLE_CORE_VERSION=$coreVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "VALIDATED_SOURCE_SYNC_CORE=PASS root=$root core=$coreVersion git=$git repo=$repo"
+          Write-Host "VALIDATED_SOURCE_SYNC_CORE=PASS root=$root core=$coreVersion git=$git canonical_repo=$repo"
 
-      - name: Skip when live checkout is intentionally on another branch
-        id: branch_guard
+      - id: policy
+        name: Select certified preview policy
         shell: powershell
         run: |
-          $ErrorActionPreference='Stop'
-          $git=$env:WADDLE_MANAGED_GIT
-          $repo=$env:WADDLE_LIVE_REPO
-          $branch=(& $git -c "safe.directory=$repo" -C $repo symbolic-ref --quiet --short HEAD 2>$null | Out-String).Trim()
-          $global:LASTEXITCODE=0
-          if($branch -ne $env:WADDLE_TARGET_BRANCH){
-            "skip=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-            Write-Host "VALIDATED_SOURCE_SYNC=PASS mode=other_branch_active current=$branch target=$env:WADDLE_TARGET_BRANCH mutation=false"
+          $run=($env:WADDLE_TARGET_BRANCH -eq $env:WADDLE_PREVIEW_BRANCH)
+          "run=$($run.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          if($run){
+            Write-Host "VALIDATED_SOURCE_SYNC_POLICY=PASS mode=isolated_preview target=$env:WADDLE_TARGET_BRANCH"
           }else{
-            "skip=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-            Write-Host "VALIDATED_SOURCE_SYNC_BRANCH=PASS branch=$branch"
+            Write-Host "VALIDATED_SOURCE_SYNC=PASS mode=no_live_preview target=$env:WADDLE_TARGET_BRANCH canonical_mutation=false"
           }
 
-      - name: Materialize certified synchronizer without touching live source
-        if: steps.branch_guard.outputs.skip != 'true'
+      - name: Materialize exact-SHA certified preview launcher
+        if: steps.policy.outputs.run == 'true'
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           Set-StrictMode -Version Latest
           $git=$env:WADDLE_MANAGED_GIT
-          $repo=$env:WADDLE_LIVE_REPO
+          $repo=$env:WADDLE_CANONICAL_REPO
           $sha=$env:WADDLE_EXPECTED_SHA.Trim().ToLowerInvariant()
-          & $git -c "safe.directory=$repo" -C $repo fetch --force --no-tags 'https://github.com/${{ github.repository }}.git' $sha
-          if($LASTEXITCODE -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL fetch_certified_script exit=$LASTEXITCODE sha=$sha"}
+          $ref="refs/remotes/waddle-materialize/$($env:WADDLE_TARGET_BRANCH)"
+          $refspec=("+refs/heads/{0}:{1}" -f $env:WADDLE_TARGET_BRANCH,$ref)
+          & $git -c "safe.directory=$repo" -C $repo fetch --force --no-tags 'https://github.com/${{ github.repository }}.git' $refspec
+          if($LASTEXITCODE -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL materialize_fetch branch=$env:WADDLE_TARGET_BRANCH"}
           $global:LASTEXITCODE=0
-          $dir=Join-Path $env:ANDROIDBUILD_ROOT 'Certification\Waddle-SourceSync'
+          $actual=(& $git -c "safe.directory=$repo" -C $repo rev-parse $ref | Out-String).Trim().ToLowerInvariant()
+          if($LASTEXITCODE -ne 0 -or $actual -ne $sha){throw "VALIDATED_SOURCE_SYNC=FAIL materialize_sha expected=$sha actual=$actual"}
+          $global:LASTEXITCODE=0
+          $dir=Join-Path $env:ANDROIDBUILD_ROOT 'Certification\Waddle-Preview'
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
-          $scriptPath=Join-Path $dir ("waddle-source-sync-$sha.ps1")
-          $content=@(& $git -c "safe.directory=$repo" -C $repo show "${sha}:.github/scripts/waddle-source-sync.ps1")
-          if($LASTEXITCODE -ne 0 -or $content.Count -lt 20){throw "VALIDATED_SOURCE_SYNC=FAIL certified_script_unavailable sha=$sha"}
+          $scriptPath=Join-Path $dir ("waddle-certified-preview-$sha.ps1")
+          $content=@(& $git -c "safe.directory=$repo" -C $repo show "${sha}:.github/scripts/waddle-certified-preview.ps1")
+          if($LASTEXITCODE -ne 0 -or $content.Count -lt 40){throw "VALIDATED_SOURCE_SYNC=FAIL preview_launcher_unavailable sha=$sha"}
           $global:LASTEXITCODE=0
           [IO.File]::WriteAllLines($scriptPath,[string[]]$content,(New-Object Text.UTF8Encoding($false)))
-          "WADDLE_CERTIFIED_SYNC_SCRIPT=$scriptPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "VALIDATED_SOURCE_SYNC_SCRIPT=PASS sha=$sha path=$scriptPath live_worktree_mutated=false"
+          "WADDLE_CERTIFIED_PREVIEW_SCRIPT=$scriptPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "VALIDATED_SOURCE_SYNC_SCRIPT=PASS sha=$sha path=$scriptPath canonical_worktree_mutated=false"
 
-      - name: Fast-forward canonical source to certified SHA
-        if: steps.branch_guard.outputs.skip != 'true'
+      - name: Activate isolated exact-SHA certified preview
+        if: steps.policy.outputs.run == 'true'
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           Set-StrictMode -Version Latest
-          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $env:WADDLE_CERTIFIED_SYNC_SCRIPT `
-            -Trigger ci-publish `
-            -RepoRoot $env:WADDLE_LIVE_REPO `
-            -TargetBranch $env:WADDLE_TARGET_BRANCH `
-            -ExpectedSha $env:WADDLE_EXPECTED_SHA `
-            -AndroidBuildRoot $env:ANDROIDBUILD_ROOT `
-            -AllowCiMutation `
-            -RequireCore `
-            -RequireRemote `
-            -InstallHooks
-          $code=$LASTEXITCODE
-          $global:LASTEXITCODE=0
-          if($code -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL synchronizer_exit=$code"}
 
-          Import-Module (Join-Path $env:ANDROIDBUILD_ROOT 'Core\Current\AndroidBuild.psd1') -DisableNameChecking -Force -WarningAction SilentlyContinue
-          $git=[string](Get-AndroidBuildGitPath -AndroidBuildRoot $env:ANDROIDBUILD_ROOT)
-          $repo=$env:WADDLE_LIVE_REPO
-          $actual=(& $git -c "safe.directory=$repo" -C $repo rev-parse HEAD 2>$null | Out-String).Trim().ToLowerInvariant()
-          $branch=(& $git -c "safe.directory=$repo" -C $repo symbolic-ref --quiet --short HEAD 2>$null | Out-String).Trim()
-          $trackedDirty=@(& $git -c "safe.directory=$repo" -C $repo status --porcelain=v1 --untracked-files=no)
-          $untracked=@(& $git -c "safe.directory=$repo" -C $repo ls-files --others --exclude-standard)
-          $global:LASTEXITCODE=0
-          if($actual -ne $env:WADDLE_EXPECTED_SHA.Trim().ToLowerInvariant()){throw "VALIDATED_SOURCE_SYNC=FAIL exact_head expected=$env:WADDLE_EXPECTED_SHA actual=$actual"}
-          if($branch -ne $env:WADDLE_TARGET_BRANCH){throw "VALIDATED_SOURCE_SYNC=FAIL branch expected=$env:WADDLE_TARGET_BRANCH actual=$branch"}
-          if($trackedDirty.Count -gt 0){throw "VALIDATED_SOURCE_SYNC=FAIL tracked_worktree_not_clean count=$($trackedDirty.Count)"}
-
-          $stateDir=Join-Path $repo '.work\state'
-          New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
-          [ordered]@{
-            schema='waddle-validated-source-sync/v2'
-            status='PASS'
-            branch=$branch
-            source_sha=$actual
-            certification_run_id=$env:WADDLE_CERT_RUN_ID
-            sync_run_id=$env:GITHUB_RUN_ID
-            core_version=$env:WADDLE_CORE_VERSION
-            tracked_dirty_count=$trackedDirty.Count
-            untracked_count=$untracked.Count
-            untracked_preserved=$true
-            hard_reset=$false
-            clean=$false
-            local_commits_overwritten=$false
-            local_files_overwritten=$false
-            synchronized_utc=[DateTime]::UtcNow.ToString('o')
-          } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $stateDir 'validated-source-sync.json') -Encoding UTF8
-          Write-Host "VALIDATED_SOURCE_SYNC=PASS branch=$branch sha=$actual certification_run=$env:WADDLE_CERT_RUN_ID core=$env:WADDLE_CORE_VERSION tracked_dirty=0 untracked=$($untracked.Count) untracked_preserved=true hard_reset=false clean=false"
-
-      - name: Diagnose protected live source on failure
-        if: failure()
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Continue'
-          $git=$env:WADDLE_MANAGED_GIT
-          $repo=$env:WADDLE_LIVE_REPO
-          if(-not $git -or -not $repo -or -not(Test-Path -LiteralPath $repo)){Write-Host 'VALIDATED_SOURCE_SYNC_DIAG=SKIP';exit 0}
-          Write-Host '----- LIVE STATUS -----'
-          & $git -c "safe.directory=$repo" -C $repo status -sb
-          Write-Host '----- LIVE RECENT COMMITS -----'
-          & $git -c "safe.directory=$repo" -C $repo log --oneline --decorate -8
-          Write-Host '----- LIVE REMOTES -----'
-          & $git -c "safe.directory=$repo" -C $repo remote -v
-          if($env:WADDLE_TARGET_BRANCH){
-            Write-Host '----- LIVE DIVERGENCE -----'
-            & $git -c "safe.directory=$repo" -C $repo rev-list --left-right --count "androidbuild-source/$env:WADDLE_TARGET_BRANCH...HEAD"
+          # GitHub's self-hosted runner tags descendants with RUNNER_TRACKING_ID and
+          # kills them as orphans at job teardown. Remove that tag only while spawning
+          # the certified preview so Electron survives after CI; restore it immediately
+          # for the runner-owned shell and all subsequent validation commands.
+          $trackingId=$env:RUNNER_TRACKING_ID
+          try {
+            Remove-Item Env:\RUNNER_TRACKING_ID -ErrorAction SilentlyContinue
+            Write-Host 'VALIDATED_SOURCE_SYNC_DETACH=PASS runner_tracking_removed_for_preview=true'
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $env:WADDLE_CERTIFIED_PREVIEW_SCRIPT `
+              -AndroidBuildRoot $env:ANDROIDBUILD_ROOT `
+              -SourceRepoRoot $env:WADDLE_CANONICAL_REPO `
+              -Repository '${{ github.repository }}' `
+              -TargetBranch $env:WADDLE_TARGET_BRANCH `
+              -ExpectedSha $env:WADDLE_EXPECTED_SHA `
+              -CertificationRunId $env:WADDLE_CERT_RUN_ID
+            $code=$LASTEXITCODE
+            $global:LASTEXITCODE=0
+          } finally {
+            if([string]::IsNullOrEmpty($trackingId)){
+              Remove-Item Env:\RUNNER_TRACKING_ID -ErrorAction SilentlyContinue
+            }else{
+              $env:RUNNER_TRACKING_ID=$trackingId
+            }
           }
+          if($code -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL isolated_preview_exit=$code"}
+
+          $safeTarget=[regex]::Replace($env:WADDLE_TARGET_BRANCH,'[^A-Za-z0-9._-]','_')
+          $previewRoot=Join-Path $env:ANDROIDBUILD_ROOT ("Previews\Waddle-Forever\$safeTarget")
+          $verify=Join-Path $previewRoot '.github\scripts\waddle-modern-timeline-verify.ps1'
+          if(-not(Test-Path -LiteralPath $verify -PathType Leaf)){throw "VALIDATED_SOURCE_SYNC=FAIL timeline_verifier_missing=$verify"}
+          # Temporary update end dates are exclusive. Nov 5 means Nov 4 remains playable.
+          & $verify -RepoRoot $previewRoot -RequiredThroughYear 2017 -RequiredDates @('2015-10-21','2015-11-05')
+          if($LASTEXITCODE -ne 0){throw 'VALIDATED_SOURCE_SYNC=FAIL compiled_timeline_verification'}
           $global:LASTEXITCODE=0
+          Write-Host "VALIDATED_SOURCE_SYNC_TIMELINE=PASS preview=$previewRoot picker_through=2017 compiled=true exclusive_party_end=2015-11-05"

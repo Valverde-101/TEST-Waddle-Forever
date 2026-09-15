@@ -96,7 +96,6 @@ class CallbackManager<Ctx extends WorldContext> {
 
     if (this._cooldown !== null) {
       const last = this._timestamps.get(client);
-
       if (last !== undefined && last + this._cooldown > now) {
         const remainingMs = Math.max(0, last + this._cooldown - now);
         console.log('Rate limited');
@@ -211,8 +210,18 @@ export class XtHandler {
       }
 
       const [_, signature, callback] = callbackInfo;
-      const parsedArgs = parseArgs(args, signature);
-      const compatibility = parsedArgs === null ? getXtCompatibilityRule(name, args.length) : undefined;
+
+      // Airtower serializes an empty payload array as a final empty field:
+      //   %xt%s%party#partycookie%<room>%%
+      // Splitting on '%' therefore exposes one empty string even though the
+      // ActionScript caller sent []. Normalize that representation only when the
+      // registered callback explicitly requires zero arguments. This preserves a
+      // legitimate empty string for callbacks that actually declare a string
+      // parameter while making zero-argument modern client requests canonical.
+      const emptyArrayFraming = Array.isArray(signature) && signature.length === 0 && args.length === 1 && args[0] === '';
+      const argsForParsing = emptyArrayFraming ? [] : args;
+      const parsedArgs = parseArgs(argsForParsing, signature);
+      const compatibility = parsedArgs === null ? getXtCompatibilityRule(name, args) : undefined;
       if (parsedArgs === null && compatibility === undefined) {
         logverbose(getRedString('incorrect type signature: ' + name));
         publishWaddleLiveTrace({
@@ -230,7 +239,8 @@ export class XtHandler {
       // Compatibility rules are explicit and read-only. Their extra arguments
       // are version metadata/pagination fields that the legacy Waddle callback
       // does not consume, so dispatch with the canonical parsed argument list.
-      // For normal signatures parsedArgs remains authoritative.
+      // Empty-array framing is handled separately because it is a transport
+      // representation of [] rather than a protocol variant.
       const dispatchArgs = parsedArgs ?? [];
       publishWaddleLiveTrace({
         category: 'XT',
@@ -238,10 +248,12 @@ export class XtHandler {
         source: 'xt-handler',
         action: name,
         direction: 'in',
-        status: compatibility === undefined ? 'handler-dispatched' : 'compatibility-signature',
+        status: emptyArrayFraming ? 'empty-array-framing' : compatibility === undefined ? 'handler-dispatched' : 'compatibility-signature',
         argCount: dispatchArgs.length,
         receivedArgCount: args.length,
-        compatibilityReason: compatibility?.reason
+        compatibilityReason: emptyArrayFraming
+          ? 'Airtower encoded an empty argument array as a trailing empty XT payload field'
+          : compatibility?.reason
       });
       try {
         const result = callback.call(client, context, name, ...dispatchArgs);
@@ -255,7 +267,7 @@ export class XtHandler {
             status: 'handler-complete',
             argCount: dispatchArgs.length,
             receivedArgCount: args.length,
-            compatibility: compatibility !== undefined
+            compatibility: compatibility !== undefined || emptyArrayFraming
           });
         }).catch(error => {
           publishWaddleLiveTrace({

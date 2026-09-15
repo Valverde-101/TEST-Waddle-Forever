@@ -4,6 +4,7 @@ import { Pin, PINS } from "@server/game-data/pins";
 import { FileRef } from "../game-data/files";
 import { GameName } from "../game-data/games";
 import { RoomName } from "../game-data/rooms";
+import { PartyProgressConfig } from "../game-data/party";
 import { getStagePlayMusic, StageName, StageScript } from "../game-data/stage-plays";
 import { StampUpdates } from "../game-data/stamps";
 import { WaddleRoomInfo } from "../game-logic/waddles";
@@ -159,6 +160,11 @@ export type CPUpdate = {
 
   // only EN support currently
   gameStrings?: Record<string, string>;
+  /** Merge-only localization overlay, useful for temporary parties. */
+  gameStringChanges?: Record<string, string>;
+
+  /** Shared modern party-cookie protocol configuration. */
+  partyProgress?: PartyProgressConfig;
 
   globalChanges?: GlobalChanges;
 

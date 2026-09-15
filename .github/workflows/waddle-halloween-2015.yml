@@ -1,0 +1,125 @@
+name: Waddle Halloween Party 2015 Integration
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [dev]
+    paths:
+      - '.github/scripts/waddle-party-runtime.ps1'
+      - '.github/scripts/waddle-party-hardening.ps1'
+      - '.github/scripts/waddle-timeline-modern.ps1'
+      - '.github/scripts/waddle-halloween-2015.ps1'
+      - '.github/scripts/waddle-halloween-2015-source.ps1'
+      - '.github/scripts/waddle-halloween-2015-postfix.ps1'
+      - '.github/scripts/waddle-halloween-2015-verify.ps1'
+      - '.github/scripts/waddle-halloween-2015-protocol.ps1'
+      - '.github/scripts/waddle-halloween-2015-dialogues.ps1'
+      - '.github/scripts/waddle-halloween-2015-versioning.ps1'
+      - '.github/scripts/waddle-halloween-2015-gameplay.ps1'
+      - '.github/scripts/waddle-halloween-2015-data.ps1'
+      - '.github/workflows/waddle-halloween-2015.yml'
+      - '.gitignore'
+      - 'media/default/party2015/**'
+      - 'src/server/updates/2015.ts'
+      - 'src/server/updates/index.ts'
+      - 'src/server/timelines/game-data.ts'
+      - 'src/server/game-data/files.ts'
+      - 'src/server/game-data/rooms.ts'
+      - 'src/server/game-data/party.ts'
+      - 'src/server/game-logic/party-progress.ts'
+      - 'src/server/database/database.ts'
+      - 'src/server/socket-server/world/world-penguin.ts'
+      - 'src/server/socket-server/handlers/party.ts'
+      - 'src/server/socket-server/handlers/puffle.ts'
+      - 'src/server/socket-server/world-handlers.ts'
+      - 'src/client/views/timeline/timeline.ts'
+      - 'src/client/views/timeline/timeline-static.ts'
+      - 'src/client/views/timeline/timeline.html'
+
+permissions:
+  contents: read
+
+env:
+  GIT_CONFIG_COUNT: 1
+  GIT_CONFIG_KEY_0: core.autocrlf
+  GIT_CONFIG_VALUE_0: 'false'
+
+concurrency:
+  group: waddle-halloween-2015-${{ github.event.pull_request.number || 'manual' }}
+  cancel-in-progress: true
+
+jobs:
+  validate-pr-source:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Validate generated source and reusable party runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          ./.github/scripts/waddle-halloween-2015-source.ps1 -RepoRoot $env:GITHUB_WORKSPACE
+          ./.github/scripts/waddle-halloween-2015-postfix.ps1 -RepoRoot $env:GITHUB_WORKSPACE
+          ./.github/scripts/waddle-halloween-2015-versioning.ps1 -RepoRoot $env:GITHUB_WORKSPACE
+          ./.github/scripts/waddle-halloween-2015-gameplay.ps1 -RepoRoot $env:GITHUB_WORKSPACE
+          ./.github/scripts/waddle-timeline-modern.ps1 -RepoRoot $env:GITHUB_WORKSPACE
+          $changes = @(git status --porcelain)
+          if($LASTEXITCODE -ne 0){throw "WADDLE_PARTY2015_SOURCE_GATE=FAIL git_status_exit=$LASTEXITCODE"}
+          if($changes.Count -gt 0){$changes | ForEach-Object { Write-Host $_ }; throw "WADDLE_PARTY2015_SOURCE_GATE=FAIL generated_diff_count=$($changes.Count)"}
+          Write-Host 'WADDLE_PARTY2015_SOURCE_GATE=PASS generated_diff_count=0 architecture=data_driven timeline=data_driven'
+
+  hydrate-publish-and-verify-assets:
+    needs: validate-pr-source
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    permissions:
+      contents: write
+    runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
+    timeout-minutes: 45
+    steps:
+      - name: Enable AndroidBuild managed Git for checkout
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'; $gitDir='V:\AndroidBuild\Tools\Git\cmd'; if(-not(Test-Path -LiteralPath (Join-Path $gitDir 'git.exe') -PathType Leaf)){throw "WADDLE_PARTY2015_GIT=FAIL missing=$gitDir"}; $gitDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          fetch-depth: 0
+      - name: Hydrate complete Halloween Party 2015 archive into canonical media
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'; $canonical='V:\AndroidBuild\Repositories\TEST-Waddle-Forever'; if(-not(Test-Path -LiteralPath (Join-Path $canonical '.git'))){throw "WADDLE_PARTY2015_ASSETS=FAIL expected_canonical_missing=$canonical"}; & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015.ps1') -Mode assets -RepoRoot $canonical
+      - name: Publish canonical SWFs, timeline and reusable party runtime into the PR branch
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $canonical='V:\AndroidBuild\Repositories\TEST-Waddle-Forever'; $source=Join-Path $canonical 'media\default\party2015'; $target=Join-Path $env:GITHUB_WORKSPACE 'media\default\party2015'
+          if(-not(Test-Path -LiteralPath $source -PathType Container)){throw "WADDLE_PARTY2015_PUBLISH=FAIL source_missing=$source"}; if(Test-Path -LiteralPath $target){Remove-Item -LiteralPath $target -Recurse -Force}; New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null; Copy-Item -LiteralPath $source -Destination $target -Recurse -Force
+          & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-versioning.ps1') -RepoRoot $env:GITHUB_WORKSPACE -PatchGenerator
+          & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-source.ps1') -RepoRoot $env:GITHUB_WORKSPACE
+          & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-postfix.ps1') -RepoRoot $env:GITHUB_WORKSPACE
+          & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-gameplay.ps1') -RepoRoot $env:GITHUB_WORKSPACE
+          & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-timeline-modern.ps1') -RepoRoot $env:GITHUB_WORKSPACE
+          $swfs=@(Get-ChildItem -LiteralPath $target -Filter '*.swf' -File -Recurse); if($swfs.Count -ne 132){throw "WADDLE_PARTY2015_PUBLISH=FAIL expected_swfs=132 actual=$($swfs.Count)"}; $tooLarge=@($swfs | Where-Object {$_.Length -ge 100MB}); if($tooLarge.Count -gt 0){throw "WADDLE_PARTY2015_PUBLISH=FAIL github_100mb_limit"}
+          git config user.name 'github-actions[bot]'; git config user.email '41898282+github-actions[bot]@users.noreply.github.com'; git add -- '.gitignore' '.github/scripts/waddle-halloween-2015-source.ps1' 'media/default/party2015' 'src/server/updates/2015.ts' 'src/server/updates/index.ts' 'src/server/timelines/game-data.ts' 'src/server/game-data/files.ts' 'src/server/game-data/rooms.ts' 'src/server/game-data/party.ts' 'src/server/game-logic/party-progress.ts' 'src/server/database/database.ts' 'src/server/socket-server/world/world-penguin.ts' 'src/server/socket-server/handlers/party.ts' 'src/server/socket-server/handlers/puffle.ts' 'src/server/socket-server/world-handlers.ts' 'src/client/views/timeline/timeline.ts' 'src/client/views/timeline/timeline-static.ts' 'src/client/views/timeline/timeline.html'
+          $cachedSwfs=@(git ls-files --cached -- 'media/default/party2015' | Where-Object {$_ -match '(?i)\.swf$'}); if($cachedSwfs.Count -ne 132){throw "WADDLE_PARTY2015_PUBLISH=FAIL cached_swfs=132 actual=$($cachedSwfs.Count)"}
+          $staged=@(git diff --cached --name-only); if($staged.Count -gt 0){git commit -m 'fix(timeline): materialize modern party selection'; $branch='${{ github.event.pull_request.head.ref || github.ref_name }}'; git push origin "HEAD:$branch"}
+      - name: Verify all 132 source routes resolve to versioned valid SWFs
+        shell: powershell
+        run: ./.github/scripts/waddle-halloween-2015-verify.ps1 -RepoRoot $env:GITHUB_WORKSPACE -CanonicalRoot $env:GITHUB_WORKSPACE
+      - name: Derive Halloween 2015 protocol evidence from versioned client SWFs
+        shell: powershell
+        run: ./.github/scripts/waddle-halloween-2015-protocol.ps1 -RepoRoot $env:GITHUB_WORKSPACE -CanonicalRoot $env:GITHUB_WORKSPACE
+      - name: Audit original Halloween 2015 dialogue localization evidence
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          # Missing archived localization is evidence debt, not permission to fabricate strings.
+          # The audit still enumerates every token and writes localization-audit.json.
+          ./.github/scripts/waddle-halloween-2015-dialogues.ps1 -RepoRoot $env:GITHUB_WORKSPACE
+      - name: Verify party media is Git-owned and complete
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'; $party=Join-Path $env:GITHUB_WORKSPACE 'media\default\party2015'; $swfs=@(Get-ChildItem -LiteralPath $party -Filter '*.swf' -File -Recurse); if($swfs.Count -ne 132){throw "WADDLE_PARTY2015_GIT_OWNERSHIP=FAIL expected_swfs=132 actual=$($swfs.Count)"}; $trackedSwfs=@(git ls-files -- 'media/default/party2015' | Where-Object {$_ -match '(?i)\.swf$'}); if($trackedSwfs.Count -ne 132){throw "WADDLE_PARTY2015_GIT_OWNERSHIP=FAIL tracked_swfs=132 actual=$($trackedSwfs.Count)"}; $ignored=@(git check-ignore -- 'media/default/party2015/probe.swf' 2>$null); $global:LASTEXITCODE=0; if($ignored.Count -gt 0){throw 'WADDLE_PARTY2015_GIT_OWNERSHIP=FAIL party2015_is_ignored'}; Write-Host 'WADDLE_PARTY2015_GIT_OWNERSHIP=PASS tracked_swfs=132 ignored=false'
