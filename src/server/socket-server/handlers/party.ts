@@ -107,10 +107,9 @@ const sendCurrentPartyService: PenguinHandler<[]> = async ({ penguin, msg, data 
 };
 
 /**
- * Late-AS3 Party SWFs install their Airtower listeners during boot and expect the
- * server to push activefeatures -> partycookie -> partyservice immediately after
- * j#js. This mirrors the preserved Houdini/CPImagined modern-party contract and
- * avoids making party activation depend on a later UI-initiated cookie request.
+ * Full modern-party bootstrap, matching the preserved Houdini/CPImagined order.
+ * This helper is reusable from the join path when that path is upgraded to push
+ * the whole bootstrap eagerly.
  */
 export const sendModernPartyBootstrap: PenguinHandler<[]> = async (ctx) => {
   const config = ctx.data.getPartyProgress();
@@ -138,8 +137,29 @@ export const sendModernPartyBootstrap: PenguinHandler<[]> = async (ctx) => {
   });
 };
 
+/**
+ * Current late-AS3 clients already request partycookie after activefeatures.
+ * Return the cookie and immediately replay partyservice in the same ordered
+ * handler. This closes the initialization gap even before the generic join path
+ * is converted to the eager three-packet bootstrap.
+ */
 export const handleRetrievePartyCookie: PenguinHandler<[]> = async (ctx) => {
   await sendCurrentPartyCookie(ctx);
+  await sendCurrentPartyService(ctx);
+
+  const config = ctx.data.getPartyProgress();
+  const service = getPartyServiceConfig(config);
+  publishWaddleLiveTrace({
+    category: 'XT',
+    phase: 'handled',
+    source: 'party-bootstrap',
+    action: 'partycookie-partyservice',
+    direction: 'out',
+    status: service === undefined ? 'cookie-only' : 'complete',
+    partyId: config?.id ?? '',
+    activeFeatures: ctx.data.getActiveFeatures() ?? '',
+    hasPartyService: service !== undefined
+  });
 };
 
 export const handlePartyMessageViewed: PenguinHandler<[number]> = async (ctx, messageIndex) => {
