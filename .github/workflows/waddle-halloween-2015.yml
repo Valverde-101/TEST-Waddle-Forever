@@ -2,20 +2,6 @@ name: Waddle Halloween Party 2015 Integration
 
 on:
   workflow_dispatch:
-  push:
-    branches: [feat/halloween-party-2015]
-    paths:
-      - '.github/scripts/waddle-halloween-2015.ps1'
-      - '.github/scripts/waddle-halloween-2015-source.ps1'
-      - '.github/scripts/waddle-halloween-2015-postfix.ps1'
-      - '.github/scripts/waddle-halloween-2015-verify.ps1'
-      - '.github/workflows/waddle-halloween-2015.yml'
-      - '.gitignore'
-      - 'src/server/updates/2015.ts'
-      - 'src/server/game-data/files.ts'
-      - 'src/server/game-data/rooms.ts'
-      - 'src/client/views/timeline/timeline-static.ts'
-      - 'src/client/views/timeline/timeline.html'
   pull_request:
     branches: [dev]
     paths:
@@ -35,7 +21,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: waddle-halloween-2015-${{ github.event.pull_request.number || github.ref_name }}
+  group: waddle-halloween-2015-${{ github.event.pull_request.number || 'manual' }}
   cancel-in-progress: true
 
 jobs:
@@ -88,7 +74,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $ignored = git check-ignore -q -- 'media/default/party2015/probe.swf'
+          git check-ignore -q -- 'media/default/party2015/probe.swf'
           if($LASTEXITCODE -ne 0){throw 'WADDLE_PARTY2015_GIT_OWNERSHIP=FAIL party2015_not_ignored'}
           $global:LASTEXITCODE=0
           Write-Host 'WADDLE_PARTY2015_GIT_OWNERSHIP=PASS canonical_assets_untracked=true'
