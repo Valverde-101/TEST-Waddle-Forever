@@ -14,9 +14,9 @@ function Replace-Once([string]$Text,[string]$Old,[string]$New,[string]$Label) {
   return $Text.Replace($Old,$New)
 }
 
-# The party's Ghost Puffle is a creature subtype with canonical price 0.
-# Generic creature pricing must respect PUFFLES so other event creatures can
-# declare their own price without another handler special case.
+# Creature puffle prices are canonical game data, not party-handler special cases.
+# This makes Ghost Puffle 1022 free because PUFFLES declares cost 0 while the
+# permanent dog/cat/wild creature prices continue to come from the same table.
 $pufflePath = Join-Path $repo 'src/server/socket-server/handlers/puffle.ts'
 $puffle = Read-N $pufflePath
 if (-not $puffle.Contains('category === PuffleCategory.Creature ? puffleInfo.cost')) {
@@ -44,6 +44,9 @@ if (-not $puffle.Contains('category === PuffleCategory.Creature ? puffleInfo.cos
 }
 Write-N $pufflePath $puffle
 
+# Halloween 2015 only declares configuration consumed by the reusable modern
+# party runtime. Future parties can provide a different id/counts without new
+# status classes or packet handlers.
 $updatesPath = Join-Path $repo 'src/server/updates/2015.ts'
 $updates = Read-N $updatesPath
 if (-not $updates.Contains("id: 'halloween-2015'")) {
@@ -59,70 +62,23 @@ if (-not $updates.Contains("id: 'halloween-2015'")) {
 '@.TrimEnd() 'party-progress'
 }
 
-# Party-local strings are merged only while this timeline update is active.
-# The finale text is preserved from the archived game strings; the MascBot
-# quest dialogue follows the leaked 2015 dialogue/screens in their original
-# order. Keeping these here makes localization another party data dependency.
-$dialogueOverlay = @'
-        gameStringChanges: {
-          "w.app.p2015.halloween.login1": "Gadzooks! I fear the robots I created for the 10th Anniversary Party have gone haywire! This is an especially spooky start to Halloween. Could you help me deal with these mad machines?",
-          "w.app.p2015.halloween.login2": "The Gary Bot is menacing the Mine Shack right now!",
-          "w.app.p2015.halloween.gary1": "Scare this robot by showing it its greatest fear: decaf coffee!",
-          "w.app.p2015.halloween.gary2": "Success! That caused a fear overload. Now deactivate it.",
-          "w.app.p2015.halloween.gary3": "Connect the green terminal to the yellow terminal.",
-          "w.app.p2015.halloween.gary4": "Well done! We're safe from that robot, but there are others sneaking around.",
-          "w.app.p2015.halloween.gary5": "Excellent work! The robot has been deactivated. Stay alert for the others.",
-          "w.app.p2015.halloween.AA1": "Oh my! A robot that looks like me is scaring citizens. We have to put an end to this.",
-          "w.app.p2015.halloween.AA2": "There is one thing that should stop it: my terrible spelling. Show this failed spelling test to the robot.",
-          "w.app.p2015.halloween.AA3": "Excellent work! That is one less robot causing trouble.",
-          "w.app.p2015.halloween.rockhopper1": "Avast! That crazy robot thinks it can be me! Head to the Forest, matey.",
-          "w.app.p2015.halloween.rockhopper2": "Scare that robot with a fearsome pink flamingo!",
-          "w.app.p2015.halloween.rockhopper3": "Har har! Well done, matey!",
-          "w.app.p2015.halloween.Djcadence1": "Eeeeee! There's a scary robot in the Ski Village! This is a BIG one!",
-          "w.app.p2015.halloween.Djcadence2": "What scares me... besides evil glitchy robots? Bugs! That's it! Show it some bugs!",
-          "w.app.p2015.halloween.Djcadence3": "Whew! You did it! What a way to end the day on a high note.",
-          "w.app.p2015.halloween.Dot1": "I'm all for disguises, but there's a robot that looks like me at the Cove! We have to shut it down.",
-          "w.app.p2015.halloween.Dot2": "We'll have to find my greatest fear: an ugly sweater. Show one to the robot.",
-          "w.app.p2015.halloween.Dot3": "Good work! That robot was no match for your scare skills!",
-          "w.app.p2015.halloween.Sensei1": "There is a disturbance at the Beach. A mechanical monster wears my clothes, but not my inner calm.",
-          "w.app.p2015.halloween.Sensei2": "We must scare this robot. Threaten the robot's beard with a trimmer.",
-          "w.app.p2015.halloween.Sensei3": "Your beard-trimming skills are impressive! Well done, grasshopper.",
-          "w.app.p2015.halloween.PH1": "Crikey! There's a rogue robot at the Snow Forts. Let's head over there!",
-          "w.app.p2015.halloween.PH2": "That thing must fear whatever scares me. Show it this toy UFO.",
-          "w.app.p2015.halloween.PH3": "Bonza! You took care of that robot no worries!",
-          "w.app.p2015.halloween.Rookie1": "Yikes! Somebody call the EPF! The Rookie Bot is going crazy in the Plaza!",
-          "w.app.p2015.halloween.Rookie2": "Ahhh!! That's scarier than a clown! Wait... that's it! Scare it with clown face paint!",
-          "w.app.p2015.halloween.Rookie3": "A secret lair in the Coffee Shop? Sounds scary. I'll alert the EPF.",
-          "w.app.p2015.halloween.RookieBOT1": "BZZZT! You found my fear. But you'll never find the secret lair in the Coffee Shop! ... Oops! running scared.exe! ShUTTiNG DooOOoown",
-          "w.app.p2015.halloween.finale.HerbertMonologue1": "Look, I've told you before, I didn't bring Herbot back!\n\nI think it was that pesky di-",
-          "w.app.p2015.halloween.finale.HerbertMonologue2": "Ah, a penguin!\nSo, you think you can just take MY inventions and turn them into party props?\nI'll show YOU not to humiliate Herbert P. Bear, Esquire!",
-          "w.app.p2015.halloween.finale.HerBOTReply1": "Making the same mistakes twice, are we?\n\nI really am the superior bear.",
-          "w.app.p2015.halloween.finale.HerbertScared1": "GRRRR...\n\nI knew I shouldn't have taken inspiration from that movie...",
-          "w.app.p2015.halloween.finale.GaryScreen1": "Connection terminated.\n\nI'm sorry to interrupt you Herbert, if you even-",
-          "w.app.p2015.halloween.finale.HerbertReply1": "WHATEVER!\n\nJust get me out of here so I can destroy you with my actual NEW inventions.",
-          "w.app.p2015.halloween.finale.GaryScreen2": "Quick, we can't let Herbot escape! Credit due to Herbert, it seems as if he left the same laser intact that put Herbot out of commission the last time. Blast him with the laser and then short circuit his wires!",
-          "w.app.p2015.halloween.finale.HerbertRunaway1": "MWAHAHAHAHA! You can't stop Klutzy and I!\n\nWe'll take over this whole island! Quick Klutzy, to the Skyberg!",
-          "w.app.p2015.halloween.finale.GaryScreen3": "Excellent work!\nHerbert may have gotten away, but we've hopefully set him back just enough to not spoil the rest of our Halloween fun!"
-        },
-'@
-if (-not $updates.Contains('gameStringChanges: {')) {
-  $anchor = @'
-          maxCoinUpdate: 10
-        },
-        rooms: {
-'@
-  $replacement = "          maxCoinUpdate: 10`n        },`n" + $dialogueOverlay + "        rooms: {`n"
-  $updates = Replace-Once $updates $anchor $replacement 'dialogue-overlay'
+# A previous iteration inserted reconstructed/later-fan game strings and treated
+# them as original 2015 localization. Remove that block. The generic
+# gameStringChanges capability remains available, but this party must only use
+# values backed by an archived 2015 game_strings source.
+$unverifiedOverlay = '(?s)\n        gameStringChanges: \{\n(?:(?!\n        \},).)*w\.app\.p2015\.halloween(?:(?!\n        \},).)*\n        \},'
+if ([regex]::IsMatch($updates,$unverifiedOverlay)) {
+  $updates = [regex]::Replace($updates,$unverifiedOverlay,'',1)
 }
 Write-N $updatesPath $updates
 
 $verifyUpdates = Read-N $updatesPath
 if (-not $verifyUpdates.Contains("id: 'halloween-2015'")) { throw 'WADDLE_HALLOWEEN2015_DATA=FAIL party_progress_missing' }
-if (-not $verifyUpdates.Contains('gameStringChanges: {')) { throw 'WADDLE_HALLOWEEN2015_DATA=FAIL dialogue_overlay_missing' }
-$dialogueKeys = @([regex]::Matches($verifyUpdates,'"w\.app\.p2015\.halloween[^"\r\n]+"') | ForEach-Object { $_.Value } | Sort-Object -Unique)
-if ($dialogueKeys.Count -ne 38) { throw "WADDLE_HALLOWEEN2015_DATA=FAIL expected_dialogue_keys=38 actual=$($dialogueKeys.Count)" }
+if ($verifyUpdates -match 'gameStringChanges:\s*\{(?s:.*?)w\.app\.p2015\.halloween') {
+  throw 'WADDLE_HALLOWEEN2015_DATA=FAIL unverified_halloween_strings_remain'
+}
 if (-not (Read-N $pufflePath).Contains('category === PuffleCategory.Creature ? puffleInfo.cost')) { throw 'WADDLE_HALLOWEEN2015_DATA=FAIL ghost_puffle_price_missing' }
 
 & git -C $repo add -- 'src/server/updates/2015.ts' 'src/server/socket-server/handlers/puffle.ts'
 if ($LASTEXITCODE -ne 0) { throw "WADDLE_HALLOWEEN2015_DATA=FAIL git_add_exit=$LASTEXITCODE" }
-Write-Host 'WADDLE_HALLOWEEN2015_DATA=PASS party=halloween-2015 tasks=10 dialogue_keys=38 ghost_puffle=1022 staged=true'
+Write-Host 'WADDLE_HALLOWEEN2015_DATA=PASS party=halloween-2015 tasks=10 localization=evidence-required ghost_puffle=1022 staged=true'
