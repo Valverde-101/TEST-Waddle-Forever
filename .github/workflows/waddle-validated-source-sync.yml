@@ -63,11 +63,12 @@ jobs:
   sync-live:
     needs: wait-certification
     runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       WADDLE_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       WADDLE_TARGET_BRANCH: ${{ github.head_ref || github.ref_name }}
       WADDLE_CERT_RUN_ID: ${{ needs.wait-certification.outputs.certification_run_id }}
+      WADDLE_PREVIEW_BRANCH: feat/halloween-party-2015
     steps:
       - name: Resolve AndroidBuild Core and canonical repository
         shell: powershell
@@ -97,271 +98,63 @@ jobs:
           $repo=Join-Path $root 'Repositories\TEST-Waddle-Forever'
           if(-not(Test-Path -LiteralPath (Join-Path $repo '.git'))){throw "VALIDATED_SOURCE_SYNC=FAIL canonical_repo_missing=$repo"}
           "ANDROIDBUILD_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "WADDLE_LIVE_REPO=$repo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WADDLE_CANONICAL_REPO=$repo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "WADDLE_MANAGED_GIT=$git" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "WADDLE_CORE_VERSION=$coreVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "VALIDATED_SOURCE_SYNC_CORE=PASS root=$root core=$coreVersion git=$git repo=$repo"
+          Write-Host "VALIDATED_SOURCE_SYNC_CORE=PASS root=$root core=$coreVersion git=$git canonical_repo=$repo"
 
-      - name: Protect or activate certified live preview branch
-        id: branch_guard
+      - id: policy
+        name: Select certified preview policy
         shell: powershell
         run: |
-          $ErrorActionPreference='Stop'
-          Set-StrictMode -Version Latest
-          $git=$env:WADDLE_MANAGED_GIT
-          $repo=$env:WADDLE_LIVE_REPO
-          $target=$env:WADDLE_TARGET_BRANCH
-          $expected=$env:WADDLE_EXPECTED_SHA.Trim().ToLowerInvariant()
-          $branch=(& $git -c "safe.directory=$repo" -C $repo symbolic-ref --quiet --short HEAD 2>$null | Out-String).Trim()
-          $global:LASTEXITCODE=0
-
-          if($branch -eq $target){
-            "skip=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-            "switched=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-            Write-Host "VALIDATED_SOURCE_SYNC_BRANCH=PASS branch=$branch mode=already_active"
-            exit 0
-          }
-          if($target -ne 'feat/halloween-party-2015'){
-            "skip=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-            "switched=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-            Write-Host "VALIDATED_SOURCE_SYNC=PASS mode=other_branch_active current=$branch target=$target mutation=false"
-            exit 0
-          }
-          if([string]::IsNullOrWhiteSpace($branch)){throw 'VALIDATED_SOURCE_SYNC=FAIL preview_switch_detached_live_checkout'}
-
-          $upstream=(& $git -c "safe.directory=$repo" -C $repo rev-parse --abbrev-ref --symbolic-full-name '@{u}' 2>$null | Out-String).Trim()
-          $upstreamExit=$LASTEXITCODE
-          $global:LASTEXITCODE=0
-          if($upstreamExit -ne 0 -or [string]::IsNullOrWhiteSpace($upstream)){throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_current_upstream_missing current=$branch"}
-          $currentRemote=($upstream -split '/',2)[0]
-          & $git -c "safe.directory=$repo" -C $repo fetch --no-tags --prune $currentRemote
-          if($LASTEXITCODE -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_current_fetch current=$branch remote=$currentRemote"}
-          $global:LASTEXITCODE=0
-          $aheadText=(& $git -c "safe.directory=$repo" -C $repo rev-list --count "$upstream..HEAD" | Out-String).Trim()
-          if($LASTEXITCODE -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_current_ahead_probe current=$branch upstream=$upstream"}
-          $global:LASTEXITCODE=0
-          if([int]$aheadText -gt 0){throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_unpublished_commits current=$branch upstream=$upstream ahead=$aheadText"}
-
-          $previewRef="refs/remotes/waddle-preview/$target"
-          $refspec=("+refs/heads/{0}:{1}" -f $target,$previewRef)
-          & $git -c "safe.directory=$repo" -C $repo fetch --force --no-tags 'https://github.com/${{ github.repository }}.git' $refspec
-          if($LASTEXITCODE -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_target_fetch target=$target"}
-          $global:LASTEXITCODE=0
-          $targetSha=(& $git -c "safe.directory=$repo" -C $repo rev-parse $previewRef | Out-String).Trim().ToLowerInvariant()
-          if($LASTEXITCODE -ne 0 -or $targetSha -ne $expected){throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_target_sha expected=$expected actual=$targetSha"}
-          $global:LASTEXITCODE=0
-
-          # Reconcile only content that Git normalizes to the certified target blob.
-          $dirtyPaths=@()
-          foreach($probe in @('diff --name-only --','diff --cached --name-only --')){
-            $parts=$probe -split ' '
-            $text=(& $git -c "safe.directory=$repo" -C $repo @parts | Out-String).Trim()
-            $global:LASTEXITCODE=0
-            if(-not[string]::IsNullOrWhiteSpace($text)){$dirtyPaths += @($text -split "`r?`n")}
-          }
-          $dirtyPaths=@($dirtyPaths | Where-Object {-not[string]::IsNullOrWhiteSpace($_)} | Sort-Object -Unique)
-          $stateDir=Join-Path $repo '.work\state'
-          New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
-          $reconciledTracked=0
-          if($dirtyPaths.Count -gt 0){
-            $backupRoot=Join-Path $stateDir ("live-preview-contamination-" + (Get-Date -Format 'yyyyMMdd-HHmmssfff'))
-            foreach($path in $dirtyPaths){
-              $targetBlob=(& $git -c "safe.directory=$repo" -C $repo rev-parse "$previewRef`:$path" 2>$null | Out-String).Trim().ToLowerInvariant()
-              $targetExit=$LASTEXITCODE
-              $global:LASTEXITCODE=0
-              $workBlob=(& $git -c "safe.directory=$repo" -C $repo hash-object "--path=$path" -- $path 2>$null | Out-String).Trim().ToLowerInvariant()
-              $workExit=$LASTEXITCODE
-              $global:LASTEXITCODE=0
-              if($targetExit -ne 0 -or $workExit -ne 0 -or $targetBlob -ne $workBlob){
-                throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_tracked_dirty current=$branch path=$path target_blob=$targetBlob clean_work_blob=$workBlob"
-              }
-              $sourcePath=Join-Path $repo ($path -replace '/', '\')
-              $backupPath=Join-Path $backupRoot ($path -replace '/', '\')
-              New-Item -ItemType Directory -Force -Path (Split-Path -Parent $backupPath) | Out-Null
-              Copy-Item -LiteralPath $sourcePath -Destination $backupPath -Force
-            }
-            & $git -c "safe.directory=$repo" -C $repo restore --source=HEAD --staged --worktree -- @dirtyPaths
-            if($LASTEXITCODE -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_restore_certified_contamination"}
-            $global:LASTEXITCODE=0
-            $reconciledTracked=$dirtyPaths.Count
-            Write-Host "VALIDATED_SOURCE_SYNC_CONTAMINATION=PASS kind=tracked count=$reconciledTracked backup=$backupRoot identity=certified_target_after_git_filters"
-          }
-
-          # Remove only untracked collisions that normalize byte-for-byte to target-tracked files.
-          $untrackedText=(& $git -c "safe.directory=$repo" -C $repo ls-files --others --exclude-standard | Out-String).Trim()
-          $global:LASTEXITCODE=0
-          $untracked=@()
-          if(-not[string]::IsNullOrWhiteSpace($untrackedText)){$untracked=@($untrackedText -split "`r?`n")}
-          $reconciledUntracked=0
-          foreach($path in $untracked){
-            if([string]::IsNullOrWhiteSpace($path)){continue}
-            $targetBlob=(& $git -c "safe.directory=$repo" -C $repo rev-parse "$previewRef`:$path" 2>$null | Out-String).Trim().ToLowerInvariant()
-            $targetExit=$LASTEXITCODE
-            $global:LASTEXITCODE=0
-            if($targetExit -ne 0 -or [string]::IsNullOrWhiteSpace($targetBlob)){continue}
-            $workBlob=(& $git -c "safe.directory=$repo" -C $repo hash-object "--path=$path" -- $path 2>$null | Out-String).Trim().ToLowerInvariant()
-            $workExit=$LASTEXITCODE
-            $global:LASTEXITCODE=0
-            if($workExit -ne 0 -or $workBlob -ne $targetBlob){throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_untracked_collision path=$path target_blob=$targetBlob clean_work_blob=$workBlob"}
-            Remove-Item -LiteralPath (Join-Path $repo ($path -replace '/', '\')) -Force
-            $reconciledUntracked++
-          }
-          if($reconciledUntracked -gt 0){Write-Host "VALIDATED_SOURCE_SYNC_CONTAMINATION=PASS kind=untracked_collision count=$reconciledUntracked identity=certified_target_after_git_filters"}
-
-          $remainingTracked=@(& $git -c "safe.directory=$repo" -C $repo status --porcelain=v1 --untracked-files=no)
-          $global:LASTEXITCODE=0
-          if($remainingTracked.Count -gt 0){throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_tracked_remaining count=$($remainingTracked.Count)"}
-
-          [ordered]@{
-            schema='waddle-live-preview-branch/v2'
-            previous_branch=$branch
-            previous_upstream=$upstream
-            target_branch=$target
-            target_sha=$targetSha
-            reconciled_tracked=$reconciledTracked
-            reconciled_untracked_collisions=$reconciledUntracked
-            activated_utc=[DateTime]::UtcNow.ToString('o')
-          } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $stateDir 'live-preview-previous-branch.json') -Encoding UTF8
-
-          & $git -c "safe.directory=$repo" -C $repo show-ref --verify --quiet "refs/heads/$target"
-          $localTargetExists=($LASTEXITCODE -eq 0)
-          $global:LASTEXITCODE=0
-          if($localTargetExists){
-            $targetAheadText=(& $git -c "safe.directory=$repo" -C $repo rev-list --count "$previewRef..refs/heads/$target" | Out-String).Trim()
-            if($LASTEXITCODE -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_target_ahead_probe target=$target"}
-            $global:LASTEXITCODE=0
-            if([int]$targetAheadText -gt 0){throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_target_has_local_commits target=$target ahead=$targetAheadText"}
-            & $git -c "safe.directory=$repo" -C $repo checkout $target
-            if($LASTEXITCODE -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_checkout_existing target=$target"}
-            $global:LASTEXITCODE=0
-            & $git -c "safe.directory=$repo" -C $repo merge --ff-only $previewRef
-            if($LASTEXITCODE -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_fast_forward target=$target"}
+          $run=($env:WADDLE_TARGET_BRANCH -eq $env:WADDLE_PREVIEW_BRANCH)
+          "run=$($run.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          if($run){
+            Write-Host "VALIDATED_SOURCE_SYNC_POLICY=PASS mode=isolated_preview target=$env:WADDLE_TARGET_BRANCH"
           }else{
-            & $git -c "safe.directory=$repo" -C $repo checkout -b $target $previewRef
-            if($LASTEXITCODE -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_checkout_new target=$target"}
+            Write-Host "VALIDATED_SOURCE_SYNC=PASS mode=no_live_preview target=$env:WADDLE_TARGET_BRANCH canonical_mutation=false"
           }
-          $global:LASTEXITCODE=0
-          $actualBranch=(& $git -c "safe.directory=$repo" -C $repo symbolic-ref --quiet --short HEAD | Out-String).Trim()
-          $actualSha=(& $git -c "safe.directory=$repo" -C $repo rev-parse HEAD | Out-String).Trim().ToLowerInvariant()
-          $global:LASTEXITCODE=0
-          if($actualBranch -ne $target -or $actualSha -ne $expected){throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_verify branch=$actualBranch sha=$actualSha expected_branch=$target expected_sha=$expected"}
-          "skip=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "switched=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          "previous_branch=$branch" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          Write-Host "VALIDATED_SOURCE_SYNC_PREVIEW=PASS previous=$branch target=$target sha=$actualSha reconciled_tracked=$reconciledTracked reconciled_untracked=$reconciledUntracked unpublished_commits=0 destructive_reset=false clean=false"
 
-      - name: Materialize certified synchronizer without touching live source
-        if: steps.branch_guard.outputs.skip != 'true'
+      - name: Materialize exact-SHA certified preview launcher
+        if: steps.policy.outputs.run == 'true'
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           Set-StrictMode -Version Latest
           $git=$env:WADDLE_MANAGED_GIT
-          $repo=$env:WADDLE_LIVE_REPO
+          $repo=$env:WADDLE_CANONICAL_REPO
           $sha=$env:WADDLE_EXPECTED_SHA.Trim().ToLowerInvariant()
-          & $git -c "safe.directory=$repo" -C $repo fetch --force --no-tags 'https://github.com/${{ github.repository }}.git' $sha
-          if($LASTEXITCODE -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL fetch_certified_script exit=$LASTEXITCODE sha=$sha"}
+          $ref="refs/remotes/waddle-materialize/$($env:WADDLE_TARGET_BRANCH)"
+          $refspec=("+refs/heads/{0}:{1}" -f $env:WADDLE_TARGET_BRANCH,$ref)
+          & $git -c "safe.directory=$repo" -C $repo fetch --force --no-tags 'https://github.com/${{ github.repository }}.git' $refspec
+          if($LASTEXITCODE -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL materialize_fetch branch=$env:WADDLE_TARGET_BRANCH"}
           $global:LASTEXITCODE=0
-          $dir=Join-Path $env:ANDROIDBUILD_ROOT 'Certification\Waddle-SourceSync'
+          $actual=(& $git -c "safe.directory=$repo" -C $repo rev-parse $ref | Out-String).Trim().ToLowerInvariant()
+          if($LASTEXITCODE -ne 0 -or $actual -ne $sha){throw "VALIDATED_SOURCE_SYNC=FAIL materialize_sha expected=$sha actual=$actual"}
+          $global:LASTEXITCODE=0
+          $dir=Join-Path $env:ANDROIDBUILD_ROOT 'Certification\Waddle-Preview'
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
-          $scriptPath=Join-Path $dir ("waddle-source-sync-$sha.ps1")
-          $content=@(& $git -c "safe.directory=$repo" -C $repo show "${sha}:.github/scripts/waddle-source-sync.ps1")
-          if($LASTEXITCODE -ne 0 -or $content.Count -lt 20){throw "VALIDATED_SOURCE_SYNC=FAIL certified_script_unavailable sha=$sha"}
+          $scriptPath=Join-Path $dir ("waddle-certified-preview-$sha.ps1")
+          $content=@(& $git -c "safe.directory=$repo" -C $repo show "${sha}:.github/scripts/waddle-certified-preview.ps1")
+          if($LASTEXITCODE -ne 0 -or $content.Count -lt 40){throw "VALIDATED_SOURCE_SYNC=FAIL preview_launcher_unavailable sha=$sha"}
           $global:LASTEXITCODE=0
           [IO.File]::WriteAllLines($scriptPath,[string[]]$content,(New-Object Text.UTF8Encoding($false)))
-          "WADDLE_CERTIFIED_SYNC_SCRIPT=$scriptPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "VALIDATED_SOURCE_SYNC_SCRIPT=PASS sha=$sha path=$scriptPath live_worktree_mutated=false"
+          "WADDLE_CERTIFIED_PREVIEW_SCRIPT=$scriptPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "VALIDATED_SOURCE_SYNC_SCRIPT=PASS sha=$sha path=$scriptPath canonical_worktree_mutated=false"
 
-      - name: Fast-forward canonical source to certified SHA
-        if: steps.branch_guard.outputs.skip != 'true'
+      - name: Activate isolated exact-SHA certified preview
+        if: steps.policy.outputs.run == 'true'
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           Set-StrictMode -Version Latest
-          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $env:WADDLE_CERTIFIED_SYNC_SCRIPT `
-            -Trigger ci-publish `
-            -RepoRoot $env:WADDLE_LIVE_REPO `
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $env:WADDLE_CERTIFIED_PREVIEW_SCRIPT `
+            -AndroidBuildRoot $env:ANDROIDBUILD_ROOT `
+            -SourceRepoRoot $env:WADDLE_CANONICAL_REPO `
+            -Repository '${{ github.repository }}' `
             -TargetBranch $env:WADDLE_TARGET_BRANCH `
             -ExpectedSha $env:WADDLE_EXPECTED_SHA `
-            -AndroidBuildRoot $env:ANDROIDBUILD_ROOT `
-            -AllowCiMutation `
-            -RequireCore `
-            -RequireRemote `
-            -InstallHooks
+            -CertificationRunId $env:WADDLE_CERT_RUN_ID
           $code=$LASTEXITCODE
           $global:LASTEXITCODE=0
-          if($code -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL synchronizer_exit=$code"}
-
-          Import-Module (Join-Path $env:ANDROIDBUILD_ROOT 'Core\Current\AndroidBuild.psd1') -DisableNameChecking -Force -WarningAction SilentlyContinue
-          $git=[string](Get-AndroidBuildGitPath -AndroidBuildRoot $env:ANDROIDBUILD_ROOT)
-          $repo=$env:WADDLE_LIVE_REPO
-          $actual=(& $git -c "safe.directory=$repo" -C $repo rev-parse HEAD 2>$null | Out-String).Trim().ToLowerInvariant()
-          $branch=(& $git -c "safe.directory=$repo" -C $repo symbolic-ref --quiet --short HEAD 2>$null | Out-String).Trim()
-          $trackedDirty=@(& $git -c "safe.directory=$repo" -C $repo status --porcelain=v1 --untracked-files=no)
-          $untracked=@(& $git -c "safe.directory=$repo" -C $repo ls-files --others --exclude-standard)
-          $global:LASTEXITCODE=0
-          if($actual -ne $env:WADDLE_EXPECTED_SHA.Trim().ToLowerInvariant()){throw "VALIDATED_SOURCE_SYNC=FAIL exact_head expected=$env:WADDLE_EXPECTED_SHA actual=$actual"}
-          if($branch -ne $env:WADDLE_TARGET_BRANCH){throw "VALIDATED_SOURCE_SYNC=FAIL branch expected=$env:WADDLE_TARGET_BRANCH actual=$branch"}
-          if($trackedDirty.Count -gt 0){throw "VALIDATED_SOURCE_SYNC=FAIL tracked_worktree_not_clean count=$($trackedDirty.Count)"}
-          $stateDir=Join-Path $repo '.work\state'
-          New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
-          [ordered]@{
-            schema='waddle-validated-source-sync/v4'
-            status='PASS'
-            branch=$branch
-            source_sha=$actual
-            certification_run_id=$env:WADDLE_CERT_RUN_ID
-            sync_run_id=$env:GITHUB_RUN_ID
-            core_version=$env:WADDLE_CORE_VERSION
-            tracked_dirty_count=$trackedDirty.Count
-            untracked_count=$untracked.Count
-            untracked_preserved=$true
-            hard_reset=$false
-            clean=$false
-            local_commits_overwritten=$false
-            local_files_overwritten=$false
-            synchronized_utc=[DateTime]::UtcNow.ToString('o')
-          } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $stateDir 'validated-source-sync.json') -Encoding UTF8
-          Write-Host "VALIDATED_SOURCE_SYNC=PASS branch=$branch sha=$actual certification_run=$env:WADDLE_CERT_RUN_ID core=$env:WADDLE_CORE_VERSION tracked_dirty=0 untracked=$($untracked.Count) hard_reset=false clean=false"
-
-      - name: Build and restart certified Halloween preview
-        if: steps.branch_guard.outputs.skip != 'true' && env.WADDLE_TARGET_BRANCH == 'feat/halloween-party-2015'
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Stop'
-          Set-StrictMode -Version Latest
-          $startScript=Join-Path $env:WADDLE_LIVE_REPO '.github\scripts\waddle-start.ps1'
-          if(-not(Test-Path -LiteralPath $startScript -PathType Leaf)){throw "VALIDATED_SOURCE_SYNC=FAIL preview_start_script_missing=$startScript"}
-          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $startScript -AndroidBuildRoot $env:ANDROIDBUILD_ROOT
-          $code=$LASTEXITCODE
-          $global:LASTEXITCODE=0
-          if($code -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL preview_start_exit=$code"}
-          $statePath=Join-Path $env:WADDLE_LIVE_REPO '.work\state\waddle-client.json'
-          if(-not(Test-Path -LiteralPath $statePath -PathType Leaf)){throw "VALIDATED_SOURCE_SYNC=FAIL preview_state_missing=$statePath"}
-          $state=Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
-          $actualSha=([string]$state.source_sha).Trim().ToLowerInvariant()
-          if([string]$state.status -ne 'RUNNING'){throw "VALIDATED_SOURCE_SYNC=FAIL preview_state_status actual=$($state.status)"}
-          if($actualSha -ne $env:WADDLE_EXPECTED_SHA.Trim().ToLowerInvariant()){throw "VALIDATED_SOURCE_SYNC=FAIL preview_state_sha expected=$env:WADDLE_EXPECTED_SHA actual=$actualSha"}
-          $process=Get-Process -Id ([int]$state.pid) -ErrorAction SilentlyContinue
-          if(-not $process){throw "VALIDATED_SOURCE_SYNC=FAIL preview_process_missing pid=$($state.pid)"}
-          Write-Host "VALIDATED_SOURCE_PREVIEW=PASS branch=$env:WADDLE_TARGET_BRANCH sha=$actualSha pid=$($state.pid) status=RUNNING build=true restart=true"
-
-      - name: Diagnose protected live source on failure
-        if: failure()
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Continue'
-          $git=$env:WADDLE_MANAGED_GIT
-          $repo=$env:WADDLE_LIVE_REPO
-          if(-not $git -or -not $repo -or -not(Test-Path -LiteralPath $repo)){Write-Host 'VALIDATED_SOURCE_SYNC_DIAG=SKIP';exit 0}
-          Write-Host '----- LIVE STATUS -----'
-          & $git -c "safe.directory=$repo" -C $repo status -sb
-          Write-Host '----- LIVE RECENT COMMITS -----'
-          & $git -c "safe.directory=$repo" -C $repo log --oneline --decorate -8
-          Write-Host '----- LIVE REMOTES -----'
-          & $git -c "safe.directory=$repo" -C $repo remote -v
-          if($env:WADDLE_TARGET_BRANCH){
-            Write-Host '----- LIVE DIVERGENCE -----'
-            & $git -c "safe.directory=$repo" -C $repo rev-list --left-right --count "androidbuild-source/$env:WADDLE_TARGET_BRANCH...HEAD"
-          }
-          $global:LASTEXITCODE=0
+          if($code -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL isolated_preview_exit=$code"}
