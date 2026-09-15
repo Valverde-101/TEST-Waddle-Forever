@@ -34,6 +34,8 @@ $partyPath = Join-Path $repo 'src/server/updates/2015.ts'
 $updatesPath = Join-Path $repo 'src/server/updates/updates.ts'
 $generalPath = Join-Path $repo 'src/server/file-generators/general.json.ts'
 $dependenciesPath = Join-Path $repo 'src/server/file-generators/dependencies.json.ts'
+$xtHandlerPath = Join-Path $repo 'src/server/socket-server/xt-handler.ts'
+$worldHandlersPath = Join-Path $repo 'src/server/socket-server/world-handlers.ts'
 $timelinePath = Join-Path $repo 'src/client/views/timeline/timeline-static.ts'
 $htmlPath = Join-Path $repo 'src/client/views/timeline/timeline.html'
 
@@ -91,6 +93,21 @@ Require-Contains $general '"party_icon_active": modernPartyIconActive' 'modern_p
 $dependencies = Read-Normalized $dependenciesPath
 Require-Regex $dependencies '(?s)const DEPENDENCIES_VANILLA = \{.*?"boot"\s*:\s*\[.*?"id"\s*:\s*"party"' 'modern_party_boot_dependency'
 
+# Modern ServerCookieService calls Airtower with [] for cookie retrieval. Airtower
+# serializes that as a trailing empty XT payload field (..%room%%). Waddle must
+# normalize that transport representation only for callbacks that explicitly
+# declare a zero-argument signature. Otherwise party initialization stops before
+# the cookie can drive login state / party-icon visibility.
+$xtHandler = Read-Normalized $xtHandlerPath
+Require-Contains $xtHandler "const emptyArrayFraming = Array.isArray(signature) && signature.length === 0 && args.length === 1 && args[0] === '';" 'xt_empty_array_frame_detection'
+Require-Contains $xtHandler 'const argsForParsing = emptyArrayFraming ? [] : args;' 'xt_empty_array_frame_normalization'
+Require-Contains $xtHandler "status: emptyArrayFraming ? 'empty-array-framing'" 'xt_empty_array_frame_diagnostic'
+Require-Contains $xtHandler 'compatibility: compatibility !== undefined || emptyArrayFraming' 'xt_empty_array_frame_completion'
+
+$worldHandlers = Read-Normalized $worldHandlersPath
+Require-Regex $worldHandlers "p\.xt\('s',\s*'party#partycookie',\s*\[\],\s*handleRetrievePartyCookie\)" 'party_cookie_zero_arg_contract'
+Require-NotContains $worldHandlers "'party#partycookie', ['number']" 'party_cookie_fake_numeric_arg'
+
 $updates = Read-Normalized $updatesPath
 Require-Contains $updates 'import { UPDATES_2015 } from "./2015";' 'updates_2015_import'
 Require-Contains $updates '...UPDATES_2015' 'updates_2015_registration'
@@ -107,4 +124,4 @@ foreach ($year in 2013..2017) {
   Require-Regex $html ('<option(?:\s+value="{0}")?>{0}</option>' -f $year) ("timeline_year_{0}" -f $year)
 }
 
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source media_prefix=party2015 years=2005-2017 modern_room_ids=326,430,431,432,433,435,436,890 party_start=2015-10-21 party_end=2015-11-04 modern_ui_routes=canonical party_icon_activation=route_driven mutation=false"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source media_prefix=party2015 years=2005-2017 modern_room_ids=326,430,431,432,433,435,436,890 party_start=2015-10-21 party_end=2015-11-04 modern_ui_routes=canonical party_icon_activation=route_driven airtower_empty_array=normalized_zero_arg_only mutation=false"
