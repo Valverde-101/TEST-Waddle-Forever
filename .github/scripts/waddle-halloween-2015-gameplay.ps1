@@ -7,6 +7,8 @@ $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path -LiteralPath $RepoRoot).Path
 $scripts = Join-Path $repo '.github\scripts'
 
+# Compatibility wrapper: party mechanics live in the reusable runtime; this
+# party contributes only its own timeline/data configuration.
 & (Join-Path $scripts 'waddle-party-runtime.ps1') -RepoRoot $repo
 if ($LASTEXITCODE -ne 0) { throw "WADDLE_PARTY2015_GAMEPLAY=FAIL runtime_exit=$LASTEXITCODE" }
 
