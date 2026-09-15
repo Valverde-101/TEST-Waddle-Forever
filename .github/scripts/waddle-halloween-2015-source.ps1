@@ -15,6 +15,12 @@ function Require-Contains([string]$Text,[string]$Needle,[string]$Label) {
   }
 }
 
+function Require-NotContains([string]$Text,[string]$Needle,[string]$Label) {
+  if ($Text.Contains($Needle)) {
+    throw "WADDLE_PARTY2015_SOURCE=FAIL stale_contract=$Label"
+  }
+}
+
 function Require-Regex([string]$Text,[string]$Pattern,[string]$Label) {
   if ($Text -notmatch $Pattern) {
     throw "WADDLE_PARTY2015_SOURCE=FAIL missing_contract=$Label"
@@ -26,6 +32,8 @@ $filesPath = Join-Path $repo 'src/server/game-data/files.ts'
 $roomsPath = Join-Path $repo 'src/server/game-data/rooms.ts'
 $partyPath = Join-Path $repo 'src/server/updates/2015.ts'
 $updatesPath = Join-Path $repo 'src/server/updates/updates.ts'
+$generalPath = Join-Path $repo 'src/server/file-generators/general.json.ts'
+$dependenciesPath = Join-Path $repo 'src/server/file-generators/dependencies.json.ts'
 $timelinePath = Join-Path $repo 'src/client/views/timeline/timeline-static.ts'
 $htmlPath = Join-Path $repo 'src/client/views/timeline/timeline.html'
 
@@ -63,12 +71,25 @@ foreach ($contract in @(
   "end: ['party']",
   "'close_ups/quest_interface.swf'",
   "'close_ups/tiles_minigame8.swf'",
-  "'play/v2/client/interface.swf'",
+  "'play/v2/content/global/content/interface.swf'",
+  "'play/v2/content/global/content/party.swf': 'svanilla:media/play/v2/content/global/content/party.swf'",
   "'play/v2/content/global/content/features.swf'",
+  "'play/v2/content/global/logo/logo.swf'",
+  "'play/v2/content/global/content/party_icon.swf'",
   "'play/v2/content/global/avatar/sprites/penguin_robot.swf'"
 )) {
   Require-Contains $party $contract ("party_" + ($contract -replace '[^A-Za-z0-9]+','_').Trim('_'))
 }
+Require-NotContains $party "'play/v2/client/interface.swf'" 'legacy_wrong_interface_route'
+Require-NotContains $party "'play/v2/content/global/content/logo.swf'" 'legacy_wrong_logo_route'
+
+$general = Read-Normalized $generalPath
+Require-Contains $general "const MODERN_PARTY_ICON_ROUTE = 'play/v2/content/global/content/party_icon.swf';" 'modern_party_icon_route'
+Require-Contains $general 'd.lookupFile(MODERN_PARTY_ICON_ROUTE) !== undefined' 'modern_party_icon_activation'
+Require-Contains $general '"party_icon_active": modernPartyIconActive' 'modern_party_option_activation'
+
+$dependencies = Read-Normalized $dependenciesPath
+Require-Regex $dependencies '(?s)const DEPENDENCIES_VANILLA = \{.*?"boot"\s*:\s*\[.*?"id"\s*:\s*"party"' 'modern_party_boot_dependency'
 
 $updates = Read-Normalized $updatesPath
 Require-Contains $updates 'import { UPDATES_2015 } from "./2015";' 'updates_2015_import'
@@ -86,4 +107,4 @@ foreach ($year in 2013..2017) {
   Require-Regex $html ('<option(?:\s+value="{0}")?>{0}</option>' -f $year) ("timeline_year_{0}" -f $year)
 }
 
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source media_prefix=party2015 years=2005-2017 modern_room_ids=326,430,431,432,433,435,436,890 party_start=2015-10-21 party_end=2015-11-04 mutation=false"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source media_prefix=party2015 years=2005-2017 modern_room_ids=326,430,431,432,433,435,436,890 party_start=2015-10-21 party_end=2015-11-04 modern_ui_routes=canonical party_icon_activation=route_driven mutation=false"
