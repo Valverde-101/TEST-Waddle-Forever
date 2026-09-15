@@ -33,16 +33,20 @@ $roomsPath = Join-Path $repo 'src/server/game-data/rooms.ts'
 $partyPath = Join-Path $repo 'src/server/updates/2015.ts'
 $updatesPath = Join-Path $repo 'src/server/updates/updates.ts'
 $generalPath = Join-Path $repo 'src/server/file-generators/general.json.ts'
+$fileGeneratorsPath = Join-Path $repo 'src/server/file-generators/index.ts'
 $dependenciesPath = Join-Path $repo 'src/server/file-generators/dependencies.json.ts'
 $xtHandlerPath = Join-Path $repo 'src/server/socket-server/xt-handler.ts'
 $worldHandlersPath = Join-Path $repo 'src/server/socket-server/world-handlers.ts'
 $partyHandlersPath = Join-Path $repo 'src/server/socket-server/handlers/party.ts'
+$partyDataPath = Join-Path $repo 'src/server/game-data/party.ts'
 $timelinePath = Join-Path $repo 'src/client/views/timeline/timeline-static.ts'
 $htmlPath = Join-Path $repo 'src/client/views/timeline/timeline.html'
+$runtimePath = Join-Path $repo 'media/default/archives/PartyRuntime-CPImagined-HalloweenClassic.swf'
 
 $files = Read-Normalized $filesPath
 Require-Contains $files "const PARTY2015 = 'party2015';" 'party2015_file_ref_constant'
 Require-Regex $files '(?m)^\s*PARTY2015,\s*$' 'party2015_file_ref_registration'
+Require-Contains $files "'archives'" 'archives_fileref_registration'
 
 $rooms = Read-Normalized $roomsPath
 $roomContracts = [ordered]@{
@@ -65,45 +69,66 @@ foreach ($contract in @(
   "const P = 'party2015:';",
   "date: '2015-10-21'",
   "partyName: 'Halloween Party 2015'",
+  "activeFeatures: '20150501'",
   "id: 'halloween-2015'",
   'messageCount: 10',
   'communicatorMessageCount: 5',
   'taskCount: 10',
   'maxCoinUpdate: 10',
-  "date: '2015-11-04'",
+  "partyStartDate: '2015-10-21 00:00:00'",
+  "partyEndDate: '2015-11-05 00:00:00'",
+  'unlockDayIndex: 16',
+  'numOfDaysInParty: 16',
+  "date: '2015-11-05'",
   "end: ['party']",
   "'close_ups/quest_interface.swf'",
-  "'close_ups/tiles_minigame8.swf'",
+  "'w.p2015.may.partyinterface'",
+  "'w.p2015.may.login'",
+  "'halloHerbertGame'",
   "'play/v2/content/global/content/interface.swf'",
-  "'play/v2/content/global/content/party.swf': 'svanilla:media/play/v2/content/global/content/party.swf'",
+  "'play/v2/content/global/content/party.swf': 'archives:PartyRuntime-CPImagined-HalloweenClassic.swf'",
   "'play/v2/content/global/content/features.swf'",
   "'play/v2/content/global/content/party_icon.swf': P + 'content/ContentParty_icon-HalloweenParty2015.swf'",
   "'play/v2/content/global/logo/logo.swf'",
-  "'content/party_icon.swf': [P + 'content/ContentParty_icon-HalloweenParty2015.swf', 'party_icon']",
+  "'content/party_icon.swf': [P + 'content/ContentParty_icon-HalloweenParty2015.swf', 'party_icon', 'scavenger_hunt_icon']",
   "'play/v2/content/global/avatar/sprites/penguin_robot.swf'"
 )) {
   Require-Contains $party $contract ("party_" + ($contract -replace '[^A-Za-z0-9]+','_').Trim('_'))
 }
 Require-NotContains $party "'play/v2/client/interface.swf'" 'legacy_wrong_interface_route'
 Require-NotContains $party "'play/v2/content/global/content/logo.swf'" 'legacy_wrong_logo_route'
+Require-NotContains $party "PartyRuntime-CPImaginedReference.swf" 'runtime_inside_hydrated_party_inventory'
+
+if (-not (Test-Path -LiteralPath $runtimePath -PathType Leaf)) {
+  throw "WADDLE_PARTY2015_SOURCE=FAIL runtime_missing=$runtimePath"
+}
+$runtimeInfo = Get-Item -LiteralPath $runtimePath
+if ($runtimeInfo.Length -lt 100000) {
+  throw "WADDLE_PARTY2015_SOURCE=FAIL runtime_too_small bytes=$($runtimeInfo.Length)"
+}
+$stream = [IO.File]::OpenRead($runtimePath)
+try {
+  $signature = New-Object byte[] 3
+  if ($stream.Read($signature,0,3) -ne 3) { throw 'WADDLE_PARTY2015_SOURCE=FAIL runtime_header_short' }
+  $runtimeSig = [Text.Encoding]::ASCII.GetString($signature)
+  if (@('FWS','CWS','ZWS') -notcontains $runtimeSig) { throw "WADDLE_PARTY2015_SOURCE=FAIL runtime_signature=$runtimeSig" }
+} finally {
+  $stream.Dispose()
+}
 
 $general = Read-Normalized $generalPath
 Require-Contains $general "const MODERN_PARTY_ICON_ROUTE = 'play/v2/content/global/content/party_icon.swf';" 'modern_party_icon_route'
 Require-Contains $general 'd.lookupFile(MODERN_PARTY_ICON_ROUTE) !== undefined' 'modern_party_icon_activation'
 Require-Contains $general '"party_icon_active": modernPartyIconActive' 'modern_party_option_activation'
 
-# Modern clients load the generic party runtime during the boot phase, before the
-# join/interface group. This is the principal startup invocation that initializes
-# BaseParty/ServerCookieService and later allows interface/quest code to resolve
-# party state. Treat it as a required reusable modern-party contract.
+$fileGenerators = Read-Normalized $fileGeneratorsPath
+Require-Contains $fileGenerators 'const getRuntimePathsJson: FileGenerator' 'runtime_paths_generator'
+Require-Contains $fileGenerators '...Object.fromEntries(d.getGlobalPaths())' 'global_paths_merge'
+Require-Contains $fileGenerators "'play/en/web_service/game_configs/paths.json': getRuntimePathsJson" 'runtime_paths_registration'
+
 $dependencies = Read-Normalized $dependenciesPath
 Require-Regex $dependencies '(?s)const DEPENDENCIES_VANILLA = \{.*?"boot"\s*:\s*\[.*?"id"\s*:\s*"party"' 'modern_party_boot_dependency'
 
-# Modern ServerCookieService calls Airtower with [] for cookie retrieval. Airtower
-# serializes that as a trailing empty XT payload field (..%room%%). Waddle must
-# normalize that transport representation only for callbacks that explicitly
-# declare a zero-argument signature. Otherwise party initialization stops before
-# the cookie can drive login state / party-icon visibility.
 $xtHandler = Read-Normalized $xtHandlerPath
 Require-Contains $xtHandler "const emptyArrayFraming = Array.isArray(signature) && signature.length === 0 && args.length === 1 && args[0] === '';" 'xt_empty_array_frame_detection'
 Require-Contains $xtHandler 'const argsForParsing = emptyArrayFraming ? [] : args;' 'xt_empty_array_frame_normalization'
@@ -115,7 +140,16 @@ Require-Regex $worldHandlers "p\.xt\('s',\s*'party#partycookie',\s*\[\],\s*handl
 Require-NotContains $worldHandlers "'party#partycookie', ['number']" 'party_cookie_fake_numeric_arg'
 
 $partyHandlers = Read-Normalized $partyHandlersPath
-Require-Contains $partyHandlers "msg.send(penguin, 'partycookie', JSON.stringify(cookie));" 'party_cookie_response_contract'
+Require-Contains $partyHandlers "await ctx.msg.send(ctx.penguin, 'partycookie'" 'party_cookie_response_contract'
+Require-Contains $partyHandlers "await msg.send(penguin, 'partyservice'" 'party_service_response_contract'
+Require-Contains $partyHandlers "await sendCurrentPartyCookie(ctx);`n  await sendCurrentPartyService(ctx);" 'party_cookie_service_order'
+Require-Contains $partyHandlers "action: 'partycookie-partyservice'" 'party_bootstrap_trace'
+
+$partyData = Read-Normalized $partyDataPath
+Require-Contains $partyData 'export type PartyServiceConfig' 'party_service_type'
+Require-Contains $partyData "'halloween-2015':" 'party_service_archive_fallback'
+Require-Contains $partyData "partyStartDate: '2015-10-21 00:00:00'" 'party_service_start'
+Require-Contains $partyData "partyEndDate: '2015-11-05 00:00:00'" 'party_service_end'
 
 $updates = Read-Normalized $updatesPath
 Require-Contains $updates 'import { UPDATES_2015 } from "./2015";' 'updates_2015_import'
@@ -133,4 +167,4 @@ foreach ($year in 2013..2017) {
   Require-Regex $html ('<option(?:\s+value="{0}")?>{0}</option>' -f $year) ("timeline_year_{0}" -f $year)
 }
 
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source media_prefix=party2015 years=2005-2017 modern_room_ids=326,430,431,432,433,435,436,890 party_start=2015-10-21 party_end=2015-11-04 modern_ui_routes=canonical party_icon_activation=canonical_route_plus_global_crumb modern_party_boot=party_swF_then_cookie airtower_empty_array=normalized_zero_arg_only mutation=false"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source media_prefix=party2015 runtime=archives modern_party_id=20150501 party_start=2015-10-21 exclusive_end=2015-11-05 paths_global_merged=true partycookie_partyservice=true runtime_sig=$runtimeSig years=2005-2017 mutation=false"
