@@ -32,24 +32,73 @@ function Resolve-FFDec([string]$Explicit) {
   throw 'WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_missing'
 }
 
-function Invoke-Dump([string]$FFDec,[string]$Swf,[string]$Out,[string]$Err) {
-  Remove-Item -LiteralPath $Out,$Err -Force -ErrorAction SilentlyContinue
-  $quoted = '"' + $Swf.Replace('"','\"') + '"'
-  $proc = Start-Process -FilePath $FFDec -ArgumentList @('-cli','-dumpAS3',$quoted) -RedirectStandardOutput $Out -RedirectStandardError $Err -PassThru -WindowStyle Hidden
-  if (-not $proc.WaitForExit(45000)) {
+function Invoke-FFDec {
+  param(
+    [Parameter(Mandatory)][string]$FFDec,
+    [Parameter(Mandatory)][string[]]$Arguments,
+    [Parameter(Mandatory)][string]$Stdout,
+    [Parameter(Mandatory)][string]$Stderr,
+    [int]$TimeoutSeconds = 90
+  )
+  Remove-Item -LiteralPath $Stdout,$Stderr -Force -ErrorAction SilentlyContinue
+  $proc = Start-Process -FilePath $FFDec -ArgumentList $Arguments -RedirectStandardOutput $Stdout -RedirectStandardError $Stderr -PassThru -WindowStyle Hidden
+  if (-not $proc.WaitForExit($TimeoutSeconds * 1000)) {
     try { $proc.Kill() } catch {}
     try { [void]$proc.WaitForExit(3000) } catch {}
-    throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_timeout swf=$Swf"
+    return [pscustomobject]@{ ok=$false; timeout=$true; exit=$null }
   }
   $proc.Refresh()
   $exitText = [string]$proc.ExitCode
-  if (-not [string]::IsNullOrWhiteSpace($exitText) -and [int]$exitText -ne 0) {
-    $message = if (Test-Path -LiteralPath $Err) { (Get-Content -LiteralPath $Err -Raw -ErrorAction SilentlyContinue) } else { '' }
-    throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_exit=$exitText swf=$Swf error=$message"
+  $ok = [string]::IsNullOrWhiteSpace($exitText) -or [int]$exitText -eq 0
+  return [pscustomobject]@{ ok=$ok; timeout=$false; exit=$exitText }
+}
+
+function Get-ScriptEvidence {
+  param(
+    [Parameter(Mandatory)][string]$FFDec,
+    [Parameter(Mandatory)][string]$Swf,
+    [Parameter(Mandatory)][string]$SafeName,
+    [Parameter(Mandatory)][string]$WorkRoot
+  )
+
+  # `-export script` is the FFDec-supported source export for both AVM1/AS1-2
+  # and AVM2/AS3. Do not assume a 2015 archive file is AS3 merely because its
+  # surrounding client is modern; several party/dialogue files can be timeline
+  # driven or contain a different script VM.
+  $exportDir = Join-Path $WorkRoot ($SafeName + '-scripts')
+  $stdout = Join-Path $WorkRoot ($SafeName + '.export.stdout.txt')
+  $stderr = Join-Path $WorkRoot ($SafeName + '.export.stderr.txt')
+  if (Test-Path -LiteralPath $exportDir) { Remove-Item -LiteralPath $exportDir -Recurse -Force }
+  New-Item -ItemType Directory -Force -Path $exportDir | Out-Null
+
+  $quotedOut = '"' + $exportDir.Replace('"','\"') + '"'
+  $quotedSwf = '"' + $Swf.Replace('"','\"') + '"'
+  $result = Invoke-FFDec -FFDec $FFDec -Arguments @('-cli','-onerror','ignore','-exportTimeout','60','-exportFileTimeout','20','-export','script',$quotedOut,$quotedSwf) -Stdout $stdout -Stderr $stderr -TimeoutSeconds 90
+  if ($result.timeout) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_export_timeout swf=$Swf" }
+  if (-not $result.ok) {
+    $err = if (Test-Path -LiteralPath $stderr) { (Get-Content -LiteralPath $stderr -Raw -ErrorAction SilentlyContinue) } else { '' }
+    throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_export_exit=$($result.exit) swf=$Swf error=$err"
   }
-  if (-not (Test-Path -LiteralPath $Out -PathType Leaf) -or (Get-Item -LiteralPath $Out).Length -eq 0) {
-    $message = if (Test-Path -LiteralPath $Err) { (Get-Content -LiteralPath $Err -Raw -ErrorAction SilentlyContinue) } else { '' }
-    throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_empty swf=$Swf error=$message"
+
+  $files = @(Get-ChildItem -LiteralPath $exportDir -File -Recurse -ErrorAction SilentlyContinue | Sort-Object FullName)
+  $sourceFiles = @($files | Where-Object { $_.Extension -in @('.as','.txt') })
+  if ($sourceFiles.Count -eq 0) {
+    return [pscustomobject]@{ mode='no-script'; text=''; files=0 }
+  }
+
+  $chunks = New-Object System.Collections.Generic.List[string]
+  foreach ($file in $sourceFiles) {
+    try {
+      $body = Get-Content -LiteralPath $file.FullName -Raw -ErrorAction Stop
+      if (-not [string]::IsNullOrWhiteSpace($body)) {
+        $chunks.Add("// FILE: $($file.FullName.Substring($exportDir.Length).TrimStart('\\'))`n$body")
+      }
+    } catch {}
+  }
+  return [pscustomobject]@{
+    mode='export-script'
+    text=($chunks -join "`n`n")
+    files=$sourceFiles.Count
   }
 }
 
@@ -82,10 +131,12 @@ $targets = @(
 foreach ($i in 0..8) { $targets += @{ role="tiles-$i"; path="close_ups\Close_upsTiles_minigame$i-HalloweenParty2015.swf" } }
 
 $work = Join-Path $repo '.work\halloween2015-protocol'
+if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 $pairSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 $tokenSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 $reports = New-Object System.Collections.Generic.List[object]
+$scriptedTargets = 0
 
 $networkRegexes = @(
   '(?is)sendXtMessage\s*\(\s*["'']([^"'']+)["'']\s*,\s*["'']([^"'']+)["'']',
@@ -98,10 +149,9 @@ foreach ($target in $targets) {
   $swf = Join-Path $partyRoot $target.path
   if (-not (Test-Swf $swf)) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL invalid_target role=$($target.role) path=$swf" }
   $safe = ($target.role -replace '[^A-Za-z0-9_.-]','_')
-  $out = Join-Path $work ($safe + '.as3.txt')
-  $err = Join-Path $work ($safe + '.err.txt')
-  Invoke-Dump -FFDec $ffdec -Swf $swf -Out $out -Err $err
-  $text = Get-Content -LiteralPath $out -Raw
+  $source = Get-ScriptEvidence -FFDec $ffdec -Swf $swf -SafeName $safe -WorkRoot $work
+  $text = [string]$source.text
+  if (-not [string]::IsNullOrWhiteSpace($text)) { $scriptedTargets++ }
 
   $pairs = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
   foreach ($rx in $networkRegexes) {
@@ -119,32 +169,41 @@ foreach ($target in $targets) {
   $tokens = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
   foreach ($m in [regex]::Matches($text,'["'']([^"''\r\n]{2,100})["'']')) {
     $value = $m.Groups[1].Value.Trim()
-    if ($value -match $keyword -or $value -match '^[a-z]{1,12}#[a-z0-9_]{1,32}$') {
+    if ($value -match $keyword -or $value -match '^[a-z]{1,16}#[a-z0-9_]{1,48}$') {
       [void]$tokens.Add($value); [void]$tokenSet.Add($value)
     }
   }
 
-  $lines = @($text -split "`r?`n" | Where-Object { $_ -match $keyword } | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Select-Object -Unique -First 80)
+  $lines = if ([string]::IsNullOrWhiteSpace($text)) { @() } else {
+    @($text -split "`r?`n" | Where-Object { $_ -match $keyword } | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Select-Object -Unique -First 100)
+  }
   $evidencePath = Join-Path $work ($safe + '.evidence.txt')
   $lines | Set-Content -LiteralPath $evidencePath -Encoding UTF8
   $report = [pscustomobject]@{
     role = $target.role
     file = $target.path
     bytes = [int64](Get-Item -LiteralPath $swf).Length
+    scriptMode = $source.mode
+    scriptFiles = [int]$source.files
     pairs = @($pairs | Sort-Object)
     tokens = @($tokens | Sort-Object)
     evidence = $lines
   }
   $reports.Add($report)
-  Write-Host "WADDLE_PARTY2015_PROTOCOL_FILE=PASS role=$($target.role) pairs=$(@($pairs).Count) tokens=$(@($tokens).Count) evidence=$($lines.Count)"
+  Write-Host "WADDLE_PARTY2015_PROTOCOL_FILE=PASS role=$($target.role) script_mode=$($source.mode) script_files=$($source.files) pairs=$(@($pairs).Count) tokens=$(@($tokens).Count) evidence=$($lines.Count)"
   foreach ($pair in @($pairs | Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_PAIR role=$($target.role) value=$pair" }
-  foreach ($line in @($lines | Select-Object -First 12)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_LINE role=$($target.role) value=$line" }
+  foreach ($line in @($lines | Select-Object -First 16)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_LINE role=$($target.role) value=$line" }
+}
+
+if ($scriptedTargets -lt 1) {
+  throw "WADDLE_PARTY2015_PROTOCOL=FAIL no_script_sources targets=$($targets.Count) ffdec=$ffdec"
 }
 
 $summary = [ordered]@{
-  schema = 'waddle-halloween2015-protocol/v1'
+  schema = 'waddle-halloween2015-protocol/v2'
   party = 'Halloween Party 2015'
   targetCount = $targets.Count
+  scriptedTargetCount = $scriptedTargets
   ffdec = $ffdec
   partyRoot = $partyRoot
   pairs = @($pairSet | Sort-Object)
@@ -153,5 +212,5 @@ $summary = [ordered]@{
 }
 $summaryPath = Join-Path $work 'summary.json'
 $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryPath -Encoding UTF8
-Write-Host "WADDLE_PARTY2015_PROTOCOL=PASS targets=$($targets.Count) pairs=$(@($pairSet).Count) tokens=$(@($tokenSet).Count) party_root=$partyRoot summary=$summaryPath"
+Write-Host "WADDLE_PARTY2015_PROTOCOL=PASS targets=$($targets.Count) scripted_targets=$scriptedTargets pairs=$(@($pairSet).Count) tokens=$(@($tokenSet).Count) party_root=$partyRoot summary=$summaryPath"
 foreach ($pair in @($pairSet | Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_PAIR_ALL=$pair" }
