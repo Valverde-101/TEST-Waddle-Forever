@@ -1,21 +1,17 @@
-﻿{
-    "schema":  2,
+{
+    "schema":  3,
     "party":  "Halloween Party 2015",
     "sourcePage":  "https://toolbox.solero.me/cparchives/wiki/Halloween_Party_2015.html",
-    "canonicalRoot":  "V:\\AndroidBuild\\Repositories\\TEST-Waddle-Forever\\media\\default\\party2015",
     "requiredCount":  132,
     "total":  132,
-    "downloaded":  0,
-    "reused":  132,
-    "generatedAt":  "2026-09-15T03:22:40.3826809Z",
     "assets":  [
                    {
-                       "category":  "other",
-                       "name":  "Binoculars-HalloweenParty2015.swf",
-                       "relativePath":  "other/Binoculars-HalloweenParty2015.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/9/94/Binoculars-HalloweenParty2015.swf",
-                       "bytes":  9411,
-                       "sha256":  "09DEAA5E4FBE4E33CAE61FD2F614EC60EB71E1DE805C73B45696B301037FA250",
+                       "category":  "avatar",
+                       "name":  "PenguinRobot.swf",
+                       "relativePath":  "avatar/PenguinRobot.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/77/PenguinRobot.swf",
+                       "bytes":  967722,
+                       "sha256":  "CAF87FEE04C97B903BD7564F5175340EE015DCA4F97C18835FFDE0D34939903D",
                        "required":  true
                    },
                    {
@@ -115,132 +111,6 @@
                        "url":  "https://toolbox.solero.me/cparchives/static/images/archives/b/bb/Close_upsTiles_minigame8-HalloweenParty2015.swf",
                        "bytes":  512302,
                        "sha256":  "C3AE69C1FA6EF4EA37AFDFDB31C86C519D688BBC754101EAB2B6B06F1CD0A957",
-                       "required":  true
-                   },
-                   {
-                       "category":  "content",
-                       "name":  "ContentFeatures-HalloweenParty2015.swf",
-                       "relativePath":  "content/ContentFeatures-HalloweenParty2015.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/d/db/ContentFeatures-HalloweenParty2015.swf",
-                       "bytes":  1337,
-                       "sha256":  "24398415EF15BC6677433D4927242ABF2E803319B4AD7AD423A15FEDF1D10EA8",
-                       "required":  true
-                   },
-                   {
-                       "category":  "content",
-                       "name":  "ContentLogo-HalloweenParty2015.swf",
-                       "relativePath":  "content/ContentLogo-HalloweenParty2015.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/3/38/ContentLogo-HalloweenParty2015.swf",
-                       "bytes":  214181,
-                       "sha256":  "D476BE7292CE74E8F73721C22D1E1B4599F46CFF1A88E52DD408BBE598A7DCDC",
-                       "required":  true
-                   },
-                   {
-                       "category":  "content",
-                       "name":  "ContentParty_icon-HalloweenParty2015.swf",
-                       "relativePath":  "content/ContentParty_icon-HalloweenParty2015.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/6/67/ContentParty_icon-HalloweenParty2015.swf",
-                       "bytes":  3811,
-                       "sha256":  "A9176675A7B7CE48CEB47F08AE4563A9E61F59A768F37ECDF5D53E2C63782219",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_agentlobbymulti.swf",
-                       "relativePath":  "rooms/Hallo15_agentlobbymulti.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/1/10/Hallo15_agentlobbymulti.swf",
-                       "bytes":  425989,
-                       "sha256":  "C338E836785DB29885430B2CFDA76DCF0EFAD77D8C18C472B9F9DB548D78B9AE",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_attic.swf",
-                       "relativePath":  "rooms/Hallo15_attic.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/a/aa/Hallo15_attic.swf",
-                       "bytes":  283673,
-                       "sha256":  "EFC82CD731A6ECB50C2B07BD251656FF9EC03320417A434C3D3E8B819BCF4CA6",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_beach.swf",
-                       "relativePath":  "rooms/Hallo15_beach.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/d/d3/Hallo15_beach.swf",
-                       "bytes":  1180827,
-                       "sha256":  "0BA26BCE3F7BA44A220CAFE5928FC2CB2525DDDA1E2AAADBD6DB0A732DDBC592",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_beacon.swf",
-                       "relativePath":  "rooms/Hallo15_beacon.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/d/d3/Hallo15_beacon.swf",
-                       "bytes":  175957,
-                       "sha256":  "DD287A13EE5F807F1343663BC3B6E75F3009BB99E46DEE875AF5B59A6F474A70",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_berg.swf",
-                       "relativePath":  "rooms/Hallo15_berg.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/5/52/Hallo15_berg.swf",
-                       "bytes":  67847,
-                       "sha256":  "C6467A053B7657CEFD61A4D8459CD8CDCAF9BFEEC111832DC42CD1397A22A5B7",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_book.swf",
-                       "relativePath":  "rooms/Hallo15_book.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/1/15/Hallo15_book.swf",
-                       "bytes":  202035,
-                       "sha256":  "D30DAC4DB780CD9EE7ECCA0E34B3D89FBEE190E3BA3393C2F4B76AC9BF3C83E0",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_cave.swf",
-                       "relativePath":  "rooms/Hallo15_cave.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/f/f9/Hallo15_cave.swf",
-                       "bytes":  267222,
-                       "sha256":  "37E622B2A3C45189BA28CF2508188093779317D8FEEE47F871F4A887CEB004B8",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_cloudforest.swf",
-                       "relativePath":  "rooms/Hallo15_cloudforest.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/4/40/Hallo15_cloudforest.swf",
-                       "bytes":  204318,
-                       "sha256":  "7DD2390680556F9E31B7FD848E48A3422A200023D81896A55435A19C8D5255BE",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_coffee.swf",
-                       "relativePath":  "rooms/Hallo15_coffee.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/2/2a/Hallo15_coffee.swf",
-                       "bytes":  416417,
-                       "sha256":  "174422A61DDD8F2954CAD373513C0FBFC64113703F7D7224B4E6D017F93570F2",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_cove.swf",
-                       "relativePath":  "rooms/Hallo15_cove.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/2/2c/Hallo15_cove.swf",
-                       "bytes":  1156228,
-                       "sha256":  "276DAC44B724722CC09CD0CDA92DF19D015C61FD92EAF8747CD375657C38EC52",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_dance.swf",
-                       "relativePath":  "rooms/Hallo15_dance.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/9/95/Hallo15_dance.swf",
-                       "bytes":  243843,
-                       "sha256":  "C0580839B5DD2C263C7B0DAC2BCA01F26605FBB57F4FE4A3BEBBE6B165001F53",
                        "required":  true
                    },
                    {
@@ -550,264 +420,30 @@
                        "required":  true
                    },
                    {
-                       "category":  "rooms",
-                       "name":  "Hallo15_dock.swf",
-                       "relativePath":  "rooms/Hallo15_dock.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/5/56/Hallo15_dock.swf",
-                       "bytes":  999467,
-                       "sha256":  "B2B016A24000D0D266F099796C870D80077F9BA4222B02F2ACF3F5735ECA3EF5",
+                       "category":  "content",
+                       "name":  "ContentFeatures-HalloweenParty2015.swf",
+                       "relativePath":  "content/ContentFeatures-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/d/db/ContentFeatures-HalloweenParty2015.swf",
+                       "bytes":  1337,
+                       "sha256":  "24398415EF15BC6677433D4927242ABF2E803319B4AD7AD423A15FEDF1D10EA8",
                        "required":  true
                    },
                    {
-                       "category":  "rooms",
-                       "name":  "Hallo15_dojo.swf",
-                       "relativePath":  "rooms/Hallo15_dojo.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/82/Hallo15_dojo.swf",
-                       "bytes":  414956,
-                       "sha256":  "7DBD41196F186AAC7B86BDA0AE9E28C3A395664E3138698F1015E9EC8870B26F",
+                       "category":  "content",
+                       "name":  "ContentLogo-HalloweenParty2015.swf",
+                       "relativePath":  "content/ContentLogo-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/3/38/ContentLogo-HalloweenParty2015.swf",
+                       "bytes":  214181,
+                       "sha256":  "D476BE7292CE74E8F73721C22D1E1B4599F46CFF1A88E52DD408BBE598A7DCDC",
                        "required":  true
                    },
                    {
-                       "category":  "rooms",
-                       "name":  "Hallo15_dojoext.swf",
-                       "relativePath":  "rooms/Hallo15_dojoext.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/3/38/Hallo15_dojoext.swf",
-                       "bytes":  315740,
-                       "sha256":  "A38A1436ED50388A3BD3A885DB36CBA3EA31E93ACC4D62474239A4E6A1F9E06B",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_dojofire.swf",
-                       "relativePath":  "rooms/Hallo15_dojofire.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/1/10/Hallo15_dojofire.swf",
-                       "bytes":  221111,
-                       "sha256":  "04B7A5BA5757EB33638B2DA179DCE0D53CEA033AFA63CEE96896638EDDA79AE8",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_dojosnow.swf",
-                       "relativePath":  "rooms/Hallo15_dojosnow.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/e/e5/Hallo15_dojosnow.swf",
-                       "bytes":  290223,
-                       "sha256":  "6F8E3B40A537A3E276F3BA9EC4B19BADA8E4E805783952147785D9B05C4E879B",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_forest.swf",
-                       "relativePath":  "rooms/Hallo15_forest.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/4/44/Hallo15_forest.swf",
-                       "bytes":  995578,
-                       "sha256":  "8BB6CC933F3A5D730186F88E9A910B63B2172CF8C2639E6A2EB39577F8A220A1",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_forts.swf",
-                       "relativePath":  "rooms/Hallo15_forts.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/73/Hallo15_forts.swf",
-                       "bytes":  1219351,
-                       "sha256":  "D9D872FAC6BF9A94CEDA36FCD24BB4E6E4A60E3C0263B95DF7D885C96256C52E",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_hotellobby.swf",
-                       "relativePath":  "rooms/Hallo15_hotellobby.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/d/db/Hallo15_hotellobby.swf",
-                       "bytes":  396526,
-                       "sha256":  "DBE9851D9EE2D80B9F53BDE1C472867EFC93C0E4E8E35ECDF557150E96649DBD",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_hotelroof.swf",
-                       "relativePath":  "rooms/Hallo15_hotelroof.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/1/1d/Hallo15_hotelroof.swf",
-                       "bytes":  500212,
-                       "sha256":  "808A9923D67F7E1BEC6E358045C0D25E45E2460DEAE87283A140CFC050136543",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_hotelspa.swf",
-                       "relativePath":  "rooms/Hallo15_hotelspa.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/d/db/Hallo15_hotelspa.swf",
-                       "bytes":  350964,
-                       "sha256":  "8119C793CB0976F1A8ADE248B51F924411A3FA6EF1C9BF975E20BB4DDF5C542F",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_light.swf",
-                       "relativePath":  "rooms/Hallo15_light.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/c/c2/Hallo15_light.swf",
-                       "bytes":  187460,
-                       "sha256":  "16604BDE5DDB5431E1C420845F56097A8469CDAFDA4B91FC7529FB661D601017",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_lodge.swf",
-                       "relativePath":  "rooms/Hallo15_lodge.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/a/a1/Hallo15_lodge.swf",
-                       "bytes":  306956,
-                       "sha256":  "92B3222A63E4173E226B870E4B9E826299CF2A6310F5FE50CE4F6A0A78AF0C7F",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_lounge.swf",
-                       "relativePath":  "rooms/Hallo15_lounge.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/2/27/Hallo15_lounge.swf",
-                       "bytes":  220495,
-                       "sha256":  "63E7BA68AE9EF12FAAF8A28081900A6032309B67A108237B5144CF6B1BA61AE3",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_mall.swf",
-                       "relativePath":  "rooms/Hallo15_mall.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/6/62/Hallo15_mall.swf",
-                       "bytes":  292405,
-                       "sha256":  "646E18271ECE30EA39BBE99D3EB9E70B2120EB8EBE2A302496065AE7035A8CE6",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_mtn.swf",
-                       "relativePath":  "rooms/Hallo15_mtn.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/81/Hallo15_mtn.swf",
-                       "bytes":  217922,
-                       "sha256":  "9048BFD52EB49841F121C9F4C91FE1A38D8EDB5BE7D4118B2F37F8186FE3929B",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_park.swf",
-                       "relativePath":  "rooms/Hallo15_park.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/0/0f/Hallo15_park.swf",
-                       "bytes":  598859,
-                       "sha256":  "D4808C831DDBDE2D1A030678FAEC98DD0384D4AA4F0DFE09BE9D83BACD0AA361",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_party1.swf",
-                       "relativePath":  "rooms/Hallo15_party1.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/d/d6/Hallo15_party1.swf",
-                       "bytes":  2971971,
-                       "sha256":  "B0970395D6EF6F8A92EB132242A7CAFCEAB0687B78C19E60DE9707507CD0DE1F",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_party2.swf",
-                       "relativePath":  "rooms/Hallo15_party2.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/2/2a/Hallo15_party2.swf",
-                       "bytes":  138276,
-                       "sha256":  "E484482CBB857538B51A8949B7C8EC8C339F785E86767A31543A284EE2942379",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_partysolo1.swf",
-                       "relativePath":  "rooms/Hallo15_partysolo1.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/0/05/Hallo15_partysolo1.swf",
-                       "bytes":  2972018,
-                       "sha256":  "FCA5B3A0547A6E39D80C6959414E0BD4C1E1287C7914DE97EEBE26C866FD65FD",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_pet.swf",
-                       "relativePath":  "rooms/Hallo15_pet.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/83/Hallo15_pet.swf",
-                       "bytes":  469773,
-                       "sha256":  "61213A192C41514FA5E6E029D7480FB3630F4DF29071CBF305CC2B947914C909",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_pizza.swf",
-                       "relativePath":  "rooms/Hallo15_pizza.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/c/c5/Hallo15_pizza.swf",
-                       "bytes":  278728,
-                       "sha256":  "2D087EC6A99F72FF859D2D16F9288E63E6925CD72363669AA7AC0B9C127A380A",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_plaza.swf",
-                       "relativePath":  "rooms/Hallo15_plaza.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/7a/Hallo15_plaza.swf",
-                       "bytes":  1251656,
-                       "sha256":  "B64BCE96E8D99EE3817FF6261537CEF9D404FE2B226F205049932477B5F8B2AD",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_pufflewild.swf",
-                       "relativePath":  "rooms/Hallo15_pufflewild.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/8b/Hallo15_pufflewild.swf",
-                       "bytes":  507985,
-                       "sha256":  "919E43219A09D9819EE158DF8B48E683EBA3B29109E591FFC8F8868F0B2A1B90",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_rink.swf",
-                       "relativePath":  "rooms/Hallo15_rink.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/3/36/Hallo15_rink.swf",
-                       "bytes":  321991,
-                       "sha256":  "AFE20188A43EC08AA4F57FAC8A625170D23FCD69949B82C43F9EE4B17AF52207",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_school.swf",
-                       "relativePath":  "rooms/Hallo15_school.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/76/Hallo15_school.swf",
-                       "bytes":  350182,
-                       "sha256":  "F168C3011AB7050E9426102867C380D2AE3588F94FE1485431F8191CD7F0BB4A",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_shack.swf",
-                       "relativePath":  "rooms/Hallo15_shack.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/75/Hallo15_shack.swf",
-                       "bytes":  977852,
-                       "sha256":  "9540A95FBF81BD6FCD9CF58D8B5BFB176FF399D00AC8B7830A8B4D9CBD41670E",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_shop.swf",
-                       "relativePath":  "rooms/Hallo15_shop.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/5/5f/Hallo15_shop.swf",
-                       "bytes":  424714,
-                       "sha256":  "D3517003CD2AB2AC7E5CCB19CEEE60417164ABBD79FFF68DF60BB5CA141D6844",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_skatepark.swf",
-                       "relativePath":  "rooms/Hallo15_skatepark.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/77/Hallo15_skatepark.swf",
-                       "bytes":  378005,
-                       "sha256":  "5DDB591F53D7A883428AD07AFE9968C0A58485225C4AFEFCC35C7CC6627736F8",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "Hallo15_village.swf",
-                       "relativePath":  "rooms/Hallo15_village.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/3/31/Hallo15_village.swf",
-                       "bytes":  1158263,
-                       "sha256":  "D03B9529F32DB179AB07201C6525C2456A1178DBD2F64AA7E0CCEA7BDF7532A2",
+                       "category":  "content",
+                       "name":  "ContentParty_icon-HalloweenParty2015.swf",
+                       "relativePath":  "content/ContentParty_icon-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/6/67/ContentParty_icon-HalloweenParty2015.swf",
+                       "bytes":  3811,
+                       "sha256":  "A9176675A7B7CE48CEB47F08AE4563A9E61F59A768F37ECDF5D53E2C63782219",
                        "required":  true
                    },
                    {
@@ -1171,21 +807,12 @@
                        "required":  true
                    },
                    {
-                       "category":  "avatar",
-                       "name":  "PenguinRobot.swf",
-                       "relativePath":  "avatar/PenguinRobot.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/77/PenguinRobot.swf",
-                       "bytes":  967722,
-                       "sha256":  "CAF87FEE04C97B903BD7564F5175340EE015DCA4F97C18835FFDE0D34939903D",
-                       "required":  true
-                   },
-                   {
-                       "category":  "rooms",
-                       "name":  "RoomsTown-HalloweenParty2015.swf",
-                       "relativePath":  "rooms/RoomsTown-HalloweenParty2015.swf",
-                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/89/RoomsTown-HalloweenParty2015.swf",
-                       "bytes":  279675,
-                       "sha256":  "9101E280EF5E0A7007290EE752F26A3D987CDDF78179D5BFBDDFD9163364CCF3",
+                       "category":  "other",
+                       "name":  "Binoculars-HalloweenParty2015.swf",
+                       "relativePath":  "other/Binoculars-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/9/94/Binoculars-HalloweenParty2015.swf",
+                       "bytes":  9411,
+                       "sha256":  "09DEAA5E4FBE4E33CAE61FD2F614EC60EB71E1DE805C73B45696B301037FA250",
                        "required":  true
                    },
                    {
@@ -1195,6 +822,375 @@
                        "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/80/Telescope-HalloweenParty2015.swf",
                        "bytes":  7121,
                        "sha256":  "C4B1E7B0794CAA70086FE22770B76419D1075CDF6FB10F41F5BE8922362C3BC7",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_agentlobbymulti.swf",
+                       "relativePath":  "rooms/Hallo15_agentlobbymulti.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/1/10/Hallo15_agentlobbymulti.swf",
+                       "bytes":  425989,
+                       "sha256":  "C338E836785DB29885430B2CFDA76DCF0EFAD77D8C18C472B9F9DB548D78B9AE",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_attic.swf",
+                       "relativePath":  "rooms/Hallo15_attic.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/a/aa/Hallo15_attic.swf",
+                       "bytes":  283673,
+                       "sha256":  "EFC82CD731A6ECB50C2B07BD251656FF9EC03320417A434C3D3E8B819BCF4CA6",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_beach.swf",
+                       "relativePath":  "rooms/Hallo15_beach.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/d/d3/Hallo15_beach.swf",
+                       "bytes":  1180827,
+                       "sha256":  "0BA26BCE3F7BA44A220CAFE5928FC2CB2525DDDA1E2AAADBD6DB0A732DDBC592",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_beacon.swf",
+                       "relativePath":  "rooms/Hallo15_beacon.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/d/d3/Hallo15_beacon.swf",
+                       "bytes":  175957,
+                       "sha256":  "DD287A13EE5F807F1343663BC3B6E75F3009BB99E46DEE875AF5B59A6F474A70",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_berg.swf",
+                       "relativePath":  "rooms/Hallo15_berg.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/5/52/Hallo15_berg.swf",
+                       "bytes":  67847,
+                       "sha256":  "C6467A053B7657CEFD61A4D8459CD8CDCAF9BFEEC111832DC42CD1397A22A5B7",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_book.swf",
+                       "relativePath":  "rooms/Hallo15_book.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/1/15/Hallo15_book.swf",
+                       "bytes":  202035,
+                       "sha256":  "D30DAC4DB780CD9EE7ECCA0E34B3D89FBEE190E3BA3393C2F4B76AC9BF3C83E0",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_cave.swf",
+                       "relativePath":  "rooms/Hallo15_cave.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/f/f9/Hallo15_cave.swf",
+                       "bytes":  267222,
+                       "sha256":  "37E622B2A3C45189BA28CF2508188093779317D8FEEE47F871F4A887CEB004B8",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_cloudforest.swf",
+                       "relativePath":  "rooms/Hallo15_cloudforest.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/4/40/Hallo15_cloudforest.swf",
+                       "bytes":  204318,
+                       "sha256":  "7DD2390680556F9E31B7FD848E48A3422A200023D81896A55435A19C8D5255BE",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_coffee.swf",
+                       "relativePath":  "rooms/Hallo15_coffee.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/2/2a/Hallo15_coffee.swf",
+                       "bytes":  416417,
+                       "sha256":  "174422A61DDD8F2954CAD373513C0FBFC64113703F7D7224B4E6D017F93570F2",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_cove.swf",
+                       "relativePath":  "rooms/Hallo15_cove.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/2/2c/Hallo15_cove.swf",
+                       "bytes":  1156228,
+                       "sha256":  "276DAC44B724722CC09CD0CDA92DF19D015C61FD92EAF8747CD375657C38EC52",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_dance.swf",
+                       "relativePath":  "rooms/Hallo15_dance.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/9/95/Hallo15_dance.swf",
+                       "bytes":  243843,
+                       "sha256":  "C0580839B5DD2C263C7B0DAC2BCA01F26605FBB57F4FE4A3BEBBE6B165001F53",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_dock.swf",
+                       "relativePath":  "rooms/Hallo15_dock.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/5/56/Hallo15_dock.swf",
+                       "bytes":  999467,
+                       "sha256":  "B2B016A24000D0D266F099796C870D80077F9BA4222B02F2ACF3F5735ECA3EF5",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_dojo.swf",
+                       "relativePath":  "rooms/Hallo15_dojo.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/82/Hallo15_dojo.swf",
+                       "bytes":  414956,
+                       "sha256":  "7DBD41196F186AAC7B86BDA0AE9E28C3A395664E3138698F1015E9EC8870B26F",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_dojoext.swf",
+                       "relativePath":  "rooms/Hallo15_dojoext.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/3/38/Hallo15_dojoext.swf",
+                       "bytes":  315740,
+                       "sha256":  "A38A1436ED50388A3BD3A885DB36CBA3EA31E93ACC4D62474239A4E6A1F9E06B",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_dojofire.swf",
+                       "relativePath":  "rooms/Hallo15_dojofire.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/1/10/Hallo15_dojofire.swf",
+                       "bytes":  221111,
+                       "sha256":  "04B7A5BA5757EB33638B2DA179DCE0D53CEA033AFA63CEE96896638EDDA79AE8",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_dojosnow.swf",
+                       "relativePath":  "rooms/Hallo15_dojosnow.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/e/e5/Hallo15_dojosnow.swf",
+                       "bytes":  290223,
+                       "sha256":  "6F8E3B40A537A3E276F3BA9EC4B19BADA8E4E805783952147785D9B05C4E879B",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_forest.swf",
+                       "relativePath":  "rooms/Hallo15_forest.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/4/44/Hallo15_forest.swf",
+                       "bytes":  995578,
+                       "sha256":  "8BB6CC933F3A5D730186F88E9A910B63B2172CF8C2639E6A2EB39577F8A220A1",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_forts.swf",
+                       "relativePath":  "rooms/Hallo15_forts.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/73/Hallo15_forts.swf",
+                       "bytes":  1219351,
+                       "sha256":  "D9D872FAC6BF9A94CEDA36FCD24BB4E6E4A60E3C0263B95DF7D885C96256C52E",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_hotellobby.swf",
+                       "relativePath":  "rooms/Hallo15_hotellobby.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/d/db/Hallo15_hotellobby.swf",
+                       "bytes":  396526,
+                       "sha256":  "DBE9851D9EE2D80B9F53BDE1C472867EFC93C0E4E8E35ECDF557150E96649DBD",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_hotelroof.swf",
+                       "relativePath":  "rooms/Hallo15_hotelroof.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/1/1d/Hallo15_hotelroof.swf",
+                       "bytes":  500212,
+                       "sha256":  "808A9923D67F7E1BEC6E358045C0D25E45E2460DEAE87283A140CFC050136543",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_hotelspa.swf",
+                       "relativePath":  "rooms/Hallo15_hotelspa.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/d/db/Hallo15_hotelspa.swf",
+                       "bytes":  350964,
+                       "sha256":  "8119C793CB0976F1A8ADE248B51F924411A3FA6EF1C9BF975E20BB4DDF5C542F",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_light.swf",
+                       "relativePath":  "rooms/Hallo15_light.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/c/c2/Hallo15_light.swf",
+                       "bytes":  187460,
+                       "sha256":  "16604BDE5DDB5431E1C420845F56097A8469CDAFDA4B91FC7529FB661D601017",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_lodge.swf",
+                       "relativePath":  "rooms/Hallo15_lodge.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/a/a1/Hallo15_lodge.swf",
+                       "bytes":  306956,
+                       "sha256":  "92B3222A63E4173E226B870E4B9E826299CF2A6310F5FE50CE4F6A0A78AF0C7F",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_lounge.swf",
+                       "relativePath":  "rooms/Hallo15_lounge.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/2/27/Hallo15_lounge.swf",
+                       "bytes":  220495,
+                       "sha256":  "63E7BA68AE9EF12FAAF8A28081900A6032309B67A108237B5144CF6B1BA61AE3",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_mall.swf",
+                       "relativePath":  "rooms/Hallo15_mall.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/6/62/Hallo15_mall.swf",
+                       "bytes":  292405,
+                       "sha256":  "646E18271ECE30EA39BBE99D3EB9E70B2120EB8EBE2A302496065AE7035A8CE6",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_mtn.swf",
+                       "relativePath":  "rooms/Hallo15_mtn.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/81/Hallo15_mtn.swf",
+                       "bytes":  217922,
+                       "sha256":  "9048BFD52EB49841F121C9F4C91FE1A38D8EDB5BE7D4118B2F37F8186FE3929B",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_park.swf",
+                       "relativePath":  "rooms/Hallo15_park.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/0/0f/Hallo15_park.swf",
+                       "bytes":  598859,
+                       "sha256":  "D4808C831DDBDE2D1A030678FAEC98DD0384D4AA4F0DFE09BE9D83BACD0AA361",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_party1.swf",
+                       "relativePath":  "rooms/Hallo15_party1.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/d/d6/Hallo15_party1.swf",
+                       "bytes":  2971971,
+                       "sha256":  "B0970395D6EF6F8A92EB132242A7CAFCEAB0687B78C19E60DE9707507CD0DE1F",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_party2.swf",
+                       "relativePath":  "rooms/Hallo15_party2.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/2/2a/Hallo15_party2.swf",
+                       "bytes":  138276,
+                       "sha256":  "E484482CBB857538B51A8949B7C8EC8C339F785E86767A31543A284EE2942379",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_partysolo1.swf",
+                       "relativePath":  "rooms/Hallo15_partysolo1.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/0/05/Hallo15_partysolo1.swf",
+                       "bytes":  2972018,
+                       "sha256":  "FCA5B3A0547A6E39D80C6959414E0BD4C1E1287C7914DE97EEBE26C866FD65FD",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_pet.swf",
+                       "relativePath":  "rooms/Hallo15_pet.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/83/Hallo15_pet.swf",
+                       "bytes":  469773,
+                       "sha256":  "61213A192C41514FA5E6E029D7480FB3630F4DF29071CBF305CC2B947914C909",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_pizza.swf",
+                       "relativePath":  "rooms/Hallo15_pizza.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/c/c5/Hallo15_pizza.swf",
+                       "bytes":  278728,
+                       "sha256":  "2D087EC6A99F72FF859D2D16F9288E63E6925CD72363669AA7AC0B9C127A380A",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_plaza.swf",
+                       "relativePath":  "rooms/Hallo15_plaza.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/7a/Hallo15_plaza.swf",
+                       "bytes":  1251656,
+                       "sha256":  "B64BCE96E8D99EE3817FF6261537CEF9D404FE2B226F205049932477B5F8B2AD",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_pufflewild.swf",
+                       "relativePath":  "rooms/Hallo15_pufflewild.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/8b/Hallo15_pufflewild.swf",
+                       "bytes":  507985,
+                       "sha256":  "919E43219A09D9819EE158DF8B48E683EBA3B29109E591FFC8F8868F0B2A1B90",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_rink.swf",
+                       "relativePath":  "rooms/Hallo15_rink.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/3/36/Hallo15_rink.swf",
+                       "bytes":  321991,
+                       "sha256":  "AFE20188A43EC08AA4F57FAC8A625170D23FCD69949B82C43F9EE4B17AF52207",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_school.swf",
+                       "relativePath":  "rooms/Hallo15_school.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/76/Hallo15_school.swf",
+                       "bytes":  350182,
+                       "sha256":  "F168C3011AB7050E9426102867C380D2AE3588F94FE1485431F8191CD7F0BB4A",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_shack.swf",
+                       "relativePath":  "rooms/Hallo15_shack.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/75/Hallo15_shack.swf",
+                       "bytes":  977852,
+                       "sha256":  "9540A95FBF81BD6FCD9CF58D8B5BFB176FF399D00AC8B7830A8B4D9CBD41670E",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_shop.swf",
+                       "relativePath":  "rooms/Hallo15_shop.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/5/5f/Hallo15_shop.swf",
+                       "bytes":  424714,
+                       "sha256":  "D3517003CD2AB2AC7E5CCB19CEEE60417164ABBD79FFF68DF60BB5CA141D6844",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_skatepark.swf",
+                       "relativePath":  "rooms/Hallo15_skatepark.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/7/77/Hallo15_skatepark.swf",
+                       "bytes":  378005,
+                       "sha256":  "5DDB591F53D7A883428AD07AFE9968C0A58485225C4AFEFCC35C7CC6627736F8",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "Hallo15_village.swf",
+                       "relativePath":  "rooms/Hallo15_village.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/3/31/Hallo15_village.swf",
+                       "bytes":  1158263,
+                       "sha256":  "D03B9529F32DB179AB07201C6525C2456A1178DBD2F64AA7E0CCEA7BDF7532A2",
+                       "required":  true
+                   },
+                   {
+                       "category":  "rooms",
+                       "name":  "RoomsTown-HalloweenParty2015.swf",
+                       "relativePath":  "rooms/RoomsTown-HalloweenParty2015.swf",
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/8/89/RoomsTown-HalloweenParty2015.swf",
+                       "bytes":  279675,
+                       "sha256":  "9101E280EF5E0A7007290EE752F26A3D987CDDF78179D5BFBDDFD9163364CCF3",
                        "required":  true
                    }
                ]
