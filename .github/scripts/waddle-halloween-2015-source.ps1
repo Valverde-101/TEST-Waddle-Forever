@@ -36,6 +36,7 @@ $generalPath = Join-Path $repo 'src/server/file-generators/general.json.ts'
 $dependenciesPath = Join-Path $repo 'src/server/file-generators/dependencies.json.ts'
 $xtHandlerPath = Join-Path $repo 'src/server/socket-server/xt-handler.ts'
 $worldHandlersPath = Join-Path $repo 'src/server/socket-server/world-handlers.ts'
+$partyHandlersPath = Join-Path $repo 'src/server/socket-server/handlers/party.ts'
 $timelinePath = Join-Path $repo 'src/client/views/timeline/timeline-static.ts'
 $htmlPath = Join-Path $repo 'src/client/views/timeline/timeline.html'
 
@@ -76,6 +77,7 @@ foreach ($contract in @(
   "'play/v2/content/global/content/interface.swf'",
   "'play/v2/content/global/content/party.swf': 'svanilla:media/play/v2/content/global/content/party.swf'",
   "'play/v2/content/global/content/features.swf'",
+  "'play/v2/content/global/content/party_icon.swf': P + 'content/ContentParty_icon-HalloweenParty2015.swf'",
   "'play/v2/content/global/logo/logo.swf'",
   "'content/party_icon.swf': [P + 'content/ContentParty_icon-HalloweenParty2015.swf', 'party_icon']",
   "'play/v2/content/global/avatar/sprites/penguin_robot.swf'"
@@ -84,13 +86,16 @@ foreach ($contract in @(
 }
 Require-NotContains $party "'play/v2/client/interface.swf'" 'legacy_wrong_interface_route'
 Require-NotContains $party "'play/v2/content/global/content/logo.swf'" 'legacy_wrong_logo_route'
-Require-NotContains $party "'play/v2/content/global/content/party_icon.swf': P +" 'party_icon_route_without_global_crumb'
 
 $general = Read-Normalized $generalPath
 Require-Contains $general "const MODERN_PARTY_ICON_ROUTE = 'play/v2/content/global/content/party_icon.swf';" 'modern_party_icon_route'
 Require-Contains $general 'd.lookupFile(MODERN_PARTY_ICON_ROUTE) !== undefined' 'modern_party_icon_activation'
 Require-Contains $general '"party_icon_active": modernPartyIconActive' 'modern_party_option_activation'
 
+# Modern clients load the generic party runtime during the boot phase, before the
+# join/interface group. This is the principal startup invocation that initializes
+# BaseParty/ServerCookieService and later allows interface/quest code to resolve
+# party state. Treat it as a required reusable modern-party contract.
 $dependencies = Read-Normalized $dependenciesPath
 Require-Regex $dependencies '(?s)const DEPENDENCIES_VANILLA = \{.*?"boot"\s*:\s*\[.*?"id"\s*:\s*"party"' 'modern_party_boot_dependency'
 
@@ -109,6 +114,9 @@ $worldHandlers = Read-Normalized $worldHandlersPath
 Require-Regex $worldHandlers "p\.xt\('s',\s*'party#partycookie',\s*\[\],\s*handleRetrievePartyCookie\)" 'party_cookie_zero_arg_contract'
 Require-NotContains $worldHandlers "'party#partycookie', ['number']" 'party_cookie_fake_numeric_arg'
 
+$partyHandlers = Read-Normalized $partyHandlersPath
+Require-Contains $partyHandlers "msg.send(penguin, 'partycookie', JSON.stringify(cookie));" 'party_cookie_response_contract'
+
 $updates = Read-Normalized $updatesPath
 Require-Contains $updates 'import { UPDATES_2015 } from "./2015";' 'updates_2015_import'
 Require-Contains $updates '...UPDATES_2015' 'updates_2015_registration'
@@ -125,4 +133,4 @@ foreach ($year in 2013..2017) {
   Require-Regex $html ('<option(?:\s+value="{0}")?>{0}</option>' -f $year) ("timeline_year_{0}" -f $year)
 }
 
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source media_prefix=party2015 years=2005-2017 modern_room_ids=326,430,431,432,433,435,436,890 party_start=2015-10-21 party_end=2015-11-04 modern_ui_routes=canonical party_icon_activation=route_and_global_crumb airtower_empty_array=normalized_zero_arg_only mutation=false"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source media_prefix=party2015 years=2005-2017 modern_room_ids=326,430,431,432,433,435,436,890 party_start=2015-10-21 party_end=2015-11-04 modern_ui_routes=canonical party_icon_activation=canonical_route_plus_global_crumb modern_party_boot=party_swF_then_cookie airtower_empty_array=normalized_zero_arg_only mutation=false"
