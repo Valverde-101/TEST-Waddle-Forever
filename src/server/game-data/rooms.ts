@@ -51,7 +51,14 @@ export type RoomName = 'town' |
   'shipnest' |
   'ship' |
   'shiphold' |
-  'party' |
+  'dojosnow' |
+  'hotellobby' |
+  'hotelspa' |
+  'hotelroof' |
+  'cloudforest' |
+  'skatepark' |
+  'pufflewild' |
+  'pufflepark' |  'party' |
   'party1' |
   'party2' |
   'party3' |
@@ -322,7 +329,46 @@ export const ROOMS: Record<RoomName, Room> = {
     name: 'Captain\s Quaters',
     preCpipName: null
   },
-  'party': {
+  'dojosnow': {
+    id: 326,
+    name: 'Snow Dojo',
+    preCpipName: null
+  },
+  'hotellobby': {
+    id: 430,
+    name: 'Puffle Hotel Lobby',
+    preCpipName: null
+  },
+  'hotelspa': {
+    id: 431,
+    name: 'Puffle Hotel Spa',
+    preCpipName: null
+  },
+  'hotelroof': {
+    id: 432,
+    name: 'Puffle Hotel Roof',
+    preCpipName: null
+  },
+  'cloudforest': {
+    id: 433,
+    name: 'Cloud Forest',
+    preCpipName: null
+  },
+  'skatepark': {
+    id: 435,
+    name: 'Skatepark',
+    preCpipName: null
+  },
+  'pufflewild': {
+    id: 436,
+    name: 'Puffle Wild',
+    preCpipName: null
+  },
+  'pufflepark': {
+    id: 890,
+    name: 'Puffle Park',
+    preCpipName: null
+  },  'party': {
     id: 850,
     name: 'Party',
     preCpipName: null

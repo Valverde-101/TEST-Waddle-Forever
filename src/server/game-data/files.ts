@@ -31,6 +31,7 @@ const RECREATION = 'recreation';
 const MOD = 'mod';
 const TOOL = 'tool';
 const UNKNOWN = 'unknown';
+const PARTY2015 = 'party2015';
 
 /** Information of all files that undergo a custom process. Used purely for internal documentation and has no use in production */
 const FILE_DOCUMENTATIONS: Record<string, FileDocumentation[]> = {
@@ -2216,6 +2217,7 @@ const SUBDIRECTORES = new Set([
   RECREATION,
   TOOL,
   UNKNOWN,
+  PARTY2015,
   'archives',
   'slegacy',
   'svanilla',

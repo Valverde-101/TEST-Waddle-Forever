@@ -99,3 +99,4 @@ versions-dump.txt
 
 # AndroidBuild local heavy workspace
 /.work/
+/media/default/party2015/
