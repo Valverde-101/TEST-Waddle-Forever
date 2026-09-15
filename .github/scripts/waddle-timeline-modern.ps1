@@ -118,7 +118,12 @@ $updates = Read-Normalized $updatesPath
 $party2015 = Read-Normalized $party2015Path
 $updates2016 = Read-Normalized $updates2016Path
 
-foreach ($needle in @("import { UPDATES_2015 } from \"./2015\";","import { UPDATES_2016 } from \"./2016\";",'...UPDATES_2015','...UPDATES_2016')) {
+foreach ($needle in @(
+  'import { UPDATES_2015 } from "./2015";',
+  'import { UPDATES_2016 } from "./2016";',
+  '...UPDATES_2015',
+  '...UPDATES_2016'
+)) {
   if (-not $updates.Contains($needle)) { throw "WADDLE_TIMELINE_MODERN=FAIL updates_missing=$needle" }
 }
 if (-not $party2015.Contains("date: '2015-10-21'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL halloween_2015_date_missing' }
