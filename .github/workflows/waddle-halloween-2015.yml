@@ -20,6 +20,14 @@ on:
 permissions:
   contents: read
 
+env:
+  # The source generators intentionally write UTF-8/LF. Force checkout to the
+  # same canonical representation so the idempotence gate measures content,
+  # not Windows autocrlf transformations.
+  GIT_CONFIG_COUNT: 1
+  GIT_CONFIG_KEY_0: core.autocrlf
+  GIT_CONFIG_VALUE_0: 'false'
+
 concurrency:
   group: waddle-halloween-2015-${{ github.event.pull_request.number || 'manual' }}
   cancel-in-progress: true
