@@ -106,9 +106,13 @@ export const UPDATES_2015: Update[] = [
           town: 1052
         },
         fileChanges: {
-          'play/v2/client/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf',
+          'play/v2/content/global/content/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf',
+          // Halloween 2015 has no archived party-specific party.swf. Reset the
+          // boot dependency to the modern vanilla party loader so an older party
+          // snapshot (notably Halloween 2012) cannot leak into this event.
+          'play/v2/content/global/content/party.swf': 'svanilla:media/play/v2/content/global/content/party.swf',
           'play/v2/content/global/content/features.swf': P + 'content/ContentFeatures-HalloweenParty2015.swf',
-          'play/v2/content/global/content/logo.swf': P + 'content/ContentLogo-HalloweenParty2015.swf',
+          'play/v2/content/global/logo/logo.swf': P + 'content/ContentLogo-HalloweenParty2015.swf',
           'play/v2/content/global/content/party_icon.swf': P + 'content/ContentParty_icon-HalloweenParty2015.swf',
           'play/v2/content/global/avatar/sprites/penguin_robot.swf': P + 'avatar/PenguinRobot.swf',
           'play/v2/content/global/telescope/telescope.swf': P + 'other/Telescope-HalloweenParty2015.swf',
