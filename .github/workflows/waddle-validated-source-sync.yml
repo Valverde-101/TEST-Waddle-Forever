@@ -151,7 +151,7 @@ jobs:
           if($LASTEXITCODE -ne 0 -or $targetSha -ne $expected){throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_target_sha expected=$expected actual=$targetSha"}
           $global:LASTEXITCODE=0
 
-          # Reconcile only byte-identical preview contamination. Any real local edit remains protected.
+          # Reconcile only content that Git normalizes to the certified target blob.
           $dirtyPaths=@()
           foreach($probe in @('diff --name-only --','diff --cached --name-only --')){
             $parts=$probe -split ' '
@@ -169,11 +169,11 @@ jobs:
               $targetBlob=(& $git -c "safe.directory=$repo" -C $repo rev-parse "$previewRef`:$path" 2>$null | Out-String).Trim().ToLowerInvariant()
               $targetExit=$LASTEXITCODE
               $global:LASTEXITCODE=0
-              $workBlob=(& $git -c "safe.directory=$repo" -C $repo hash-object -- $path 2>$null | Out-String).Trim().ToLowerInvariant()
+              $workBlob=(& $git -c "safe.directory=$repo" -C $repo hash-object "--path=$path" -- $path 2>$null | Out-String).Trim().ToLowerInvariant()
               $workExit=$LASTEXITCODE
               $global:LASTEXITCODE=0
               if($targetExit -ne 0 -or $workExit -ne 0 -or $targetBlob -ne $workBlob){
-                throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_tracked_dirty current=$branch path=$path target_blob=$targetBlob work_blob=$workBlob"
+                throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_tracked_dirty current=$branch path=$path target_blob=$targetBlob clean_work_blob=$workBlob"
               }
               $sourcePath=Join-Path $repo ($path -replace '/', '\')
               $backupPath=Join-Path $backupRoot ($path -replace '/', '\')
@@ -184,10 +184,10 @@ jobs:
             if($LASTEXITCODE -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_restore_certified_contamination"}
             $global:LASTEXITCODE=0
             $reconciledTracked=$dirtyPaths.Count
-            Write-Host "VALIDATED_SOURCE_SYNC_CONTAMINATION=PASS kind=tracked count=$reconciledTracked backup=$backupRoot identity=certified_target"
+            Write-Host "VALIDATED_SOURCE_SYNC_CONTAMINATION=PASS kind=tracked count=$reconciledTracked backup=$backupRoot identity=certified_target_after_git_filters"
           }
 
-          # Remove only untracked files that collide with target-tracked files and are byte-identical.
+          # Remove only untracked collisions that normalize byte-for-byte to target-tracked files.
           $untrackedText=(& $git -c "safe.directory=$repo" -C $repo ls-files --others --exclude-standard | Out-String).Trim()
           $global:LASTEXITCODE=0
           $untracked=@()
@@ -199,14 +199,14 @@ jobs:
             $targetExit=$LASTEXITCODE
             $global:LASTEXITCODE=0
             if($targetExit -ne 0 -or [string]::IsNullOrWhiteSpace($targetBlob)){continue}
-            $workBlob=(& $git -c "safe.directory=$repo" -C $repo hash-object -- $path 2>$null | Out-String).Trim().ToLowerInvariant()
+            $workBlob=(& $git -c "safe.directory=$repo" -C $repo hash-object "--path=$path" -- $path 2>$null | Out-String).Trim().ToLowerInvariant()
             $workExit=$LASTEXITCODE
             $global:LASTEXITCODE=0
-            if($workExit -ne 0 -or $workBlob -ne $targetBlob){throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_untracked_collision path=$path target_blob=$targetBlob work_blob=$workBlob"}
+            if($workExit -ne 0 -or $workBlob -ne $targetBlob){throw "VALIDATED_SOURCE_SYNC=FAIL preview_switch_untracked_collision path=$path target_blob=$targetBlob clean_work_blob=$workBlob"}
             Remove-Item -LiteralPath (Join-Path $repo ($path -replace '/', '\')) -Force
             $reconciledUntracked++
           }
-          if($reconciledUntracked -gt 0){Write-Host "VALIDATED_SOURCE_SYNC_CONTAMINATION=PASS kind=untracked_collision count=$reconciledUntracked identity=certified_target"}
+          if($reconciledUntracked -gt 0){Write-Host "VALIDATED_SOURCE_SYNC_CONTAMINATION=PASS kind=untracked_collision count=$reconciledUntracked identity=certified_target_after_git_filters"}
 
           $remainingTracked=@(& $git -c "safe.directory=$repo" -C $repo status --porcelain=v1 --untracked-files=no)
           $global:LASTEXITCODE=0
