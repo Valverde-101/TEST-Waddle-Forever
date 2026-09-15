@@ -14,12 +14,19 @@ export const UPDATES_2015: Update[] = [
     temp: {
       party: {
         partyName: 'Halloween Party 2015',
+        activeFeatures: '20150501',
         partyProgress: {
           id: 'halloween-2015',
           messageCount: 10,
           communicatorMessageCount: 5,
           taskCount: 10,
-          maxCoinUpdate: 10
+          maxCoinUpdate: 10,
+          service: {
+            partyStartDate: '2015-10-21 00:00:00',
+            partyEndDate: '2015-11-05 00:00:00',
+            unlockDayIndex: 16,
+            numOfDaysInParty: 16
+          }
         },
         rooms: {
           beach: P + 'rooms/Hallo15_beach.swf',
@@ -107,14 +114,11 @@ export const UPDATES_2015: Update[] = [
         },
         fileChanges: {
           'play/v2/content/global/content/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf',
-          // Halloween 2015 has no archived party-specific party.swf. Reset the
-          // boot dependency to the modern vanilla party loader so an older party
-          // snapshot (notably Halloween 2012) cannot leak into this event.
-          'play/v2/content/global/content/party.swf': 'svanilla:media/play/v2/content/global/content/party.swf',
+          // Late-AS3 parties require a concrete CURRENT_PARTY implementation. The
+          // vanilla loader alone provides BaseParty but does not instantiate the
+          // Halloween runtime used by the preserved UI/feature SWFs.
+          'play/v2/content/global/content/party.swf': P + 'content/PartyRuntime-CPImaginedReference.swf',
           'play/v2/content/global/content/features.swf': P + 'content/ContentFeatures-HalloweenParty2015.swf',
-          // The modern boot/interface path resolves this canonical resource directly.
-          // Keep it explicit even though globalChanges below also exposes the shell
-          // crumb alias used by SHELL.getPath('party_icon').
           'play/v2/content/global/content/party_icon.swf': P + 'content/ContentParty_icon-HalloweenParty2015.swf',
           'play/v2/content/global/logo/logo.swf': P + 'content/ContentLogo-HalloweenParty2015.swf',
           'play/v2/content/global/avatar/sprites/penguin_robot.swf': P + 'avatar/PenguinRobot.swf',
@@ -165,11 +169,29 @@ export const UPDATES_2015: Update[] = [
           'play/v2/content/global/music/1058.swf': P + 'music/Music1058.swf',
           'play/v2/content/global/music/1067.swf': P + 'music/Music1067.swf'
         },
-        // The modern interface calls SHELL.getPath('party_icon'). The canonical
-        // route above and this global crumb are separate parts of the startup/UI
-        // contract and both are required.
+        // Late-AS3 party code discovers content by SHELL.getPath(). These routes
+        // must therefore be present in the global paths table as well as physically
+        // routable. The aliases below are preserved from the 2015-era runtime.
         globalChanges: {
-          'content/party_icon.swf': [P + 'content/ContentParty_icon-HalloweenParty2015.swf', 'party_icon']
+          'content/party_icon.swf': [P + 'content/ContentParty_icon-HalloweenParty2015.swf', 'party_icon', 'scavenger_hunt_icon'],
+          'close_ups/quest_interface.swf': [P + 'close_ups/Close_upsQuest_interface-HalloweenParty2015.swf', 'w.p2015.may.partyinterface', 'w.app.generic.partyinterface', 'scavenger_hunt'],
+          'close_ups/dialogue_login.swf': [P + 'close_ups/Hallo15_dialogue_login.swf', 'w.p2015.may.login'],
+          'close_ups/tiles_minigame0.swf': P + 'close_ups/Close_upsTiles_minigame0-HalloweenParty2015.swf',
+          'close_ups/tiles_minigame1.swf': P + 'close_ups/Close_upsTiles_minigame1-HalloweenParty2015.swf',
+          'close_ups/tiles_minigame2.swf': P + 'close_ups/Close_upsTiles_minigame2-HalloweenParty2015.swf',
+          'close_ups/tiles_minigame3.swf': P + 'close_ups/Close_upsTiles_minigame3-HalloweenParty2015.swf',
+          'close_ups/tiles_minigame4.swf': P + 'close_ups/Close_upsTiles_minigame4-HalloweenParty2015.swf',
+          'close_ups/tiles_minigame5.swf': P + 'close_ups/Close_upsTiles_minigame5-HalloweenParty2015.swf',
+          'close_ups/tiles_minigame6.swf': P + 'close_ups/Close_upsTiles_minigame6-HalloweenParty2015.swf',
+          'close_ups/tiles_minigame7.swf': P + 'close_ups/Close_upsTiles_minigame7-HalloweenParty2015.swf',
+          'close_ups/tiles_minigame8.swf': [P + 'close_ups/Close_upsTiles_minigame8-HalloweenParty2015.swf', 'halloHerbertGame'],
+          'close_ups/dialogue_Herbert_monologue.swf': [P + 'close_ups/Hallo15_dialogue_Herbert_monologue.swf', 'halloHerbertMonologue'],
+          'close_ups/dialogue_Herbert_monologue_2.swf': [P + 'close_ups/Hallo15_dialogue_Herbert_monologue_2.swf', 'halloHerbertMonologue2'],
+          'close_ups/dialogue_Herbot.swf': [P + 'close_ups/Hallo15_dialogue_Herbot.swf', 'halloHerbot'],
+          'close_ups/dialogue_Herbert_caged.swf': [P + 'close_ups/Hallo15_dialogue_Herbert_caged.swf', 'halloHerbertCage'],
+          'close_ups/dialogue_Gary_lair.swf': [P + 'close_ups/Hallo15_dialogue_Gary_lair.swf', 'halloGaryLair'],
+          'close_ups/dialogue_Herbert_escape.swf': [P + 'close_ups/Hallo15_dialogue_Herbert_escape.swf', 'halloHerbertGetaway'],
+          'close_ups/dialogue_Gary_final.swf': [P + 'close_ups/Hallo15_dialogue_Gary_final.swf', 'halloGaryFinal']
         },
         localChanges: {
           'close_ups/quest_interface.swf': { en: P + 'close_ups/Close_upsQuest_interface-HalloweenParty2015.swf' },
@@ -223,7 +245,8 @@ export const UPDATES_2015: Update[] = [
     }
   },
   {
-    date: '2015-11-04',
+    // Temporary-event ends are exclusive, so Nov 5 keeps Nov 4 playable.
+    date: '2015-11-05',
     end: ['party']
   }
 ];
