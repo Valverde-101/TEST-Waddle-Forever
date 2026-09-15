@@ -336,7 +336,7 @@ export const createWorldXtHandler = (): XtHandler => {
     p.xt('s', 'party#msgviewed', ['number'], handlePartyMessageViewed),
     p.xt('s', 'party#qcmsgviewed', ['number'], handlePartyCommunicatorViewed),
     p.xt('s', 'party#qtaskcomplete', ['number'], handlePartyTaskComplete),
-    p.xt('s', 'party#qtupdate', ['number'], handlePartyTaskUpdate),
+    p.xt('s', 'party#qtupdate', ['number'], handlePartyTaskUpdate, { xt: { cooldown: 5000 } }),
 
     p.xt('s', 'ba#barsu', [], handleGetBakeryState),
     p.xt('s', 'ba#seh', ['string'], handleSendEnterHopper),
