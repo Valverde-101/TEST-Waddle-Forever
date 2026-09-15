@@ -58,7 +58,8 @@ export type RoomName = 'town' |
   'cloudforest' |
   'skatepark' |
   'pufflewild' |
-  'pufflepark' |  'party' |
+  'pufflepark' |
+  'party' |
   'party1' |
   'party2' |
   'party3' |
@@ -368,7 +369,8 @@ export const ROOMS: Record<RoomName, Room> = {
     id: 890,
     name: 'Puffle Park',
     preCpipName: null
-  },  'party': {
+  },
+  'party': {
     id: 850,
     name: 'Party',
     preCpipName: null
