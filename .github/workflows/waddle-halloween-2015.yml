@@ -65,10 +65,11 @@ jobs:
           ./.github/scripts/waddle-halloween-2015-postfix.ps1 -RepoRoot $env:GITHUB_WORKSPACE
           ./.github/scripts/waddle-halloween-2015-versioning.ps1 -RepoRoot $env:GITHUB_WORKSPACE
           ./.github/scripts/waddle-halloween-2015-gameplay.ps1 -RepoRoot $env:GITHUB_WORKSPACE
+          ./.github/scripts/waddle-timeline-modern.ps1 -RepoRoot $env:GITHUB_WORKSPACE
           $changes = @(git status --porcelain)
           if($LASTEXITCODE -ne 0){throw "WADDLE_PARTY2015_SOURCE_GATE=FAIL git_status_exit=$LASTEXITCODE"}
           if($changes.Count -gt 0){$changes | ForEach-Object { Write-Host $_ }; throw "WADDLE_PARTY2015_SOURCE_GATE=FAIL generated_diff_count=$($changes.Count)"}
-          Write-Host 'WADDLE_PARTY2015_SOURCE_GATE=PASS generated_diff_count=0 architecture=data_driven'
+          Write-Host 'WADDLE_PARTY2015_SOURCE_GATE=PASS generated_diff_count=0 architecture=data_driven timeline=data_driven'
 
   hydrate-publish-and-verify-assets:
     needs: validate-pr-source
@@ -121,4 +122,4 @@ jobs:
       - name: Verify party media is Git-owned and complete
         shell: powershell
         run: |
-          $ErrorActionPreference='Stop'; $party=Join-Path $env:GITHUB_WORKSPACE 'media\default\party2015'; $swfs=@(Get-ChildItem -LiteralPath $party -Filter '*.swf' -File -Recurse); if($swfs.Count -ne 132){throw "WADDLE_PARTY2015_GIT_OWNERSHIP=FAIL expected_swfs=132 actual=$($swfs.Count)"}; $trackedSwfs=@(git ls-files -- 'media/default/party2015' | Where-Object {$_ -match '(?i)\.swf$'}); if($trackedSwfs.Count -ne 132){throw "WADDLE_PARTY2015_GIT_OWNERSHIP=FAIL tracked_swfs=132 actual=$($trackedSwfs.Count)"}; $ignored=@(git check-ignore -- 'media/default/party2015/probe.swf' 2>$null); $global:LASTEXITCODE=0; if($ignored.Count -gt 0){throw 'WADDLE_PARTY2015_GIT_OWNERSHIP=FAIL party2015_is_ignored'}; Write-Host 'WADDLE_PARTY2015_GIT_OWNERSHIP=PASS tracked_swfs=132 ignored=false'
+          $ErrorActionPreference='Stop'; $party=Join-Path $env:GITHUB_WORKSPACE 'media\default\party2015'; $swfs=@(Get-ChildItem -LiteralPath $party -Filter '*.swf' -File -Recurse); if($swfs.Count -ne 132){throw "WADDLE_PARTY2015_GIT_OWNERSHIP=FAIL expected_swfs=132 actual=$($swfs.Count)"}; $trackedSwfs=@(git ls-files -- 'media/default/party2015' | Where-Object {$_ -match '(?i)\.swf$'}); if($trackedSwfs.Count -ne 132){throw "WADDLE_PARTY2015_GIT_OWNERSHIP=FAIL tracked_swfs=132 actual=$($trackedSwfs.Count)"}; $ignored=@(git check-ignore -- 'media/default/party2012015/probe.swf' 2>$null); $global:LASTEXITCODE=0; if($ignored.Count -gt 0){throw 'WADDLE_PARTY2015_GIT_OWNERSHIP=FAIL party2015_is_ignored'}; Write-Host 'WADDLE_PARTY2015_GIT_OWNERSHIP=PASS tracked_swfs=132 ignored=false'
