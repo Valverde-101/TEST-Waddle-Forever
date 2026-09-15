@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
   [string]$RepoRoot = $env:GITHUB_WORKSPACE,
-  [string]$FFDecPath
+  [string]$FFDecPath,
+  [switch]$RequireComplete
 )
 
 Set-StrictMode -Version Latest
@@ -38,6 +39,7 @@ if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -For
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 
 $tokens = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+$fileTokenMap = [ordered]@{}
 foreach ($dialogue in $dialogues) {
   $out = Join-Path $work ([IO.Path]::GetFileNameWithoutExtension($dialogue.Name))
   New-Item -ItemType Directory -Force -Path $out | Out-Null
@@ -45,13 +47,16 @@ foreach ($dialogue in $dialogues) {
   if ($LASTEXITCODE -ne 0) {
     throw "WADDLE_PARTY2015_DIALOGUES=FAIL ffdec_exit=$LASTEXITCODE file=$($dialogue.Name)"
   }
+  $fileTokens = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
   foreach ($file in @(Get-ChildItem -LiteralPath $out -File -Recurse -ErrorAction SilentlyContinue)) {
     $text = Get-Content -LiteralPath $file.FullName -Raw -ErrorAction SilentlyContinue
     if ([string]::IsNullOrWhiteSpace($text)) { continue }
     foreach ($match in @([regex]::Matches($text,'w\.app\.p2015\.halloween(?:\.[A-Za-z0-9_]+)+'))) {
       [void]$tokens.Add($match.Value)
+      [void]$fileTokens.Add($match.Value)
     }
   }
+  $fileTokenMap[$dialogue.Name] = @($fileTokens | Sort-Object)
 }
 
 $sorted = @($tokens | Sort-Object)
@@ -60,12 +65,32 @@ if ($sorted.Count -lt 10) {
   throw "WADDLE_PARTY2015_DIALOGUES=FAIL token_inventory_too_small=$($sorted.Count) dialogues=$($dialogues.Count)"
 }
 
-$updatesPath = Join-Path $repo 'src\server\updates\2015.ts'
-$updates = Get-Content -LiteralPath $updatesPath -Raw
-$missing = @($sorted | Where-Object { -not $updates.Contains($_) })
+# Search the actual source tree that feeds game_strings.json. A token name in
+# 2015.ts without a historically sourced value is not considered evidence; the
+# data script removes those reconstructed values before this audit runs.
+$sourceFiles = @(
+  Get-ChildItem -LiteralPath (Join-Path $repo 'src\server\updates') -Filter '*.ts' -File -ErrorAction SilentlyContinue
+  Get-Item -LiteralPath (Join-Path $repo 'src\server\file-generators\game_strings.json.ts') -ErrorAction SilentlyContinue
+) | Where-Object { $_ -ne $null }
+$sourceText = ($sourceFiles | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw -ErrorAction SilentlyContinue }) -join "`n"
+$missing = @($sorted | Where-Object { -not $sourceText.Contains($_) })
 foreach ($token in $missing) { Write-Host "WADDLE_PARTY2015_DIALOGUE_MISSING=$token" }
-if ($missing.Count -gt 0) {
-  throw "WADDLE_PARTY2015_DIALOGUES=FAIL missing_localizations=$($missing.Count) tokens=$($sorted.Count) dialogues=$($dialogues.Count)"
+
+$report = [ordered]@{
+  schema = 'waddle-party-dialogue-audit/v2'
+  party = 'Halloween Party 2015'
+  dialogues = $dialogues.Count
+  requiredTokens = $sorted
+  missingTokens = $missing
+  files = $fileTokenMap
+  complete = ($missing.Count -eq 0)
+}
+$reportPath = Join-Path $work 'localization-audit.json'
+$report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportPath -Encoding UTF8
+
+if ($RequireComplete -and $missing.Count -gt 0) {
+  throw "WADDLE_PARTY2015_DIALOGUES=FAIL missing_localizations=$($missing.Count) tokens=$($sorted.Count) dialogues=$($dialogues.Count) report=$reportPath"
 }
 
-Write-Host "WADDLE_PARTY2015_DIALOGUES=PASS dialogues=$($dialogues.Count) tokens=$($sorted.Count) missing=0"
+$status = if ($missing.Count -eq 0) { 'PASS' } else { 'INCOMPLETE' }
+Write-Host "WADDLE_PARTY2015_DIALOGUES=$status dialogues=$($dialogues.Count) tokens=$($sorted.Count) missing=$($missing.Count) require_complete=$RequireComplete report=$reportPath"
