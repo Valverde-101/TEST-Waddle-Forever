@@ -81,7 +81,12 @@ if (-not $updates.Contains($iconCrumb)) {
         },
 '@
   if ($updates.Contains('        globalChanges: {')) {
-    $updates = $updates.Replace('        globalChanges: {', "        globalChanges: {`n$iconCrumb,", 1)
+    $updates = [regex]::Replace(
+      $updates,
+      [regex]::Escape('        globalChanges: {'),
+      [System.Text.RegularExpressions.MatchEvaluator]{ param($m) "        globalChanges: {`n$iconCrumb," },
+      1
+    )
   } else {
     $updates = Replace-Once $updates '        localChanges: {' ($globalBlock + '        localChanges: {') 'party-icon-global-crumb'
   }
