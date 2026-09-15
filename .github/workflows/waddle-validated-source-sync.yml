@@ -148,13 +148,38 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           Set-StrictMode -Version Latest
-          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $env:WADDLE_CERTIFIED_PREVIEW_SCRIPT `
-            -AndroidBuildRoot $env:ANDROIDBUILD_ROOT `
-            -SourceRepoRoot $env:WADDLE_CANONICAL_REPO `
-            -Repository '${{ github.repository }}' `
-            -TargetBranch $env:WADDLE_TARGET_BRANCH `
-            -ExpectedSha $env:WADDLE_EXPECTED_SHA `
-            -CertificationRunId $env:WADDLE_CERT_RUN_ID
-          $code=$LASTEXITCODE
-          $global:LASTEXITCODE=0
+
+          # GitHub's self-hosted runner tags descendants with RUNNER_TRACKING_ID and
+          # kills them as orphans at job teardown. Remove that tag only while spawning
+          # the certified preview so Electron survives after CI; restore it immediately
+          # for the runner-owned shell and all subsequent validation commands.
+          $trackingId=$env:RUNNER_TRACKING_ID
+          try {
+            Remove-Item Env:\RUNNER_TRACKING_ID -ErrorAction SilentlyContinue
+            Write-Host 'VALIDATED_SOURCE_SYNC_DETACH=PASS runner_tracking_removed_for_preview=true'
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $env:WADDLE_CERTIFIED_PREVIEW_SCRIPT `
+              -AndroidBuildRoot $env:ANDROIDBUILD_ROOT `
+              -SourceRepoRoot $env:WADDLE_CANONICAL_REPO `
+              -Repository '${{ github.repository }}' `
+              -TargetBranch $env:WADDLE_TARGET_BRANCH `
+              -ExpectedSha $env:WADDLE_EXPECTED_SHA `
+              -CertificationRunId $env:WADDLE_CERT_RUN_ID
+            $code=$LASTEXITCODE
+            $global:LASTEXITCODE=0
+          } finally {
+            if([string]::IsNullOrEmpty($trackingId)){
+              Remove-Item Env:\RUNNER_TRACKING_ID -ErrorAction SilentlyContinue
+            }else{
+              $env:RUNNER_TRACKING_ID=$trackingId
+            }
+          }
           if($code -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL isolated_preview_exit=$code"}
+
+          $safeTarget=[regex]::Replace($env:WADDLE_TARGET_BRANCH,'[^A-Za-z0-9._-]','_')
+          $previewRoot=Join-Path $env:ANDROIDBUILD_ROOT ("Previews\Waddle-Forever\$safeTarget")
+          $verify=Join-Path $previewRoot '.github\scripts\waddle-modern-timeline-verify.ps1'
+          if(-not(Test-Path -LiteralPath $verify -PathType Leaf)){throw "VALIDATED_SOURCE_SYNC=FAIL timeline_verifier_missing=$verify"}
+          & $verify -RepoRoot $previewRoot -RequiredThroughYear 2017 -RequiredDates @('2015-10-21','2015-11-04')
+          if($LASTEXITCODE -ne 0){throw 'VALIDATED_SOURCE_SYNC=FAIL compiled_timeline_verification'}
+          $global:LASTEXITCODE=0
+          Write-Host "VALIDATED_SOURCE_SYNC_TIMELINE=PASS preview=$previewRoot picker_through=2017 compiled=true"

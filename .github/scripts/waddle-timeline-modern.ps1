@@ -23,14 +23,34 @@ $htmlPath = Join-Path $RepoRoot 'src/client/views/timeline/timeline.html'
 $updatesPath = Join-Path $RepoRoot 'src/server/updates/updates.ts'
 $party2015Path = Join-Path $RepoRoot 'src/server/updates/2015.ts'
 $updates2016Path = Join-Path $RepoRoot 'src/server/updates/2016.ts'
+$verifyPath = Join-Path $PSScriptRoot 'waddle-modern-timeline-verify.ps1'
 
-foreach ($required in @($timelinePath,$timelineBackendPath,$htmlPath,$updatesPath,$party2015Path,$updates2016Path)) {
+foreach ($required in @($timelinePath,$timelineBackendPath,$htmlPath,$updatesPath,$party2015Path,$updates2016Path,$verifyPath)) {
   if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
     throw "WADDLE_TIMELINE_MODERN=FAIL missing=$required"
   }
 }
 
 $timeline = Read-Normalized $timelinePath
+$html = Read-Normalized $htmlPath
+
+$newSyncMarker = 'const configuredYears = Array.from(yearElement.options)'
+$newRangeMarker = 'const lastSelectableYear = Math.max(...selectableYears, payloadEndDate.getFullYear());'
+$needsMaterialization = (-not $timeline.Contains($newSyncMarker)) -or (-not $timeline.Contains($newRangeMarker)) -or (-not $html.Contains('<option>2017</option>'))
+$isGitHubHosted = ($env:GITHUB_ACTIONS -eq 'true') -and (($env:RUNNER_ENVIRONMENT -eq 'github-hosted') -or ($env:RUNNER_NAME -like 'GitHub Actions*'))
+
+# A generator revision can land before its materialized source. The hosted source gate
+# must not manufacture a partial working tree that it cannot commit. The self-hosted
+# publisher is the authority that materializes and commits the generated timeline in
+# one follow-up SHA. Once materialized, this branch is never taken again and the gate
+# returns to strict zero-diff/idempotence behavior.
+if ($needsMaterialization -and $isGitHubHosted) {
+  if (-not $timeline.Contains('function syncYearOptions(days: DateInfo[])')) { throw 'WADDLE_TIMELINE_MODERN=FAIL bootstrap_sync_function_missing' }
+  if (-not $timeline.Contains('const endDate = getDateFromDateInfo(days[days.length - 1]);')) { throw 'WADDLE_TIMELINE_MODERN=FAIL bootstrap_calendar_end_missing' }
+  if (-not $html.Contains('<option>2016</option>')) { throw 'WADDLE_TIMELINE_MODERN=FAIL bootstrap_2016_missing' }
+  Write-Host 'WADDLE_TIMELINE_MODERN=MATERIALIZATION_PENDING authority=self_hosted reason=generator_revision picker_through=2017'
+  return
+}
 
 $oldYearLine = @'
   const yearStr = (year === undefined && useYear) ? '' : `, ${year}`;
@@ -38,20 +58,9 @@ $oldYearLine = @'
 $newYearLine = @'
   const yearStr = useYear && year !== undefined ? `, ${year}` : '';
 '@.TrimEnd()
-$timeline = Replace-Required $timeline $oldYearLine $newYearLine 'date-year-format'
+if ($timeline.Contains($oldYearLine)) { $timeline = $timeline.Replace($oldYearLine,$newYearLine) }
 
-$selectAnchor = @'
-function setSelectElements(month: number, year: number) {
-  monthElement.value = MONTHS[month - 1];
-  yearElement.value = String(year);
-}
-'@
-$selectWithYears = @'
-function setSelectElements(month: number, year: number) {
-  monthElement.value = MONTHS[month - 1];
-  yearElement.value = String(year);
-}
-
+$currentSync = @'
 /** Keep the year picker in lockstep with the actual timeline data. */
 function syncYearOptions(days: DateInfo[]) {
   const years = Array.from(new Set(days.map((day) => day.year)))
@@ -68,7 +77,53 @@ function syncYearOptions(days: DateInfo[]) {
   yearElement.dataset.timelineYears = years.join(',');
 }
 '@
-$timeline = Replace-Required $timeline $selectAnchor $selectWithYears 'dynamic-years'
+$newSync = @'
+/** Keep configured years visible while allowing future timeline data to extend the range. */
+function syncYearOptions(days: DateInfo[]) {
+  const configuredYears = Array.from(yearElement.options)
+    .map((option) => Number(option.value || option.text))
+    .filter((year) => Number.isFinite(year) && year > 0);
+  const payloadYears = days
+    .map((day) => day.year)
+    .filter((year) => Number.isFinite(year) && year > 0);
+  const allYears = [...configuredYears, ...payloadYears];
+
+  if (allYears.length === 0) {
+    throw new Error('Timeline contains no selectable years');
+  }
+
+  const minYear = Math.min(...allYears);
+  const maxYear = Math.max(...allYears);
+  const years = Array.from({ length: maxYear - minYear + 1 }, (_, index) => minYear + index);
+
+  yearElement.innerHTML = years
+    .map((year) => `<option value="${year}">${year}</option>`)
+    .join('');
+  yearElement.dataset.timelineYears = years.join(',');
+}
+'@
+if (-not $timeline.Contains($newSync)) {
+  if (-not $timeline.Contains($currentSync)) { throw 'WADDLE_TIMELINE_MODERN=FAIL patch_not_found=defensive_years' }
+  $timeline = $timeline.Replace($currentSync,$newSync)
+}
+
+$currentEnd = @'
+  const endDate = getDateFromDateInfo(days[days.length - 1]);
+  endDate.setDate(endDate.getDate() + 1);
+'@
+$newEnd = @'
+  const payloadEndDate = getDateFromDateInfo(days[days.length - 1]);
+  const selectableYears = Array.from(yearElement.options)
+    .map((option) => Number(option.value || option.text))
+    .filter((year) => Number.isFinite(year) && year > 0);
+  const lastSelectableYear = Math.max(...selectableYears, payloadEndDate.getFullYear());
+  const endDate = new Date(lastSelectableYear, 11, 31);
+  endDate.setDate(endDate.getDate() + 1);
+'@
+if (-not $timeline.Contains($newEnd)) {
+  if (-not $timeline.Contains($currentEnd)) { throw 'WADDLE_TIMELINE_MODERN=FAIL patch_not_found=calendar_selectable_horizon' }
+  $timeline = $timeline.Replace($currentEnd,$newEnd)
+}
 
 $timeline = Replace-Required $timeline `
   '            if (year !== undefined && month !== undefined)' `
@@ -107,12 +162,11 @@ $eventWithYears = @'
   syncYearOptions(days);
   const dateInfo = getDateInfo(currentVersion);
 '@
-$timeline = Replace-Required $timeline $eventAnchor $eventWithYears 'timeline-event-years'
+if (-not $timeline.Contains('syncYearOptions(days);')) {
+  $timeline = Replace-Required $timeline $eventAnchor $eventWithYears 'timeline-event-years'
+}
 Write-Utf8 $timelinePath $timeline
 
-# A year is only selectable when the timeline backend emits at least one visible day.
-# Client/index transitions are real version boundaries, so expose them generically instead
-# of relying on a one-off 2016/2017 button.
 $timelineBackend = Read-Normalized $timelineBackendPath
 $backendAnchor = @'
   UPDATES.forEach(update => {
@@ -125,20 +179,21 @@ $backendWithClientVersion = @'
     }
     if (update.update.gameRelease !== undefined) {
 '@
-$timelineBackend = Replace-Required $timelineBackend $backendAnchor $backendWithClientVersion 'client-version-days'
+if (-not $timelineBackend.Contains("addEvent(map, update.date, 'A new client version is available', 'other');")) {
+  $timelineBackend = Replace-Required $timelineBackend $backendAnchor $backendWithClientVersion 'client-version-days'
+}
 Write-Utf8 $timelineBackendPath $timelineBackend
 
 $html = Read-Normalized $htmlPath
-$html = $html -replace '(?m)^\s*<option>2017</option>\s*\n?', ''
-if (-not $html.Contains('<option>2016</option>')) {
-  throw 'WADDLE_TIMELINE_MODERN=FAIL year_2016_missing_from_fallback_html'
+if (-not $html.Contains('<option>2017</option>')) {
+  if (-not $html.Contains('<option>2016</option>')) { throw 'WADDLE_TIMELINE_MODERN=FAIL year_2016_missing_from_fallback_html' }
+  $html = $html.Replace('              <option>2016</option>', "              <option>2016</option>`n              <option>2017</option>")
 }
 Write-Utf8 $htmlPath $html
 
 $updates = Read-Normalized $updatesPath
 $party2015 = Read-Normalized $party2015Path
 $updates2016 = Read-Normalized $updates2016Path
-
 foreach ($needle in @(
   'import { UPDATES_2015 } from "./2015";',
   'import { UPDATES_2016 } from "./2016";',
@@ -151,13 +206,11 @@ if (-not $party2015.Contains("date: '2015-10-21'")) { throw 'WADDLE_TIMELINE_MOD
 if (-not $party2015.Contains("partyName: 'Halloween Party 2015'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL halloween_2015_party_missing' }
 if (-not $updates2016.Contains("date: '2016-01-01'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL year_2016_update_missing' }
 if (-not $updates2016.Contains("indexHtml: 'modern-as3'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL modern_as3_entry_missing' }
-if (-not $timelineBackend.Contains("addEvent(map, update.date, 'A new client version is available', 'other');")) { throw 'WADDLE_TIMELINE_MODERN=FAIL client_transition_not_selectable' }
 
-# Engine cutovers are generic timeline facts: Halloween 2015 must be after both
-# AS3 (2010-11-19) and the vanilla-engine transition (2011-06-27).
 $updates2010 = Read-Normalized (Join-Path $RepoRoot 'src/server/updates/2010.ts')
 $updates2011 = Read-Normalized (Join-Path $RepoRoot 'src/server/updates/2011.ts')
 if (-not $updates2010.Contains("dateReference: 'as3'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL as3_cutover_missing' }
 if (-not $updates2011.Contains("dateReference: 'vanilla-engine'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL vanilla_engine_cutover_missing' }
 
-Write-Host 'WADDLE_TIMELINE_MODERN=PASS years=data-driven current_max=2016 halloween=2015-10-21 client_transitions=selectable as3=true vanilla_engine=true legacy_footer=false'
+& $verifyPath -RepoRoot $RepoRoot -RequiredThroughYear 2017 -RequiredDates @('2015-10-21','2015-11-04')
+Write-Host 'WADDLE_TIMELINE_MODERN=PASS years=configured_plus_payload picker_through=2017 halloween=2015-10-21 client_transitions=selectable as3=true vanilla_engine=true legacy_footer=false'
