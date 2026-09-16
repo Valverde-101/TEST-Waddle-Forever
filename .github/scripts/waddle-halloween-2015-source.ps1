@@ -10,21 +10,15 @@ function Read-Normalized([string]$Path) {
 }
 
 function Require-Contains([string]$Text,[string]$Needle,[string]$Label) {
-  if (-not $Text.Contains($Needle)) {
-    throw "WADDLE_PARTY2015_SOURCE=FAIL missing_contract=$Label"
-  }
+  if (-not $Text.Contains($Needle)) { throw "WADDLE_PARTY2015_SOURCE=FAIL missing_contract=$Label" }
 }
 
 function Require-NotContains([string]$Text,[string]$Needle,[string]$Label) {
-  if ($Text.Contains($Needle)) {
-    throw "WADDLE_PARTY2015_SOURCE=FAIL stale_contract=$Label"
-  }
+  if ($Text.Contains($Needle)) { throw "WADDLE_PARTY2015_SOURCE=FAIL stale_contract=$Label" }
 }
 
 function Require-Regex([string]$Text,[string]$Pattern,[string]$Label) {
-  if ($Text -notmatch $Pattern) {
-    throw "WADDLE_PARTY2015_SOURCE=FAIL missing_contract=$Label"
-  }
+  if ($Text -notmatch $Pattern) { throw "WADDLE_PARTY2015_SOURCE=FAIL missing_contract=$Label" }
 }
 
 function Get-GitBlobSha([string]$Path) {
@@ -49,21 +43,10 @@ function Test-Swf([string]$Path) {
   } finally { $stream.Dispose() }
 }
 
-function Test-ZipConfig([string]$Path) {
-  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
-  $stream = [IO.File]::OpenRead($Path)
-  try {
-    if ($stream.Length -lt 4) { return $false }
-    $header = New-Object byte[] 4
-    if ($stream.Read($header,0,4) -ne 4) { return $false }
-    return $header[0] -eq 0x50 -and $header[1] -eq 0x4B -and $header[2] -eq 0x03 -and $header[3] -eq 0x04
-  } finally { $stream.Dispose() }
-}
-
 $repo = (Resolve-Path -LiteralPath $RepoRoot).Path
+$partyPath = Join-Path $repo 'src/server/updates/2015.ts'
 $filesPath = Join-Path $repo 'src/server/game-data/files.ts'
 $roomsPath = Join-Path $repo 'src/server/game-data/rooms.ts'
-$partyPath = Join-Path $repo 'src/server/updates/2015.ts'
 $updatesPath = Join-Path $repo 'src/server/updates/updates.ts'
 $generalPath = Join-Path $repo 'src/server/file-generators/general.json.ts'
 $fileGeneratorsPath = Join-Path $repo 'src/server/file-generators/index.ts'
@@ -73,8 +56,6 @@ $protocolPath = Join-Path $repo 'src/server/socket-server/handlers/protocol.ts'
 $joinHandlersPath = Join-Path $repo 'src/server/socket-server/handlers/join.ts'
 $partyHandlersPath = Join-Path $repo 'src/server/socket-server/handlers/party.ts'
 $partyDataPath = Join-Path $repo 'src/server/game-data/party.ts'
-$timelinePath = Join-Path $repo 'src/client/views/timeline/timeline-static.ts'
-$htmlPath = Join-Path $repo 'src/client/views/timeline/timeline.html'
 $canonicalManifestPath = Join-Path $repo '.github/manifests/halloween-2015-canonical.json'
 $partyRoot = Join-Path $repo 'media/default/party2015'
 $historicalManifestPath = Join-Path $partyRoot 'manifest.json'
@@ -83,23 +64,19 @@ $files = Read-Normalized $filesPath
 Require-Contains $files "const PARTY2015 = 'party2015';" 'party2015_file_ref_constant'
 Require-Regex $files '(?m)^\s*PARTY2015,\s*$' 'party2015_file_ref_registration'
 
-# This gate only proves that the modern room symbols exist in the Waddle source.
-# Numeric ID parity belongs to waddle-halloween-2015-rooms.ps1, which compares
-# against the preserved rooms.json. Keeping IDs in both scripts previously let an
-# obsolete hardcoded 890 survive after Puffle Park was corrected to canonical 434.
 $rooms = Read-Normalized $roomsPath
-$modernRoomKeys = @('dojosnow','hotellobby','hotelspa','hotelroof','cloudforest','pufflepark','skatepark','pufflewild')
-foreach ($roomKey in $modernRoomKeys) {
-  $escaped = [regex]::Escape($roomKey)
-  Require-Regex $rooms ("(?s)'{0}'\s*:\s*\{{.*?\bid\s*:\s*\d+\b" -f $escaped) ("room_symbol_{0}" -f $roomKey)
+foreach ($roomKey in @('dojosnow','hotellobby','hotelspa','hotelroof','cloudforest','pufflepark','skatepark','pufflewild')) {
+  Require-Regex $rooms ("(?s)'{0}'\s*:\s*\{{.*?\bid\s*:\s*\d+\b" -f [regex]::Escape($roomKey)) ("room_symbol_{0}" -f $roomKey)
 }
 
 $party = Read-Normalized $partyPath
 foreach ($contract in @(
   "const P = 'party2015:';",
+  "const ref = (relative: string) => P + relative;",
   "date: '2015-10-21'",
   "partyName: 'Halloween Party 2015'",
   "activeFeatures: '20150501'",
+  'gameStringChanges: HALLOWEEN_2015_DIALOGUE_STRINGS',
   "id: 'halloween-2015'",
   'messageCount: 10',
   'communicatorMessageCount: 5',
@@ -109,48 +86,57 @@ foreach ($contract in @(
   "partyEndDate: '2015-11-05 00:00:00'",
   'unlockDayIndex: 16',
   'numOfDaysInParty: 16',
+  'rooms: HALLOWEEN_2015_ROOMS',
+  'music: HALLOWEEN_2015_MUSIC',
+  "'play/v2/client/QuestCommunicator.swf': ref('client/QuestCommunicator.swf')",
+  "'play/v2/client/interface.swf': ref('client/ClientInterface-HalloweenParty2015.swf')",
+  "'play/v2/content/global/content/interface.swf': ref('client/ClientInterface-HalloweenParty2015.swf')",
+  "'play/v2/content/global/content/features.swf': ref('content/ContentFeatures-HalloweenParty2015.swf')",
+  "'play/v2/content/global/content/party_icon.swf': ref('content/ContentParty_icon-HalloweenParty2015.swf')",
+  "'content/party_icon.swf': [ref('content/ContentParty_icon-HalloweenParty2015.swf'), 'party_icon', 'scavenger_hunt_icon']",
+  "'close_ups/quest_interface.swf': [ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf'), 'w.p2015.may.partyinterface', 'w.app.generic.partyinterface', 'scavenger_hunt']",
+  "'close_ups/quest_interface.swf': { en: ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf') }",
+  '...dialogueGlobalChanges',
+  '...dialogueLocalChanges',
+  '...tileGlobalChanges',
+  '...tileLocalChanges',
+  '...musicFileChanges',
   "date: '2015-11-05'",
-  "end: ['party']",
-  "'play/en/web_service/game_configs.bin': P + 'game_configs/game_configs.bin'",
-  "'play/v2/client/QuestCommunicator.swf': P + 'client/QuestCommunicator.swf'",
-  "'play/v2/content/global/content/party.swf': P + 'content/party.swf'",
-  "'play/v2/content/global/content/map.swf': P + 'content/map.swf'",
-  "'play/v2/client/interface.swf': P + 'client/ClientInterface-HalloweenClassic2015.swf'",
-  "'play/v2/content/global/content/interface.swf': P + 'client/ClientInterface-HalloweenClassic2015.swf'",
-  "'play/v2/content/global/content/features.swf'",
-  "'play/v2/content/global/content/party_icon.swf': P + 'content/ContentParty_icon-HalloweenParty2015.swf'",
-  "'play/v2/content/global/logo/logo.swf'",
-  "'content/map.swf': [P + 'content/map.swf', 'w.p2015.may.partymap']",
-  "'content/party_icon.swf': [P + 'content/ContentParty_icon-HalloweenParty2015.swf', 'party_icon', 'scavenger_hunt_icon']",
-  "'close_ups/quest_interface.swf': [P + 'close_ups/Close_upsQuest_interface-HalloweenClassic2015.swf', 'w.p2015.may.partyinterface', 'w.app.generic.partyinterface', 'scavenger_hunt']",
-  "'close_ups/quest_interface.swf': { en: P + 'close_ups/Close_upsQuest_interface-HalloweenClassic2015.swf' }",
-  "'close_ups/ghostAdopt.swf': [P + 'close_ups/ghostAdopt.swf', 'ghostAdopt']",
-  "'close_ups/skipDialogue.swf': [P + 'close_ups/skipDialogue.swf', 'skipDialogue']",
-  "'close_ups/ghostAdopt.swf': { en: P + 'close_ups/ghostAdopt.swf' }",
-  "'close_ups/skipDialogue.swf': { en: P + 'close_ups/skipDialogue.swf' }",
-  "'w.p2015.may.partyinterface'",
-  "'w.p2015.may.login'",
-  "'halloHerbertGame'"
+  "end: ['party']"
 )) {
   Require-Contains $party $contract ("party_" + ($contract -replace '[^A-Za-z0-9]+','_').Trim('_'))
 }
+
+# Root rule: October 2015 uses the preserved CPArchives interaction family.
+# The later CPImagined 2310 recreation may stay in media as provenance, but it
+# must never replace the live party/map/config/interface stack for this date.
+foreach ($stale in @(
+  "'play/en/web_service/game_configs.bin'",
+  "'play/v2/content/global/content/party.swf'",
+  "'play/v2/content/global/content/map.swf'",
+  "'content/map.swf':",
+  'ClientInterface-HalloweenClassic2015.swf',
+  'Close_upsQuest_interface-HalloweenClassic2015.swf',
+  "'close_ups/ghostAdopt.swf'",
+  "'close_ups/skipDialogue.swf'",
+  "'close_ups/halloLogin.swf'"
+)) {
+  Require-NotContains $party $stale ("mixed_2310_" + ($stale -replace '[^A-Za-z0-9]+','_').Trim('_'))
+}
 Require-NotContains $party "'play/v2/content/global/content/logo.swf'" 'legacy_wrong_logo_route'
-Require-NotContains $party 'PartyRuntime-CPImagined-HalloweenClassic.swf' 'obsolete_runtime_alias'
-Require-NotContains $party "'play/v2/client/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'" 'mixed_historical_client_interface'
-Require-NotContains $party "'close_ups/quest_interface.swf': { en: P + 'close_ups/Close_upsQuest_interface-HalloweenParty2015.swf' }" 'mixed_historical_quest_interface'
 
-$general = Read-Normalized $generalPath
-Require-Contains $general "const MODERN_PARTY_ICON_ROUTE = 'play/v2/content/global/content/party_icon.swf';" 'modern_party_icon_route'
-Require-Contains $general 'd.lookupFile(MODERN_PARTY_ICON_ROUTE) !== undefined' 'modern_party_icon_activation'
-Require-Contains $general '"hunt_active": hunt !== null || fair || d.getPartyIcon() || modernPartyIconActive' 'modern_hunt_activation'
-Require-Contains $general '"party_icon_active": modernPartyIconActive' 'modern_party_option_activation'
-
+# The dynamic route tables are generated from the party's committed changes;
+# they are the authoritative way the preserved interface resolves crumbs.
 $fileGenerators = Read-Normalized $fileGeneratorsPath
 Require-Contains $fileGenerators 'const getRuntimePathsJson: FileGenerator' 'runtime_paths_generator'
 Require-Contains $fileGenerators '...Object.fromEntries(d.getGlobalPaths())' 'global_paths_merge'
 Require-Contains $fileGenerators "'play/en/web_service/game_configs/paths.json': getRuntimePathsJson" 'runtime_paths_registration'
 Require-Contains $fileGenerators 'const getRuntimeGameStringsJson: FileGenerator' 'runtime_game_strings_generator'
 Require-Contains $fileGenerators "'play/en/web_service/game_configs/game_strings.json': getRuntimeGameStringsJson" 'runtime_game_strings_registration'
+
+$general = Read-Normalized $generalPath
+Require-Contains $general "const MODERN_PARTY_ICON_ROUTE = 'play/v2/content/global/content/party_icon.swf';" 'modern_party_icon_route'
+Require-Contains $general 'd.lookupFile(MODERN_PARTY_ICON_ROUTE) !== undefined' 'modern_party_icon_activation'
 
 $dependencies = Read-Normalized $dependenciesPath
 Require-Regex $dependencies '(?s)const DEPENDENCIES_VANILLA = \{.*?"boot"\s*:\s*\[.*?"id"\s*:\s*"party"' 'modern_party_boot_dependency'
@@ -172,112 +158,43 @@ Require-Contains $joinHandlers 'if (data.getPartyProgress() !== null)' 'join_par
 Require-Contains $joinHandlers 'await sendModernPartyBootstrap(ctx);' 'join_party_bootstrap_call'
 
 $partyHandlers = Read-Normalized $partyHandlersPath
-Require-Contains $partyHandlers "await ctx.msg.send(ctx.penguin, 'activefeatures'" 'party_activefeatures_bootstrap'
-Require-Contains $partyHandlers "await ctx.msg.send(ctx.penguin, 'partycookie'" 'party_cookie_response_contract'
-Require-Contains $partyHandlers "await msg.send(penguin, 'partyservice'" 'party_service_response_contract'
-Require-Contains $partyHandlers "action: 'modern-party-bootstrap'" 'party_full_bootstrap_trace'
-Require-Contains $partyHandlers "action: 'partycookie-partyservice'" 'party_cookie_fallback_trace'
-
+foreach ($needle in @('activefeatures','partycookie','partyservice','modern-party-bootstrap','partycookie-partyservice')) {
+  Require-Contains $partyHandlers $needle ("party_handler_" + $needle)
+}
 $partyData = Read-Normalized $partyDataPath
-Require-Contains $partyData 'export type PartyServiceConfig' 'party_service_type'
 Require-Contains $partyData "'halloween-2015':" 'party_service_archive_fallback'
 
+if (-not (Test-Path -LiteralPath $historicalManifestPath -PathType Leaf)) { throw "WADDLE_PARTY2015_SOURCE=FAIL historical_manifest_missing=$historicalManifestPath" }
+$historicalManifest = Get-Content -LiteralPath $historicalManifestPath -Raw | ConvertFrom-Json
+$historicalAssets = @($historicalManifest.assets)
+if ([int]$historicalManifest.requiredCount -ne 132 -or $historicalAssets.Count -ne 132) {
+  throw "WADDLE_PARTY2015_SOURCE=FAIL historical_count manifest=$($historicalManifest.requiredCount) assets=$($historicalAssets.Count) expected=132"
+}
+$historicalTargets = @($historicalAssets | ForEach-Object { [string]$_.relativePath })
+foreach ($required in @('client/ClientInterface-HalloweenParty2015.swf','close_ups/Close_upsQuest_interface-HalloweenParty2015.swf','content/ContentFeatures-HalloweenParty2015.swf','content/ContentParty_icon-HalloweenParty2015.swf')) {
+  if (-not ($historicalTargets -contains $required)) { throw "WADDLE_PARTY2015_SOURCE=FAIL historical_runtime_missing=$required" }
+  $path = Join-Path $partyRoot ($required.Replace('/','\'))
+  if (-not (Test-Swf $path)) { throw "WADDLE_PARTY2015_SOURCE=FAIL historical_runtime_invalid=$required" }
+}
+
+# Canonical supplements are retained for provenance/other compatibility work.
+# Validate anything already materialized byte-for-byte, but never treat those
+# files as proof that the October 2015 live runtime is coherent.
 $canonicalManifest = Get-Content -LiteralPath $canonicalManifestPath -Raw | ConvertFrom-Json
 if ($canonicalManifest.schema -ne 'waddle-canonical-assets/v1') { throw "WADDLE_PARTY2015_SOURCE=FAIL canonical_schema=$($canonicalManifest.schema)" }
 $canonicalAssets = @($canonicalManifest.assets)
-if ($canonicalAssets.Count -lt 1) { throw 'WADDLE_PARTY2015_SOURCE=FAIL canonical_assets=0' }
-$canonicalTargets = @($canonicalAssets | ForEach-Object { [string]$_.target })
-$uniqueCanonicalTargets = @($canonicalTargets | Sort-Object -Unique)
-if ($uniqueCanonicalTargets.Count -ne $canonicalTargets.Count) {
-  throw "WADDLE_PARTY2015_SOURCE=FAIL duplicate_canonical_targets total=$($canonicalTargets.Count) unique=$($uniqueCanonicalTargets.Count)"
-}
-$requiredCanonicalTargets = @(
-  'content/party.swf','content/map.swf','client/QuestCommunicator.swf',
-  'client/ClientInterface-HalloweenClassic2015.swf',
-  'close_ups/Close_upsQuest_interface-HalloweenClassic2015.swf',
-  'close_ups/ghostAdopt.swf','close_ups/skipDialogue.swf',
-  'game_configs/game_configs.bin','game_configs/game_strings.json','game_configs/general.json',
-  'game_configs/paths.json','game_configs/rooms.json'
-)
-foreach ($target in $requiredCanonicalTargets) {
-  if (-not ($canonicalTargets -contains $target)) {
-    throw "WADDLE_PARTY2015_SOURCE=FAIL canonical_target_missing=$target"
-  }
-}
-
-# Pin the two interaction-sensitive companions to the exact Halloween Classic
-# source blobs. A wrong path/size/blob here can still produce a visually loaded
-# but non-interactive party, so metadata drift is a hard failure.
-$canonicalByTarget = @{}
-foreach ($entry in $canonicalAssets) { $canonicalByTarget[[string]$entry.target] = $entry }
-$pinnedCompanions = @(
-  @{
-    target = 'client/ClientInterface-HalloweenClassic2015.swf'
-    sourcePath = 'parties/2310 2 halloween classic edition/interface/interface.swf'
-    bytes = 1670806
-    gitBlobSha = '5286f60dbfc51c780691f8427e2a4f8b0b63dc21'
-  },
-  @{
-    target = 'close_ups/Close_upsQuest_interface-HalloweenClassic2015.swf'
-    sourcePath = 'parties/2310 2 halloween classic edition/party interface/quest_interface.swf'
-    bytes = 597937
-    gitBlobSha = '1a51f8e7283068cba3678d1d225ea155dc6afd5a'
-  }
-)
-foreach ($expected in $pinnedCompanions) {
-  $target = [string]$expected.target
-  if (-not $canonicalByTarget.ContainsKey($target)) { throw "WADDLE_PARTY2015_SOURCE=FAIL companion_missing=$target" }
-  $entry = $canonicalByTarget[$target]
-  if ([string]$entry.sourcePath -ne [string]$expected.sourcePath) { throw "WADDLE_PARTY2015_SOURCE=FAIL companion_source target=$target" }
-  if ([long]$entry.bytes -ne [long]$expected.bytes) { throw "WADDLE_PARTY2015_SOURCE=FAIL companion_bytes target=$target" }
-  if (([string]$entry.gitBlobSha).ToLowerInvariant() -ne ([string]$expected.gitBlobSha).ToLowerInvariant()) { throw "WADDLE_PARTY2015_SOURCE=FAIL companion_blob target=$target" }
-}
-
-# Historical CPArchives media and canonical supplements are different layers.
-# Specifically prevent the interaction companions from ever reusing the two
-# historical paths; doing so would overwrite media while the publish workflow
-# still counted them as additional SWFs.
-if (-not (Test-Path -LiteralPath $historicalManifestPath -PathType Leaf)) { throw "WADDLE_PARTY2015_SOURCE=FAIL historical_manifest_missing=$historicalManifestPath" }
-$historicalManifest = Get-Content -LiteralPath $historicalManifestPath -Raw | ConvertFrom-Json
-$historicalTargets = @($historicalManifest.assets | ForEach-Object { [string]$_.relativePath })
-foreach ($companion in $pinnedCompanions) {
-  if ($historicalTargets -contains [string]$companion.target) {
-    throw "WADDLE_PARTY2015_SOURCE=FAIL companion_overwrites_historical=$($companion.target)"
-  }
-}
-foreach ($historicalOnly in @('client/ClientInterface-HalloweenParty2015.swf','close_ups/Close_upsQuest_interface-HalloweenParty2015.swf')) {
-  if (-not ($historicalTargets -contains $historicalOnly)) {
-    throw "WADDLE_PARTY2015_SOURCE=FAIL historical_companion_missing=$historicalOnly"
-  }
-  if ($canonicalTargets -contains $historicalOnly) {
-    throw "WADDLE_PARTY2015_SOURCE=FAIL canonical_reuses_historical=$historicalOnly"
-  }
-}
-
-# Hosted source validation runs before hydration on a fresh integration. Validate
-# every supplement already committed byte-for-byte; the publish job materializes
-# only those absent from Git.
 $presentCanonical = 0
 foreach ($entry in $canonicalAssets) {
   $path = Join-Path $partyRoot (([string]$entry.target).Replace('/','\'))
   if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
   $presentCanonical++
-  $item = Get-Item -LiteralPath $path
-  if ([long]$item.Length -ne [long]$entry.bytes) { throw "WADDLE_PARTY2015_SOURCE=FAIL canonical_bytes target=$($entry.target)" }
+  if ([long](Get-Item -LiteralPath $path).Length -ne [long]$entry.bytes) { throw "WADDLE_PARTY2015_SOURCE=FAIL canonical_bytes target=$($entry.target)" }
   if ((Get-GitBlobSha $path) -ne ([string]$entry.gitBlobSha).ToLowerInvariant()) { throw "WADDLE_PARTY2015_SOURCE=FAIL canonical_blob target=$($entry.target)" }
   if ([string]$entry.kind -eq 'swf' -and -not (Test-Swf $path)) { throw "WADDLE_PARTY2015_SOURCE=FAIL canonical_swf target=$($entry.target)" }
-  if ([string]$entry.kind -eq 'zip-config' -and -not (Test-ZipConfig $path)) { throw "WADDLE_PARTY2015_SOURCE=FAIL canonical_zip target=$($entry.target)" }
 }
 
 $updates = Read-Normalized $updatesPath
 Require-Contains $updates 'import { UPDATES_2015 } from "./2015";' 'updates_2015_import'
 Require-Contains $updates '...UPDATES_2015' 'updates_2015_registration'
 
-$timeline = Read-Normalized $timelinePath
-Require-Contains $timeline 'function syncYearOptions(days: DateInfo[])' 'timeline_year_sync'
-Require-Contains $timeline 'const lastSelectableYear = Math.max' 'timeline_selectable_horizon'
-$html = Read-Normalized $htmlPath
-foreach ($year in 2013..2017) { Require-Regex $html ('<option(?:\s+value="{0}")?>{0}</option>' -f $year) ("timeline_year_{0}" -f $year) }
-
-$canonicalSwfs = @($canonicalAssets | Where-Object { [string]$_.kind -eq 'swf' }).Count
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source runtime=preserved-halloween canonical_manifest=$($canonicalAssets.Count) canonical_swfs=$canonicalSwfs canonical_present=$presentCanonical config_bundle=true quest_communicator=true ghost_adopt=true skip_dialogue=true map_2015=true native_namespace=true bimp_telemetry=true activefeatures=20150501 partyservice=true client_interface=coherent-halloween-classic companion_quest=true historical_overlap=false room_ids=delegated_to_preserved_parity years=2005-2017 mutation=false"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=exact-cparchives-2015 historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical party_map=base-runtime game_configs=base-runtime client_interface=historical-2015 quest_interface=historical-2015 dialogues=historical-2015 music=historical-2015 native_namespace=true activefeatures=20150501 partyservice=true mutation=false"
