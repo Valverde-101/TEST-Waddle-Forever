@@ -36,6 +36,8 @@ $generalPath = Join-Path $repo 'src/server/file-generators/general.json.ts'
 $fileGeneratorsPath = Join-Path $repo 'src/server/file-generators/index.ts'
 $dependenciesPath = Join-Path $repo 'src/server/file-generators/dependencies.json.ts'
 $xtHandlerPath = Join-Path $repo 'src/server/socket-server/xt-handler.ts'
+$protocolPath = Join-Path $repo 'src/server/socket-server/handlers/protocol.ts'
+$joinHandlersPath = Join-Path $repo 'src/server/socket-server/handlers/join.ts'
 $worldHandlersPath = Join-Path $repo 'src/server/socket-server/world-handlers.ts'
 $partyHandlersPath = Join-Path $repo 'src/server/socket-server/handlers/party.ts'
 $partyDataPath = Join-Path $repo 'src/server/game-data/party.ts'
@@ -85,7 +87,8 @@ foreach ($contract in @(
   "'w.p2015.may.partyinterface'",
   "'w.p2015.may.login'",
   "'halloHerbertGame'",
-  "'play/v2/content/global/content/interface.swf'",
+  "'play/v2/client/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'",
+  "'play/v2/content/global/content/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'",
   "'play/v2/content/global/content/party.swf': 'archives:PartyRuntime-CPImagined-HalloweenClassic.swf'",
   "'play/v2/content/global/content/features.swf'",
   "'play/v2/content/global/content/party_icon.swf': P + 'content/ContentParty_icon-HalloweenParty2015.swf'",
@@ -95,7 +98,6 @@ foreach ($contract in @(
 )) {
   Require-Contains $party $contract ("party_" + ($contract -replace '[^A-Za-z0-9]+','_').Trim('_'))
 }
-Require-NotContains $party "'play/v2/client/interface.swf'" 'legacy_wrong_interface_route'
 Require-NotContains $party "'play/v2/content/global/content/logo.swf'" 'legacy_wrong_logo_route'
 Require-NotContains $party "PartyRuntime-CPImaginedReference.swf" 'runtime_inside_hydrated_party_inventory'
 
@@ -130,20 +132,43 @@ $dependencies = Read-Normalized $dependenciesPath
 Require-Regex $dependencies '(?s)const DEPENDENCIES_VANILLA = \{.*?"boot"\s*:\s*\[.*?"id"\s*:\s*"party"' 'modern_party_boot_dependency'
 
 $xtHandler = Read-Normalized $xtHandlerPath
+Require-Contains $xtHandler 'resolveXtActionAlias' 'xt_party_alias_resolver'
 Require-Contains $xtHandler "const emptyArrayFraming = Array.isArray(signature) && signature.length === 0 && args.length === 1 && args[0] === '';" 'xt_empty_array_frame_detection'
 Require-Contains $xtHandler 'const argsForParsing = emptyArrayFraming ? [] : args;' 'xt_empty_array_frame_normalization'
-Require-Contains $xtHandler "status: emptyArrayFraming ? 'empty-array-framing'" 'xt_empty_array_frame_diagnostic'
-Require-Contains $xtHandler 'compatibility: compatibility !== undefined || emptyArrayFraming' 'xt_empty_array_frame_completion'
+Require-Contains $xtHandler "? 'protocol-alias'" 'xt_party_alias_diagnostic'
+Require-Contains $xtHandler 'compatibility: actionAlias !== undefined || compatibility !== undefined || emptyArrayFraming' 'xt_alias_completion_diagnostic'
+
+$protocol = Read-Normalized $protocolPath
+foreach ($alias in @(
+  "action: 's%fair#fair'",
+  "canonicalAction: 's%party#partycookie'",
+  "action: 's%fair#partycookie'",
+  "action: 's%fair#msgviewed'",
+  "action: 's%fair#fmsgviewed'",
+  "action: 's%fair#qcmsgviewed'",
+  "action: 's%fair#qtaskcomplete'"
+)) {
+  Require-Contains $protocol $alias ("protocol_" + ($alias -replace '[^A-Za-z0-9]+','_').Trim('_'))
+}
+Require-Contains $protocol "exactArguments: ['0']" 'protocol_fair_cookie_fixed_selector'
+Require-Contains $protocol 'dropArguments: true' 'protocol_fair_cookie_selector_drop'
+
+$joinHandlers = Read-Normalized $joinHandlersPath
+Require-Contains $joinHandlers "import { sendModernPartyBootstrap } from './party';" 'join_party_bootstrap_import'
+Require-Contains $joinHandlers 'if (data.getPartyProgress() !== null)' 'join_party_bootstrap_guard'
+Require-Contains $joinHandlers 'await sendModernPartyBootstrap(ctx);' 'join_party_bootstrap_call'
 
 $worldHandlers = Read-Normalized $worldHandlersPath
 Require-Regex $worldHandlers "p\.xt\('s',\s*'party#partycookie',\s*\[\],\s*handleRetrievePartyCookie\)" 'party_cookie_zero_arg_contract'
 Require-NotContains $worldHandlers "'party#partycookie', ['number']" 'party_cookie_fake_numeric_arg'
 
 $partyHandlers = Read-Normalized $partyHandlersPath
+Require-Contains $partyHandlers "await ctx.msg.send(ctx.penguin, 'activefeatures'" 'party_activefeatures_bootstrap'
 Require-Contains $partyHandlers "await ctx.msg.send(ctx.penguin, 'partycookie'" 'party_cookie_response_contract'
 Require-Contains $partyHandlers "await msg.send(penguin, 'partyservice'" 'party_service_response_contract'
-Require-Contains $partyHandlers "await sendCurrentPartyCookie(ctx);`n  await sendCurrentPartyService(ctx);" 'party_cookie_service_order'
-Require-Contains $partyHandlers "action: 'partycookie-partyservice'" 'party_bootstrap_trace'
+Require-Contains $partyHandlers "await ctx.msg.send(ctx.penguin, 'activefeatures', activeFeatures ?? '');`n  await sendCurrentPartyCookie(ctx);`n  await sendCurrentPartyService(ctx);" 'party_full_bootstrap_order'
+Require-Contains $partyHandlers "action: 'modern-party-bootstrap'" 'party_full_bootstrap_trace'
+Require-Contains $partyHandlers "action: 'partycookie-partyservice'" 'party_cookie_fallback_trace'
 
 $partyData = Read-Normalized $partyDataPath
 Require-Contains $partyData 'export type PartyServiceConfig' 'party_service_type'
@@ -167,4 +192,4 @@ foreach ($year in 2013..2017) {
   Require-Regex $html ('<option(?:\s+value="{0}")?>{0}</option>' -f $year) ("timeline_year_{0}" -f $year)
 }
 
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source media_prefix=party2015 runtime=archives modern_party_id=20150501 party_start=2015-10-21 exclusive_end=2015-11-05 paths_global_merged=true partycookie_partyservice=true runtime_sig=$runtimeSig years=2005-2017 mutation=false"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source media_prefix=party2015 runtime=archives client_interface=party2015 modern_party_id=20150501 party_start=2015-10-21 exclusive_end=2015-11-05 paths_global_merged=true eager_bootstrap=true fair_aliases=true runtime_sig=$runtimeSig years=2005-2017 mutation=false"
