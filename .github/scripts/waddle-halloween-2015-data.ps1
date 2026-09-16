@@ -12,13 +12,24 @@ function Read-N([string]$Path) {
 function Require([bool]$Condition,[string]$Label) {
   if(-not $Condition){throw "WADDLE_HALLOWEEN2015_DATA=FAIL missing_contract=$Label"}
 }
+function Test-Swf([string]$Path) {
+  if(-not(Test-Path -LiteralPath $Path -PathType Leaf)){return $false}
+  $stream = [IO.File]::OpenRead($Path)
+  try {
+    if($stream.Length -lt 8){return $false}
+    $signature = New-Object byte[] 3
+    if($stream.Read($signature,0,3) -ne 3){return $false}
+    return @('FWS','CWS','ZWS') -contains [Text.Encoding]::ASCII.GetString($signature)
+  } finally {
+    $stream.Dispose()
+  }
+}
 
-# Committed source is authoritative. Earlier versions of this script patched
-# 2015.ts during every gate and compared the party-icon crumb as an exact string;
-# adding a valid alias such as scavenger_hunt_icon then caused the gate itself to
-# duplicate/overwrite configuration. Keep this script strictly read-only.
+# Committed source is authoritative. This gate is validation-only: it must never
+# rewrite party data or force a temporary third-party runtime back into 2015.ts.
 $pufflePath = Join-Path $repo 'src/server/socket-server/handlers/puffle.ts'
 $updatesPath = Join-Path $repo 'src/server/updates/2015.ts'
+$runtimePath = Join-Path $repo 'media/default/svanilla/media/play/v2/content/global/content/party.swf'
 $puffle = Read-N $pufflePath
 $updates = Read-N $updatesPath
 
@@ -36,14 +47,22 @@ Require ($updates.Contains('unlockDayIndex: 16')) 'party_service_unlock_day'
 Require ($updates.Contains('numOfDaysInParty: 16')) 'party_service_days'
 
 $iconAsset = "P + 'content/ContentParty_icon-HalloweenParty2015.swf'"
+Require ($updates.Contains("'play/v2/client/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'")) 'client_interface_route'
+Require ($updates.Contains("'play/v2/content/global/content/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'")) 'content_interface_alias'
 Require ($updates.Contains("'play/v2/content/global/content/party_icon.swf': $iconAsset")) 'party_icon_canonical_route'
 Require ($updates -match "'content/party_icon\.swf'\s*:\s*\[[^\]]*'party_icon'[^\]]*\]") 'party_icon_global_crumb'
 Require ($updates -match "'content/party_icon\.swf'\s*:\s*\[[^\]]*'scavenger_hunt_icon'[^\]]*\]") 'party_icon_scavenger_alias'
 Require ($updates -match "'close_ups/quest_interface\.swf'\s*:\s*\[[^\]]*'w\.p2015\.may\.partyinterface'[^\]]*\]") 'quest_interface_global_path'
-Require ($updates.Contains("'play/v2/content/global/content/party.swf': 'archives:PartyRuntime-CPImagined-HalloweenClassic.swf'")) 'party_runtime_route'
+
+# The event archive does not contain its own party.swf. Use the native svanilla
+# framework runtime at the canonical URL and reject the old Fair/May substitute.
+Require (Test-Swf $runtimePath) 'native_party_runtime'
+Require (-not $updates.Contains("'play/v2/content/global/content/party.swf'")) 'no_event_party_runtime_override'
+Require (-not $updates.Contains('PartyRuntime-CPImagined-HalloweenClassic.swf')) 'no_cpimagined_party_runtime'
 
 if ($updates -match 'gameStringChanges:\s*\{(?s:.*?)w\.app\.p2015\.halloween') {
   throw 'WADDLE_HALLOWEEN2015_DATA=FAIL unverified_halloween_strings_remain'
 }
 
-Write-Host 'WADDLE_HALLOWEEN2015_DATA=PASS mode=validation_only mutation=false party=halloween-2015 tasks=10 activefeatures=20150501 partyservice=true ghost_puffle=1022 party_icon=canonical_plus_aliases quest_path=true'
+$runtimeInfo = Get-Item -LiteralPath $runtimePath
+Write-Host "WADDLE_HALLOWEEN2015_DATA=PASS mode=validation_only mutation=false party=halloween-2015 tasks=10 activefeatures=20150501 partyservice=true ghost_puffle=1022 party_icon=canonical_plus_aliases quest_path=true runtime=svanilla-native runtime_bytes=$($runtimeInfo.Length)"
