@@ -37,11 +37,13 @@ function Get-PreservedPath([string]$Key,[bool]$Required = $true) {
 
 # These are the party-specific late-AS3 routes for which we have byte-preserved
 # assets or a verified Waddle historical asset that is safe to expose under the
-# literal path returned by the preserved 2015 paths.json.
+# literal path returned by the preserved 2015 paths.json. The quest route is
+# deliberately backed by the coherent Halloween Classic companion rather than
+# the unrelated CPArchives historical quest SWF.
 $contracts = @(
   @{ key='skipDialogue'; route='close_ups/skipDialogue.swf'; source="'close_ups/skipDialogue.swf': [P + 'close_ups/skipDialogue.swf', 'skipDialogue']" },
   @{ key='w.p2015.may.login'; route='close_ups/halloLogin.swf'; source="'close_ups/halloLogin.swf': [P + 'close_ups/halloLogin.swf', 'w.p2015.may.login']" },
-  @{ key='w.p2015.may.partyinterface'; route='close_ups/quest_interface.swf'; source="'close_ups/quest_interface.swf': [P + 'close_ups/Close_upsQuest_interface-HalloweenParty2015.swf', 'w.p2015.may.partyinterface'" },
+  @{ key='w.p2015.may.partyinterface'; route='close_ups/quest_interface.swf'; source="'close_ups/quest_interface.swf': [P + 'close_ups/Close_upsQuest_interface-HalloweenClassic2015.swf', 'w.p2015.may.partyinterface'" },
   @{ key='w.p2015.may.partymap'; route='content/map.swf'; source="'content/map.swf': [P + 'content/map.swf', 'w.p2015.may.partymap']" },
   @{ key='ghostAdopt'; route='close_ups/ghostAdopt.swf'; source="'close_ups/ghostAdopt.swf': [P + 'close_ups/ghostAdopt.swf', 'ghostAdopt']" },
   @{ key='halloHerbertMonologue'; route='close_ups/halloHerbertMonologue.swf'; source="'close_ups/halloHerbertMonologue.swf': [P + 'close_ups/Hallo15_dialogue_Herbert_monologue.swf', 'halloHerbertMonologue']" },
@@ -64,6 +66,10 @@ foreach ($contract in $contracts) {
   }
 }
 
+if ($updates.Contains("P + 'close_ups/Close_upsQuest_interface-HalloweenParty2015.swf'")) {
+  throw 'WADDLE_HALLOWEEN2015_PATHS=FAIL historical_quest_interface_is_still_served'
+}
+
 # The preserved config also names these two routes, but no corresponding binary
 # exists in the pinned source archive or current Waddle media. Keep the gap visible
 # rather than silently substituting an unrelated SWF. If one is recovered later it
@@ -77,4 +83,4 @@ foreach ($key in $archiveOnly) {
   }
 }
 
-Write-Host "WADDLE_HALLOWEEN2015_PATHS=PASS supported=$($contracts.Count) preserved_literal_routes=true parser=case-sensitive archive_only=$($archiveOnlyDetails -join ',')"
+Write-Host "WADDLE_HALLOWEEN2015_PATHS=PASS supported=$($contracts.Count) preserved_literal_routes=true quest_companion=coherent-halloween-classic parser=case-sensitive archive_only=$($archiveOnlyDetails -join ',')"
