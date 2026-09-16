@@ -1,0 +1,20 @@
+{
+    "schema":  "waddle-canonical-assets-state/v2",
+    "party":  "Halloween Party 2015",
+    "sourceRepository":  "CPImagined/CPImagined-Archive",
+    "sourceCommit":  "130504b8cbbba1666e31442f6ca27f6687157e63",
+    "verified":  11,
+    "assetTargets":  [
+                         "client/QuestCommunicator.swf",
+                         "content/map.swf",
+                         "content/party.swf",
+                         "game_configs/game_configs.bin",
+                         "game_configs/game_strings.json",
+                         "game_configs/general.json",
+                         "game_configs/jokes.json",
+                         "game_configs/mascots.json",
+                         "game_configs/paths.json",
+                         "game_configs/rooms.json",
+                         "game_configs/safe_chat_messages.json"
+                     ]
+}
