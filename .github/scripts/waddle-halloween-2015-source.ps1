@@ -118,6 +118,10 @@ foreach ($contract in @(
   "'content/map.swf': [P + 'content/map.swf', 'w.p2015.may.partymap']",
   "'content/party_icon.swf': [P + 'content/ContentParty_icon-HalloweenParty2015.swf', 'party_icon', 'scavenger_hunt_icon']",
   "'close_ups/quest_interface.swf'",
+  "'close_ups/ghostAdopt.swf': [P + 'close_ups/ghostAdopt.swf', 'ghostAdopt']",
+  "'close_ups/skipDialogue.swf': [P + 'close_ups/skipDialogue.swf', 'skipDialogue']",
+  "'close_ups/ghostAdopt.swf': { en: P + 'close_ups/ghostAdopt.swf' }",
+  "'close_ups/skipDialogue.swf': { en: P + 'close_ups/skipDialogue.swf' }",
   "'w.p2015.may.partyinterface'",
   "'w.p2015.may.login'",
   "'halloHerbertGame'"
@@ -170,22 +174,30 @@ Require-Contains $partyData "'halloween-2015':" 'party_service_archive_fallback'
 
 $canonicalManifest = Get-Content -LiteralPath $canonicalManifestPath -Raw | ConvertFrom-Json
 if ($canonicalManifest.schema -ne 'waddle-canonical-assets/v1') { throw "WADDLE_PARTY2015_SOURCE=FAIL canonical_schema=$($canonicalManifest.schema)" }
-if (@($canonicalManifest.assets).Count -ne 11) { throw "WADDLE_PARTY2015_SOURCE=FAIL canonical_assets=$(@($canonicalManifest.assets).Count) expected=11" }
+$canonicalAssets = @($canonicalManifest.assets)
+if ($canonicalAssets.Count -lt 1) { throw 'WADDLE_PARTY2015_SOURCE=FAIL canonical_assets=0' }
+$canonicalTargets = @($canonicalAssets | ForEach-Object { [string]$_.target })
+$uniqueCanonicalTargets = @($canonicalTargets | Sort-Object -Unique)
+if ($uniqueCanonicalTargets.Count -ne $canonicalTargets.Count) {
+  throw "WADDLE_PARTY2015_SOURCE=FAIL duplicate_canonical_targets total=$($canonicalTargets.Count) unique=$($uniqueCanonicalTargets.Count)"
+}
 $requiredCanonicalTargets = @(
-  'content/party.swf','content/map.swf','client/QuestCommunicator.swf','game_configs/game_configs.bin',
-  'game_configs/game_strings.json','game_configs/general.json','game_configs/paths.json','game_configs/rooms.json'
+  'content/party.swf','content/map.swf','client/QuestCommunicator.swf',
+  'close_ups/ghostAdopt.swf','close_ups/skipDialogue.swf',
+  'game_configs/game_configs.bin','game_configs/game_strings.json','game_configs/general.json',
+  'game_configs/paths.json','game_configs/rooms.json'
 )
 foreach ($target in $requiredCanonicalTargets) {
-  if (-not (@($canonicalManifest.assets | ForEach-Object { [string]$_.target }) -contains $target)) {
+  if (-not ($canonicalTargets -contains $target)) {
     throw "WADDLE_PARTY2015_SOURCE=FAIL canonical_target_missing=$target"
   }
 }
 
-# Hosted source validation runs before the self-hosted canonical hydrator on a new
-# integration. Validate any already-committed supplements byte-for-byte, while the
-# hydrate/publish job is responsible for materializing missing ones into Git.
+# Hosted source validation runs before hydration on a fresh integration. Validate
+# every supplement already committed byte-for-byte; the publish job materializes
+# only those absent from Git.
 $presentCanonical = 0
-foreach ($entry in @($canonicalManifest.assets)) {
+foreach ($entry in $canonicalAssets) {
   $path = Join-Path $partyRoot (([string]$entry.target).Replace('/','\'))
   if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { continue }
   $presentCanonical++
@@ -206,4 +218,5 @@ Require-Contains $timeline 'const lastSelectableYear = Math.max' 'timeline_selec
 $html = Read-Normalized $htmlPath
 foreach ($year in 2013..2017) { Require-Regex $html ('<option(?:\s+value="{0}")?>{0}</option>' -f $year) ("timeline_year_{0}" -f $year) }
 
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source runtime=preserved-halloween canonical_manifest=11 canonical_present=$presentCanonical config_bundle=true quest_communicator=true map_2015=true native_namespace=true bimp_telemetry=true activefeatures=20150501 partyservice=true client_interface=party2015 exclusive_end=2015-11-05 years=2005-2017 mutation=false"
+$canonicalSwfs = @($canonicalAssets | Where-Object { [string]$_.kind -eq 'swf' }).Count
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source runtime=preserved-halloween canonical_manifest=$($canonicalAssets.Count) canonical_swfs=$canonicalSwfs canonical_present=$presentCanonical config_bundle=true quest_communicator=true ghost_adopt=true skip_dialogue=true map_2015=true native_namespace=true bimp_telemetry=true activefeatures=20150501 partyservice=true client_interface=party2015 exclusive_end=2015-11-05 years=2005-2017 mutation=false"
