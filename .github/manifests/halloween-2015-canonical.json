@@ -20,6 +20,20 @@
       "kind": "swf"
     },
     {
+      "target": "client/ClientInterface-HalloweenParty2015.swf",
+      "sourcePath": "parties/2310 2 halloween classic edition/interface/interface.swf",
+      "bytes": 1674979,
+      "gitBlobSha": "4a317412d23cd8e8c61307376868fa8cb95edf70",
+      "kind": "swf"
+    },
+    {
+      "target": "close_ups/CloseUpsQuestInterface-HalloweenParty2015.swf",
+      "sourcePath": "parties/2310 2 halloween classic edition/quest_interface/quest_interface.swf",
+      "bytes": 597024,
+      "gitBlobSha": "7ec667d22ea2f3352c4eae9393d5bee3ff88d2e5",
+      "kind": "swf"
+    },
+    {
       "target": "client/QuestCommunicator.swf",
       "sourcePath": "default things/QuestCommunicator/QuestCommunicator.swf",
       "bytes": 877687,
