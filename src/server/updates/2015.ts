@@ -113,6 +113,12 @@ export const UPDATES_2015: Update[] = [
           town: 1052
         },
         fileChanges: {
+          // Preserved late-AS3 bootstrap/configuration layer. These are hydrated
+          // from the immutable CPImagined archive by waddle-halloween-2015.ps1.
+          'play/en/web_service/game_configs.bin': P + 'game_configs/game_configs.bin',
+          'play/v2/client/QuestCommunicator.swf': P + 'client/QuestCommunicator.swf',
+          'play/v2/content/global/content/party.swf': P + 'content/party.swf',
+          'play/v2/content/global/content/map.swf': P + 'content/map.swf',
           // The late-AS3 boot sequence requests the client module here. Keeping the
           // old content/global alias as well covers shells that resolve it by path.
           'play/v2/client/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf',
@@ -172,6 +178,7 @@ export const UPDATES_2015: Update[] = [
         // must therefore be present in the global paths table as well as physically
         // routable. The aliases below are preserved from the 2015-era runtime.
         globalChanges: {
+          'content/map.swf': [P + 'content/map.swf', 'w.p2015.may.partymap'],
           'content/party_icon.swf': [P + 'content/ContentParty_icon-HalloweenParty2015.swf', 'party_icon', 'scavenger_hunt_icon'],
           'close_ups/quest_interface.swf': [P + 'close_ups/Close_upsQuest_interface-HalloweenParty2015.swf', 'w.p2015.may.partyinterface', 'w.app.generic.partyinterface', 'scavenger_hunt'],
           'close_ups/dialogue_login.swf': [P + 'close_ups/Hallo15_dialogue_login.swf', 'w.p2015.may.login'],
