@@ -100,7 +100,9 @@ if (-not $partyRoot) { throw 'WADDLE_PARTY2015_PROTOCOL=FAIL party_root_missing'
 $ffdec = Resolve-FFDec $FFDecPath
 
 # These are the exact Git-owned SWFs served by the Halloween timeline. Do not use
-# a vanilla party.swf or download a moving external reference as protocol proof.
+# a vanilla party.swf or a historical interface from a different preserved stack
+# as protocol proof. The coherent Halloween Classic interface + quest companions
+# are explicit interaction evidence targets.
 $canonicalRuntime = @(
   @{ role='runtime-party'; path='content\party.swf' },
   @{ role='runtime-map'; path='content\map.swf' },
@@ -109,10 +111,12 @@ $canonicalRuntime = @(
   @{ role='skip-dialogue'; path='close_ups\skipDialogue.swf' },
   @{ role='hallo-login'; path='close_ups\halloLogin.swf' }
 )
-$targets = @($canonicalRuntime) + @(
-  @{ role='client-interface'; path='client\ClientInterface-HalloweenParty2015.swf' },
+$interactionCompanions = @(
+  @{ role='client-interface'; path='client\ClientInterface-HalloweenClassic2015.swf' },
+  @{ role='quest-interface'; path='close_ups\Close_upsQuest_interface-HalloweenClassic2015.swf' }
+)
+$targets = @($canonicalRuntime) + @($interactionCompanions) + @(
   @{ role='features'; path='content\ContentFeatures-HalloweenParty2015.swf' },
-  @{ role='quest-interface'; path='close_ups\Close_upsQuest_interface-HalloweenParty2015.swf' },
   @{ role='robot-avatar'; path='avatar\PenguinRobot.swf' }
 )
 foreach ($dialogue in @(Get-ChildItem -LiteralPath (Join-Path $partyRoot 'close_ups') -Filter 'Hallo15_dialogue_*.swf' -File | Sort-Object Name)) {
@@ -131,7 +135,9 @@ $classes = New-Object 'System.Collections.Generic.HashSet[string]' ([StringCompa
 $reports = @()
 $scripted = 0
 $canonicalScripted = 0
+$interactionScripted = 0
 $runtimeCombined = ''
+$interactionCombined = ''
 
 foreach ($target in $targets) {
   $swf = Join-Path $partyRoot ([string]$target.path)
@@ -143,6 +149,10 @@ foreach ($target in $targets) {
   if (@($canonicalRuntime | Where-Object { $_.role -eq $target.role }).Count -gt 0) {
     if ($evidence.files -gt 0) { $canonicalScripted++ }
     $runtimeCombined += "`n" + $text
+  }
+  if (@($interactionCompanions | Where-Object { $_.role -eq $target.role }).Count -gt 0) {
+    if ($evidence.files -gt 0) { $interactionScripted++ }
+    $interactionCombined += "`n" + $text
   }
   Add-ProtocolEvidence -Text $text -Pairs $pairs -Packets $packets -Localizations $localizations -Classes $classes
   $reports += [pscustomobject]@{
@@ -156,10 +166,15 @@ foreach ($target in $targets) {
 }
 
 if ($canonicalRuntime.Count -ne 6) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL canonical_runtime_count=$($canonicalRuntime.Count) expected=6" }
+if ($interactionCompanions.Count -ne 2) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL interaction_companion_count=$($interactionCompanions.Count) expected=2" }
 if ($canonicalScripted -lt 3) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL canonical_runtime_scripted=$canonicalScripted expected_at_least=3" }
+if ($interactionScripted -lt 2) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL interaction_companions_scripted=$interactionScripted expected=2" }
 if ($localizations.Count -ne 38) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL localization_tokens=$($localizations.Count) expected=38" }
 if ($runtimeCombined -notmatch '(?i)(party|quest|halloween|october|CURRENT_PARTY)') {
   throw 'WADDLE_PARTY2015_PROTOCOL=FAIL canonical_runtime_has_no_party_evidence'
+}
+if ($interactionCombined -notmatch '(?i)(PARTY_ICON|partyIcon|quest|showContent|openQuestUI)') {
+  throw 'WADDLE_PARTY2015_PROTOCOL=FAIL coherent_interaction_companions_have_no_interaction_evidence'
 }
 
 # Close the client/server half of the contract too. These handlers are the routes
@@ -177,12 +192,14 @@ foreach ($token in @('getPartyServiceConfig','sendCurrentPartyCookie','partyserv
 }
 
 $summary = [ordered]@{
-  schema='waddle-modern-party-protocol/v6'
+  schema='waddle-modern-party-protocol/v7'
   party='Halloween Party 2015'
   evidence='git-owned-served-runtime-only'
   targetCount=$targets.Count
   canonicalRuntimeCount=$canonicalRuntime.Count
   canonicalRuntimeScripted=$canonicalScripted
+  interactionCompanionCount=$interactionCompanions.Count
+  interactionCompanionsScripted=$interactionScripted
   scriptedTargetCount=$scripted
   pairs=@($pairs | Sort-Object)
   packetTokens=@($packets | Sort-Object)
@@ -194,4 +211,4 @@ $summaryPath = Join-Path $work 'summary.json'
 $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryPath -Encoding UTF8
 foreach ($pair in @($pairs | Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_PAIR=$pair" }
 foreach ($packet in @($packets | Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_PACKET=$packet" }
-Write-Host "WADDLE_PARTY2015_PROTOCOL=PASS targets=$($targets.Count) canonical_runtime=6 canonical_scripted=$canonicalScripted scripted_targets=$scripted localization_tokens=$($localizations.Count) server_routes=5 evidence=git-owned-served-runtime-only summary=$summaryPath"
+Write-Host "WADDLE_PARTY2015_PROTOCOL=PASS targets=$($targets.Count) canonical_runtime=6 canonical_scripted=$canonicalScripted interaction_companions=2 interaction_scripted=$interactionScripted scripted_targets=$scripted localization_tokens=$($localizations.Count) server_routes=5 evidence=git-owned-served-runtime-only summary=$summaryPath"
