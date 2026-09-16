@@ -62,10 +62,26 @@ foreach ($entry in $decorated.GetEnumerator()) {
   }
   $ids[$waddleId] = $waddleKey
 
-  $updatePattern = "(?m)^\s*$([regex]::Escape($waddleKey))\s*:\s*P\s*\+\s*'rooms/[^']+\.swf',?\s*$"
+  # Validate the semantic room map, not one implementation spelling. The 2015
+  # source intentionally uses ref('...') while older revisions used P + '...'.
+  # Both represent the same party2015 FileRef and should not make the gate lie.
+  $key = [regex]::Escape($waddleKey)
+  $route = [regex]::Escape([string]$roomMatches[0].room_key)
+  if ($waddleKey -eq 'town') {
+    $assetPattern = 'rooms/RoomsTown-HalloweenParty2015\.swf'
+  } elseif ($waddleKey -eq 'stage') {
+    $assetPattern = 'rooms/Hallo15_mall\.swf'
+  } elseif ($waddleKey -eq 'pufflepark') {
+    $assetPattern = 'rooms/Hallo15_park\.swf'
+  } elseif ($waddleKey -eq 'eco') {
+    $assetPattern = 'rooms/Hallo15_school\.swf'
+  } else {
+    $assetPattern = 'rooms/Hallo15_' + [regex]::Escape($waddleKey) + '\.swf'
+  }
+  $updatePattern = "(?m)^\s*[\"']?$key[\"']?\s*:\s*(?:ref\(\s*['\"]$assetPattern['\"]\s*\)|P\s*\+\s*['\"]$assetPattern['\"]),?\s*$"
   if ($updates -notmatch $updatePattern) {
     throw "WADDLE_HALLOWEEN2015_ROOMS=FAIL decorated_route_missing=$waddleKey"
   }
 }
 
-Write-Host "WADDLE_HALLOWEEN2015_ROOMS=PASS decorated=$($decorated.Count) ids_unique=$($ids.Count) aliases=stage->mall,eco->school,pufflepark->park source=preserved_rooms_json"
+Write-Host "WADDLE_HALLOWEEN2015_ROOMS=PASS decorated=$($decorated.Count) ids_unique=$($ids.Count) aliases=stage->mall,eco->school,pufflepark->park route_parser=semantic-file-ref source=preserved_rooms_json"
