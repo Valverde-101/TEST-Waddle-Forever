@@ -27,6 +27,20 @@
       "kind": "swf"
     },
     {
+      "target": "close_ups/ghostAdopt.swf",
+      "sourcePath": "parties/2310 2 halloween classic edition/dialogue/ghostAdopt/ghostAdopt.swf",
+      "bytes": 299875,
+      "gitBlobSha": "28d7c38ebbb377d890a31ed06fed49c65c36b487",
+      "kind": "swf"
+    },
+    {
+      "target": "close_ups/skipDialogue.swf",
+      "sourcePath": "parties/2310 2 halloween classic edition/dialogue/skipDialogue/skipDialogue.swf",
+      "bytes": 107469,
+      "gitBlobSha": "9e933888609d72415e803a6916f8cd861a6b17da",
+      "kind": "swf"
+    },
+    {
       "target": "game_configs/game_configs.bin",
       "sourcePath": "parties/2310 2 halloween classic edition/spoopy configs/game_configs.bin",
       "bytes": 232384,
