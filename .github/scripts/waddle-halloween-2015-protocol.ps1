@@ -45,14 +45,22 @@ function Export-Scripts([string]$FFDec,[string]$Swf,[string]$SafeName,[string]$W
     throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_timeout swf=$Swf"
   }
   $proc.Refresh()
-  if ($proc.ExitCode -ne 0) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_exit=$($proc.ExitCode) swf=$Swf" }
+  # Windows PowerShell on the self-hosted runners can expose an empty ExitCode
+  # after WaitForExit even though FFDec completed and wrote its export. Preserve
+  # the old proven behavior: a concrete non-zero code is fatal; an empty code is
+  # accepted only provisionally and the exported-file/content gates below still
+  # have to pass.
+  $exitText = [string]$proc.ExitCode
+  if (-not [string]::IsNullOrWhiteSpace($exitText) -and [int]$exitText -ne 0) {
+    throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_exit=$exitText swf=$Swf"
+  }
   $files = @(Get-ChildItem -LiteralPath $out -File -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in @('.as','.txt') } | Sort-Object FullName)
   $chunks = @()
   foreach ($file in $files) {
     $body = Get-Content -LiteralPath $file.FullName -Raw -ErrorAction SilentlyContinue
     if (-not [string]::IsNullOrWhiteSpace($body)) { $chunks += $body }
   }
-  return [pscustomobject]@{ files=$files.Count; text=($chunks -join "`n`n") }
+  return [pscustomobject]@{ files=$files.Count; text=($chunks -join "`n`n"); exit=$exitText }
 }
 
 function Add-ProtocolEvidence(
@@ -142,8 +150,9 @@ foreach ($target in $targets) {
     file=[string]$target.path
     bytes=[int64](Get-Item -LiteralPath $swf).Length
     scriptFiles=[int]$evidence.files
+    ffdecExit=[string]$evidence.exit
   }
-  Write-Host "WADDLE_PARTY2015_PROTOCOL_FILE=PASS role=$($target.role) bytes=$((Get-Item -LiteralPath $swf).Length) script_files=$($evidence.files)"
+  Write-Host "WADDLE_PARTY2015_PROTOCOL_FILE=PASS role=$($target.role) bytes=$((Get-Item -LiteralPath $swf).Length) script_files=$($evidence.files) ffdec_exit=$($evidence.exit)"
 }
 
 if ($canonicalRuntime.Count -ne 6) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL canonical_runtime_count=$($canonicalRuntime.Count) expected=6" }
