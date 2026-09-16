@@ -9,6 +9,25 @@ export type XtCompatibilityRule = {
   reason: string;
 };
 
+export type XtActionAlias = {
+  /** Exact action emitted by the archived client/runtime. */
+  action: string;
+  /** Canonical Waddle action that owns the authoritative implementation. */
+  canonicalAction: string;
+  /** Optional exact wire values used to keep special aliases narrow. */
+  exactArguments?: string[];
+  /** Drop wire-only selector arguments before signature parsing. */
+  dropArguments?: boolean;
+  /** Evidence/rationale for the alias. */
+  reason: string;
+};
+
+export type ResolvedXtActionAlias = {
+  action: string;
+  args: string[];
+  reason: string;
+};
+
 export type XtReadOnlyFallback = {
   /** Exact client action. */
   action: string;
@@ -34,6 +53,59 @@ const noResponseClientPackets = new Set<string>([
   's%j#crl',
   's%bi#ack'
 ]);
+
+/**
+ * Evidence-backed aliases for the preserved 2015-compatible party runtime.
+ *
+ * The CPImagined/Houdini runtime used by the archived party declares cookie id
+ * 20150501 but emits its cookie/update requests through the historical `fair`
+ * handler namespace. Waddle's reusable party implementation lives under
+ * `party#...`; normalize only the proven commands instead of duplicating party
+ * state logic or making XT dispatch permissive.
+ *
+ * `fair#fair [0]` is the odd ServerCookieService bootstrap request emitted by
+ * MayPartyCookieVO.sendRequestPartyCookie(). The zero is a fixed selector, not
+ * gameplay state, so it is removed before dispatch to party#partycookie.
+ */
+const actionAliases: XtActionAlias[] = [
+  {
+    action: 's%fair#fair',
+    canonicalAction: 's%party#partycookie',
+    exactArguments: ['0'],
+    dropArguments: true,
+    reason: '20150501 party runtime requests its ServerCookieVO through fair#fair with the fixed selector [0]'
+  },
+  {
+    action: 's%fair#partycookie',
+    canonicalAction: 's%party#partycookie',
+    reason: 'preserved Houdini handler exposes the 20150501 party cookie under fair#partycookie'
+  },
+  {
+    action: 's%fair#msgviewed',
+    canonicalAction: 's%party#msgviewed',
+    reason: 'MayPartyCookieVO emits fair#msgviewed for cookie message acknowledgement'
+  },
+  {
+    action: 's%fair#fmsgviewed',
+    canonicalAction: 's%party#msgviewed',
+    reason: 'MayPartyConstants emits fair#fmsgviewed for party message acknowledgement'
+  },
+  {
+    action: 's%fair#qcmsgviewed',
+    canonicalAction: 's%party#qcmsgviewed',
+    reason: 'preserved 2015 party runtime uses fair namespace for communicator acknowledgement'
+  },
+  {
+    action: 's%fair#qtaskcomplete',
+    canonicalAction: 's%party#qtaskcomplete',
+    reason: 'preserved 2015 party runtime uses fair namespace for quest completion'
+  },
+  {
+    action: 's%fair#qtupdate',
+    canonicalAction: 's%party#qtupdate',
+    reason: 'preserved 2015 party runtime uses fair namespace for quest coin updates'
+  }
+];
 
 /**
  * Explicit compatibility aliases for client protocol variants whose extra/missing
@@ -101,6 +173,28 @@ const readOnlyFallbacks: XtReadOnlyFallback[] = [
 ];
 
 export const isNoResponseClientPacket = (action: string): boolean => noResponseClientPackets.has(action);
+
+export const resolveXtActionAlias = (action: string, args: readonly string[]): ResolvedXtActionAlias | undefined => {
+  const alias = actionAliases.find(candidate => {
+    if (candidate.action !== action) {
+      return false;
+    }
+    if (candidate.exactArguments === undefined) {
+      return true;
+    }
+    return candidate.exactArguments.length === args.length && candidate.exactArguments.every((value, index) => args[index] === value);
+  });
+
+  if (alias === undefined) {
+    return undefined;
+  }
+
+  return {
+    action: alias.canonicalAction,
+    args: alias.dropArguments ? [] : [...args],
+    reason: alias.reason
+  };
+};
 
 export const getXtCompatibilityRule = (action: string, args: readonly string[]): XtCompatibilityRule | undefined => {
   return compatibilityRules.find(rule => {
