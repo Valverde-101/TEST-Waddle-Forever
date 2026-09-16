@@ -20,15 +20,15 @@ $roomsConfig = Get-Content -LiteralPath $roomsConfigPath -Raw | ConvertFrom-Json
 $configRooms = @($roomsConfig.PSObject.Properties | ForEach-Object { $_.Value })
 
 # Every decorated room in the 2015 update. The value is the preserved room_key.
-# Mall/school were represented in Waddle historically as stage/eco but retain the
-# same canonical room IDs, so those two aliases are deliberate and verified here.
+# Waddle keeps stable semantic names even where the late-AS3 crumbs use a newer
+# literal key: stage->mall, eco->school and pufflepark->park. IDs must still match.
 $decorated = [ordered]@{
   beach='beach'; beacon='beacon'; book='book'; cave='cave'; shop='shop';
   cloudforest='cloudforest'; coffee='coffee'; cove='cove'; dance='dance'; dock='dock';
   dojo='dojo'; dojoext='dojoext'; agentlobbymulti='agentlobbymulti'; dojofire='dojofire';
   forest='forest'; party1='party1'; party2='party2'; berg='berg'; light='light'; attic='attic';
   lounge='lounge'; shack='shack'; pet='pet'; pizza='pizza'; plaza='plaza'; stage='mall';
-  hotellobby='hotellobby'; hotelroof='hotelroof'; hotelspa='hotelspa'; pufflepark='pufflepark';
+  hotellobby='hotellobby'; hotelroof='hotelroof'; hotelspa='hotelspa'; pufflepark='park';
   pufflewild='pufflewild'; eco='school'; skatepark='skatepark'; mtn='mtn'; lodge='lodge';
   village='village'; dojosnow='dojosnow'; forts='forts'; rink='rink'; town='town'
 }
@@ -42,7 +42,7 @@ foreach ($entry in $decorated.GetEnumerator()) {
   $waddleKey = [string]$entry.Key
   $preservedKey = [string]$entry.Value
 
-  $roomMatches = @($configRooms | Where-Object { [string]$_.room_key -eq $preservedKey })
+  $roomMatches = @($configRooms | Where-Object { [string]$_.room_key -ceq $preservedKey })
   if ($roomMatches.Count -ne 1) {
     throw "WADDLE_HALLOWEEN2015_ROOMS=FAIL preserved_room key=$preservedKey matches=$($roomMatches.Count)"
   }
@@ -68,4 +68,4 @@ foreach ($entry in $decorated.GetEnumerator()) {
   }
 }
 
-Write-Host "WADDLE_HALLOWEEN2015_ROOMS=PASS decorated=$($decorated.Count) ids_unique=$($ids.Count) aliases=stage->mall,eco->school source=preserved_rooms_json"
+Write-Host "WADDLE_HALLOWEEN2015_ROOMS=PASS decorated=$($decorated.Count) ids_unique=$($ids.Count) aliases=stage->mall,eco->school,pufflepark->park source=preserved_rooms_json"
