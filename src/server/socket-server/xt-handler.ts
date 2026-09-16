@@ -3,7 +3,7 @@ import { ClientSocket } from "./socket-server";
 import { WorldContext } from "@server/socket-server/handlers/handlers";
 import { getBlueString, getRedString, logverbose } from "@server/logger";
 import { publishWaddleLiveTrace } from "@common/live-trace";
-import { getXtCompatibilityRule, getXtReadOnlyFallback, isNoResponseClientPacket } from "./handlers/protocol";
+import { getXtCompatibilityRule, getXtReadOnlyFallback, isNoResponseClientPacket, resolveXtActionAlias } from "./handlers/protocol";
 
 type ParsedXtMessage = {
   name: string;
@@ -174,20 +174,25 @@ export class XtHandler {
       return;
     }
 
-    const { name, args } = parsedMessage.value;
+    const { name: wireName, args: wireArgs } = parsedMessage.value;
+    const actionAlias = resolveXtActionAlias(wireName, wireArgs);
+    const name = actionAlias?.action ?? wireName;
+    const args = actionAlias?.args ?? wireArgs;
 
     publishWaddleLiveTrace({
       category: 'XT',
       phase: 'request',
       source: 'xt-handler',
-      action: name,
+      action: wireName,
       direction: 'in',
-      argCount: args.length,
-      messageLength: message.length
+      argCount: wireArgs.length,
+      messageLength: message.length,
+      canonicalAction: actionAlias?.action,
+      compatibilityReason: actionAlias?.reason
     });
     
     if ('penguin' in context) {
-      logverbose(getBlueString(`incoming XT [${context.penguin.name}]: `), name, args);
+      logverbose(getBlueString(`incoming XT [${context.penguin.name}]: `), wireName, wireArgs);
     }
 
     const callbacks = this._callbacks.get(name);
@@ -200,10 +205,11 @@ export class XtHandler {
           category: 'XT',
           phase: 'error',
           source: 'xt-handler',
-          action: name,
+          action: wireName,
           direction: 'in',
           status: 'unhandled-context',
-          argCount: args.length,
+          argCount: wireArgs.length,
+          canonicalAction: actionAlias?.action,
           contextKeys: Object.keys(context)
         });
         return;
@@ -223,15 +229,16 @@ export class XtHandler {
       const parsedArgs = parseArgs(argsForParsing, signature);
       const compatibility = parsedArgs === null ? getXtCompatibilityRule(name, args) : undefined;
       if (parsedArgs === null && compatibility === undefined) {
-        logverbose(getRedString('incorrect type signature: ' + name));
+        logverbose(getRedString('incorrect type signature: ' + wireName));
         publishWaddleLiveTrace({
           category: 'XT',
           phase: 'error',
           source: 'xt-handler',
-          action: name,
+          action: wireName,
           direction: 'in',
           status: 'invalid-signature',
-          argCount: args.length
+          argCount: wireArgs.length,
+          canonicalAction: actionAlias?.action
         });
         return;
       }
@@ -239,44 +246,53 @@ export class XtHandler {
       // Compatibility rules are explicit and read-only. Their extra arguments
       // are version metadata/pagination fields that the legacy Waddle callback
       // does not consume, so dispatch with the canonical parsed argument list.
-      // Empty-array framing is handled separately because it is a transport
-      // representation of [] rather than a protocol variant.
+      // Empty-array framing and action aliases are handled separately because they
+      // are transport/protocol representations rather than alternate game state.
       const dispatchArgs = parsedArgs ?? [];
       publishWaddleLiveTrace({
         category: 'XT',
         phase: 'handled',
         source: 'xt-handler',
-        action: name,
+        action: wireName,
         direction: 'in',
-        status: emptyArrayFraming ? 'empty-array-framing' : compatibility === undefined ? 'handler-dispatched' : 'compatibility-signature',
+        status: actionAlias !== undefined
+          ? 'protocol-alias'
+          : emptyArrayFraming
+            ? 'empty-array-framing'
+            : compatibility === undefined
+              ? 'handler-dispatched'
+              : 'compatibility-signature',
         argCount: dispatchArgs.length,
-        receivedArgCount: args.length,
-        compatibilityReason: emptyArrayFraming
+        receivedArgCount: wireArgs.length,
+        canonicalAction: actionAlias?.action,
+        compatibilityReason: actionAlias?.reason ?? (emptyArrayFraming
           ? 'Airtower encoded an empty argument array as a trailing empty XT payload field'
-          : compatibility?.reason
+          : compatibility?.reason)
       });
       try {
-        const result = callback.call(client, context, name, ...dispatchArgs);
+        const result = callback.call(client, context, wireName, ...dispatchArgs);
         void Promise.resolve(result).then(() => {
           publishWaddleLiveTrace({
             category: 'XT',
             phase: 'handled',
             source: 'xt-handler',
-            action: name,
+            action: wireName,
             direction: 'in',
             status: 'handler-complete',
             argCount: dispatchArgs.length,
-            receivedArgCount: args.length,
-            compatibility: compatibility !== undefined || emptyArrayFraming
+            receivedArgCount: wireArgs.length,
+            canonicalAction: actionAlias?.action,
+            compatibility: actionAlias !== undefined || compatibility !== undefined || emptyArrayFraming
           });
         }).catch(error => {
           publishWaddleLiveTrace({
             category: 'XT',
             phase: 'error',
             source: 'xt-handler',
-            action: name,
+            action: wireName,
             direction: 'in',
             status: 'handler-threw',
+            canonicalAction: actionAlias?.action,
             async: true,
             error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
           });
@@ -287,9 +303,10 @@ export class XtHandler {
           category: 'XT',
           phase: 'error',
           source: 'xt-handler',
-          action: name,
+          action: wireName,
           direction: 'in',
           status: 'handler-threw',
+          canonicalAction: actionAlias?.action,
           error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
         });
         throw error;
@@ -306,12 +323,13 @@ export class XtHandler {
             category: 'XT',
             phase: 'handled',
             source: 'xt-handler',
-            action: name,
+            action: wireName,
             direction: 'in',
             status: 'compatibility-response',
-            argCount: args.length,
+            argCount: wireArgs.length,
+            canonicalAction: actionAlias?.action,
             responseAction: fallback.responseAction,
-            compatibilityReason: fallback.reason
+            compatibilityReason: actionAlias?.reason ?? fallback.reason
           });
           return;
         }
@@ -326,21 +344,23 @@ export class XtHandler {
           category: 'XT',
           phase: 'handled',
           source: 'xt-handler',
-          action: name,
+          action: wireName,
           direction: 'in',
           status: 'protocol-acknowledged',
-          argCount: args.length
+          argCount: wireArgs.length,
+          canonicalAction: actionAlias?.action
         });
       } else {
-        logverbose(getRedString('unhandled XT: ' + name));
+        logverbose(getRedString('unhandled XT: ' + wireName));
         publishWaddleLiveTrace({
           category: 'XT',
           phase: 'error',
           source: 'xt-handler',
-          action: name,
+          action: wireName,
           direction: 'in',
           status: 'unhandled-action',
-          argCount: args.length
+          argCount: wireArgs.length,
+          canonicalAction: actionAlias?.action
         });
       }
     }
