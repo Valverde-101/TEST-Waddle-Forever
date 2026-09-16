@@ -17,6 +17,7 @@ import { choose } from '@common/utils';
 import { SPY_DRILLS_DATA } from '@server/game-logic/spy-drills';
 import { PenguinHandler, PenguinGuard, RoomHandler, WorldContext } from './handlers';
 import { handleLeaveFire } from './fire';
+import { sendModernPartyBootstrap } from './party';
 
 
 function unequipPuffle(p: WorldPenguin): void {
@@ -194,7 +195,14 @@ export const handleJoinServer: PenguinHandler<[]> = async (ctx) => {
   }
 
   if (data.isVanillaEngine()) {
-    msg.send(penguin, 'activefeatures', data.getActiveFeatures() ?? '');
+    if (data.getPartyProgress() !== null) {
+      // Late-AS3 party runtimes are passive until the server pushes all three
+      // bootstrap packets. Preserve the archived Houdini/CPImagined order so
+      // party.swf can construct CURRENT_PARTY and then mount icon/interface UI.
+      await sendModernPartyBootstrap(ctx);
+    } else {
+      await msg.send(penguin, 'activefeatures', data.getActiveFeatures() ?? '');
+    }
   }
 
   if (!data.isPreCpip()) {
