@@ -96,6 +96,8 @@ foreach ($contract in @(
   "'content/party_icon.swf': [ref('content/ContentParty_icon-HalloweenParty2015.swf'), 'party_icon', 'scavenger_hunt_icon']",
   "'close_ups/quest_interface.swf': [ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf'), 'w.p2015.may.partyinterface', 'w.app.generic.partyinterface', 'scavenger_hunt']",
   "'close_ups/quest_interface.swf': { en: ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf') }",
+  "'close_ups/halloLogin.swf': [ref('close_ups/Hallo15_dialogue_login.swf'), 'w.p2015.may.login']",
+  "'close_ups/halloLogin.swf': { en: ref('close_ups/Hallo15_dialogue_login.swf') }",
   '...dialogueGlobalChanges',
   '...dialogueLocalChanges',
   '...tileGlobalChanges',
@@ -118,8 +120,7 @@ foreach ($stale in @(
   'ClientInterface-HalloweenClassic2015.swf',
   'Close_upsQuest_interface-HalloweenClassic2015.swf',
   "'close_ups/ghostAdopt.swf'",
-  "'close_ups/skipDialogue.swf'",
-  "'close_ups/halloLogin.swf'"
+  "'close_ups/skipDialogue.swf'"
 )) {
   Require-NotContains $party $stale ("mixed_2310_" + ($stale -replace '[^A-Za-z0-9]+','_').Trim('_'))
 }
@@ -171,7 +172,7 @@ if ([int]$historicalManifest.requiredCount -ne 132 -or $historicalAssets.Count -
   throw "WADDLE_PARTY2015_SOURCE=FAIL historical_count manifest=$($historicalManifest.requiredCount) assets=$($historicalAssets.Count) expected=132"
 }
 $historicalTargets = @($historicalAssets | ForEach-Object { [string]$_.relativePath })
-foreach ($required in @('client/ClientInterface-HalloweenParty2015.swf','close_ups/Close_upsQuest_interface-HalloweenParty2015.swf','content/ContentFeatures-HalloweenParty2015.swf','content/ContentParty_icon-HalloweenParty2015.swf')) {
+foreach ($required in @('client/ClientInterface-HalloweenParty2015.swf','close_ups/Close_upsQuest_interface-HalloweenParty2015.swf','content/ContentFeatures-HalloweenParty2015.swf','content/ContentParty_icon-HalloweenParty2015.swf','close_ups/Hallo15_dialogue_login.swf')) {
   if (-not ($historicalTargets -contains $required)) { throw "WADDLE_PARTY2015_SOURCE=FAIL historical_runtime_missing=$required" }
   $path = Join-Path $partyRoot ($required.Replace('/','\'))
   if (-not (Test-Swf $path)) { throw "WADDLE_PARTY2015_SOURCE=FAIL historical_runtime_invalid=$required" }
@@ -197,4 +198,4 @@ $updates = Read-Normalized $updatesPath
 Require-Contains $updates 'import { UPDATES_2015 } from "./2015";' 'updates_2015_import'
 Require-Contains $updates '...UPDATES_2015' 'updates_2015_registration'
 
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=exact-cparchives-2015 historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical party_map=base-runtime game_configs=base-runtime client_interface=historical-2015 quest_interface=historical-2015 dialogues=historical-2015 music=historical-2015 native_namespace=true activefeatures=20150501 partyservice=true mutation=false"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=exact-cparchives-2015 historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical party_map=base-runtime game_configs=base-runtime client_interface=historical-2015 quest_interface=historical-2015 hallo_login=historical-2015 dialogues=historical-2015 music=historical-2015 native_namespace=true activefeatures=20150501 partyservice=true mutation=false"
