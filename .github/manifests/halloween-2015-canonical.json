@@ -41,6 +41,13 @@
       "kind": "swf"
     },
     {
+      "target": "close_ups/halloLogin.swf",
+      "sourcePath": "parties/2310 2 halloween classic edition/dialogue/halloLogin/halloLogin.swf",
+      "bytes": 74159,
+      "gitBlobSha": "052a30679c93ff4a5d052d74220a270293c4a818",
+      "kind": "swf"
+    },
+    {
       "target": "game_configs/game_configs.bin",
       "sourcePath": "parties/2310 2 halloween classic edition/spoopy configs/game_configs.bin",
       "bytes": 232384,
