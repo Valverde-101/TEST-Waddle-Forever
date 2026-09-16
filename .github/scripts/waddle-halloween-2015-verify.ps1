@@ -91,17 +91,21 @@ foreach ($route in @(
   "'play/v2/client/QuestCommunicator.swf': P + 'client/QuestCommunicator.swf'",
   "'play/v2/content/global/content/party.swf': P + 'content/party.swf'",
   "'play/v2/content/global/content/map.swf': P + 'content/map.swf'",
-  "'play/v2/client/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'",
-  "'play/v2/content/global/content/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'",
+  "'play/v2/client/interface.swf': P + 'client/ClientInterface-HalloweenClassic2015.swf'",
+  "'play/v2/content/global/content/interface.swf': P + 'client/ClientInterface-HalloweenClassic2015.swf'",
   "'play/v2/content/global/content/features.swf': P + 'content/ContentFeatures-HalloweenParty2015.swf'",
   "'play/v2/content/global/content/party_icon.swf': P + 'content/ContentParty_icon-HalloweenParty2015.swf'",
   "'play/v2/content/global/logo/logo.swf': P + 'content/ContentLogo-HalloweenParty2015.swf'",
+  "'close_ups/quest_interface.swf': [P + 'close_ups/Close_upsQuest_interface-HalloweenClassic2015.swf', 'w.p2015.may.partyinterface', 'w.app.generic.partyinterface', 'scavenger_hunt']",
+  "'close_ups/quest_interface.swf': { en: P + 'close_ups/Close_upsQuest_interface-HalloweenClassic2015.swf' }",
   "'close_ups/ghostAdopt.swf': [P + 'close_ups/ghostAdopt.swf', 'ghostAdopt']",
   "'close_ups/skipDialogue.swf': [P + 'close_ups/skipDialogue.swf', 'skipDialogue']",
   "'close_ups/ghostAdopt.swf': { en: P + 'close_ups/ghostAdopt.swf' }",
   "'close_ups/skipDialogue.swf': { en: P + 'close_ups/skipDialogue.swf' }"
 )) { Assert ($updates.Contains($route)) "route_missing=$route" }
 Assert (-not $updates.Contains("'play/v2/content/global/content/logo.swf'")) 'legacy_wrong_logo_route_present'
+Assert (-not $updates.Contains("P + 'client/ClientInterface-HalloweenParty2015.swf'")) 'historical_client_interface_still_served'
+Assert (-not $updates.Contains("P + 'close_ups/Close_upsQuest_interface-HalloweenParty2015.swf'")) 'historical_quest_interface_still_served'
 Assert ($updates.Contains("'w.p2015.may.partymap'")) 'map_global_path_missing'
 Assert ($updates.Contains("'w.p2015.may.partyinterface'")) 'quest_global_path_missing'
 Assert ($updates.Contains("'w.p2015.may.login'")) 'login_global_path_missing'
@@ -122,7 +126,9 @@ foreach ($alias in @('halloween#partycookie','halloween#msgviewed','halloween#qc
 }
 
 # The archive-page manifest remains the immutable inventory of the 132 historical
-# visual/event SWFs collected for the party.
+# visual/event SWFs collected for the party. Two historical interface artifacts
+# are preserved physically for archival completeness but intentionally superseded
+# at runtime by the coherent Halloween Classic companion pair.
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 Assert ([int]$manifest.requiredCount -eq 132) "manifest_required_count=$($manifest.requiredCount) expected=132"
 $manifestByRelative = @{}
@@ -132,9 +138,20 @@ foreach ($asset in @($manifest.assets)) {
 }
 $requiredManifest = @($manifest.assets | Where-Object { [bool]$_.required })
 Assert ($requiredManifest.Count -eq 132) "manifest_required_entries=$($requiredManifest.Count) expected=132"
+$requiredPaths = @($requiredManifest | ForEach-Object { ([string]$_.relativePath).Replace('\\','/') } | Sort-Object -Unique)
+$supersededHistorical = @(
+  'client/ClientInterface-HalloweenParty2015.swf',
+  'close_ups/Close_upsQuest_interface-HalloweenParty2015.swf'
+)
+foreach ($old in $supersededHistorical) {
+  Assert ($requiredPaths -contains $old) "superseded_historical_missing=$old"
+}
+$servedHistoricalPaths = @($requiredPaths | Where-Object { $supersededHistorical -notcontains $_ })
+Assert ($servedHistoricalPaths.Count -eq 130) "served_historical_expected=130 actual=$($servedHistoricalPaths.Count)"
 
-# Canonical supplements are manifest-driven. This includes runtime/config and any
-# recovered interaction close-ups such as ghostAdopt/skipDialogue.
+# Canonical supplements are manifest-driven. This includes runtime/config and the
+# two coherent interaction companions that replace (without deleting) the two
+# historical interface artifacts above.
 $canonicalManifest = Get-Content -LiteralPath $canonicalManifestPath -Raw | ConvertFrom-Json
 Assert ($canonicalManifest.schema -eq 'waddle-canonical-assets/v1') "canonical_schema=$($canonicalManifest.schema)"
 $canonicalAssets = @($canonicalManifest.assets)
@@ -143,35 +160,46 @@ $canonicalTargets = @($canonicalAssets | ForEach-Object { [string]$_.target })
 Assert (@($canonicalTargets | Sort-Object -Unique).Count -eq $canonicalTargets.Count) 'canonical_targets_not_unique'
 $canonicalSwfRefs = @($canonicalAssets | Where-Object { [string]$_.kind -eq 'swf' } | ForEach-Object { ([string]$_.target).Replace('\\','/') } | Sort-Object -Unique)
 Assert ($canonicalSwfRefs.Count -gt 0) 'canonical_swf_count=0'
-foreach ($requiredCanonical in @('content/party.swf','content/map.swf','client/QuestCommunicator.swf','close_ups/ghostAdopt.swf','close_ups/skipDialogue.swf','game_configs/game_configs.bin')) {
+foreach ($requiredCanonical in @(
+  'content/party.swf','content/map.swf','client/QuestCommunicator.swf',
+  'client/ClientInterface-HalloweenClassic2015.swf',
+  'close_ups/Close_upsQuest_interface-HalloweenClassic2015.swf',
+  'close_ups/ghostAdopt.swf','close_ups/skipDialogue.swf','game_configs/game_configs.bin'
+)) {
   Assert ($canonicalTargets -contains $requiredCanonical) "canonical_target_missing=$requiredCanonical"
+}
+foreach ($old in $supersededHistorical) {
+  Assert ($canonicalTargets -notcontains $old) "canonical_reuses_historical=$old"
 }
 
 $matches = [regex]::Matches($updates, "P\s*\+\s*'([^']+\.swf)'", [Text.RegularExpressions.RegexOptions]::IgnoreCase)
 $refs = @($matches | ForEach-Object { $_.Groups[1].Value.Replace('\\','/') } | Sort-Object -Unique)
 $coreRefs = @($refs | Where-Object { $canonicalSwfRefs -notcontains $_ })
-$expectedTotalSwfRefs = $requiredManifest.Count + $canonicalSwfRefs.Count
+$expectedTotalSwfRefs = $servedHistoricalPaths.Count + $canonicalSwfRefs.Count
 Assert ($refs.Count -eq $expectedTotalSwfRefs) "all_swf_ref_count=$($refs.Count) expected=$expectedTotalSwfRefs"
-Assert ($coreRefs.Count -eq $requiredManifest.Count) "historical_swf_ref_count=$($coreRefs.Count) expected=$($requiredManifest.Count)"
+Assert ($coreRefs.Count -eq $servedHistoricalPaths.Count) "served_historical_swf_ref_count=$($coreRefs.Count) expected=$($servedHistoricalPaths.Count)"
 foreach ($runtimeRef in $canonicalSwfRefs) { Assert ($refs -contains $runtimeRef) "canonical_swf_ref_missing=$runtimeRef" }
+foreach ($old in $supersededHistorical) { Assert ($refs -notcontains $old) "superseded_historical_still_referenced=$old" }
 
+# Validate every historical archive file physically, including the two retained
+# superseded interface artifacts. Runtime-reference validation is separate below.
 $missing = New-Object System.Collections.Generic.List[string]
 $invalid = New-Object System.Collections.Generic.List[string]
-$manifestMissing = New-Object System.Collections.Generic.List[string]
-foreach ($ref in $coreRefs) {
-  $relative = $ref.Replace('\\','/')
+foreach ($relative in $requiredPaths) {
   $path = Join-Path $assetRoot $relative.Replace('/','\\')
   if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { $missing.Add($relative) | Out-Null; continue }
   if (-not (Test-Swf $path)) { $invalid.Add($relative) | Out-Null }
-  if (-not $manifestByRelative.ContainsKey($relative.ToLowerInvariant())) { $manifestMissing.Add($relative) | Out-Null }
 }
 Assert ($missing.Count -eq 0) "missing_historical_assets=$($missing.Count) files=$($missing -join ',')"
 Assert ($invalid.Count -eq 0) "invalid_historical_assets=$($invalid.Count) files=$($invalid -join ',')"
-Assert ($manifestMissing.Count -eq 0) "manifest_missing_historical_assets=$($manifestMissing.Count) files=$($manifestMissing -join ',')"
 
-$requiredPaths = @($requiredManifest | ForEach-Object { ([string]$_.relativePath).Replace('\\','/') } | Sort-Object -Unique)
-$notReferenced = @($requiredPaths | Where-Object { $coreRefs -notcontains $_ })
-Assert ($notReferenced.Count -eq 0) "required_not_referenced=$($notReferenced.Count) files=$($notReferenced -join ',')"
+$manifestMissing = New-Object System.Collections.Generic.List[string]
+foreach ($ref in $coreRefs) {
+  if (-not $manifestByRelative.ContainsKey($ref.ToLowerInvariant())) { $manifestMissing.Add($ref) | Out-Null }
+}
+Assert ($manifestMissing.Count -eq 0) "manifest_missing_served_historical_assets=$($manifestMissing.Count) files=$($manifestMissing -join ',')"
+$unexpectedUnreferenced = @($requiredPaths | Where-Object { $coreRefs -notcontains $_ -and $supersededHistorical -notcontains $_ })
+Assert ($unexpectedUnreferenced.Count -eq 0) "unexpected_historical_not_referenced=$($unexpectedUnreferenced.Count) files=$($unexpectedUnreferenced -join ',')"
 
 $canonicalMissing = New-Object System.Collections.Generic.List[string]
 foreach ($entry in $canonicalAssets) {
@@ -200,6 +228,6 @@ $closeUpRefs = @($coreRefs | Where-Object { $_ -like 'close_ups/*' })
 $canonicalCloseUps = @($canonicalSwfRefs | Where-Object { $_ -like 'close_ups/*' })
 Assert ($roomRefs.Count -eq 41) "room_ref_count=$($roomRefs.Count) expected=41"
 Assert ($musicRefs.Count -eq 38) "music_ref_count=$($musicRefs.Count) expected=38"
-Assert ($closeUpRefs.Count -eq 44) "historical_close_up_ref_count=$($closeUpRefs.Count) expected=44"
+Assert ($closeUpRefs.Count -eq 43) "served_historical_close_up_ref_count=$($closeUpRefs.Count) expected=43"
 
-Write-Host "WADDLE_PARTY2015_VERIFY=PASS historical_swfs=$($requiredManifest.Count) canonical_swfs=$($canonicalSwfRefs.Count) total_swfs=$expectedPhysicalSwfs canonical_assets=$($canonicalAssets.Count) canonical_closeups=$($canonicalCloseUps.Count) game_configs_bin=true quest_communicator=true ghost_adopt=true skip_dialogue=true party_runtime=true party_map=true rooms=$($roomRefs.Count) music=$($musicRefs.Count) historical_closeups=$($closeUpRefs.Count) activefeatures=20150501 partyservice=true halloween_namespace=true bimp_telemetry=true global_paths=true exclusive_end=2015-11-05 root=$assetRoot"
+Write-Host "WADDLE_PARTY2015_VERIFY=PASS historical_physical_swfs=$($requiredManifest.Count) historical_served_swfs=$($servedHistoricalPaths.Count) historical_superseded=$($supersededHistorical.Count) canonical_swfs=$($canonicalSwfRefs.Count) total_physical_swfs=$expectedPhysicalSwfs served_swf_refs=$($refs.Count) canonical_assets=$($canonicalAssets.Count) canonical_closeups=$($canonicalCloseUps.Count) coherent_interface=true coherent_quest_interface=true game_configs_bin=true quest_communicator=true ghost_adopt=true skip_dialogue=true party_runtime=true party_map=true rooms=$($roomRefs.Count) music=$($musicRefs.Count) served_historical_closeups=$($closeUpRefs.Count) activefeatures=20150501 partyservice=true halloween_namespace=true bimp_telemetry=true global_paths=true exclusive_end=2015-11-05 root=$assetRoot"
