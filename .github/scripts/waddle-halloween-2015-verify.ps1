@@ -63,7 +63,9 @@ $requiredLive = @(
   "'play/v2/content/global/content/party_icon.swf': ref('content/ContentParty_icon-HalloweenParty2015.swf')",
   "'play/v2/content/global/logo/logo.swf': ref('content/ContentLogo-HalloweenParty2015.swf')",
   "'close_ups/quest_interface.swf': [ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf')",
-  "'close_ups/quest_interface.swf': { en: ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf') }"
+  "'close_ups/quest_interface.swf': { en: ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf') }",
+  "'close_ups/halloLogin.swf': [ref('close_ups/Hallo15_dialogue_login.swf'), 'w.p2015.may.login']",
+  "'close_ups/halloLogin.swf': { en: ref('close_ups/Hallo15_dialogue_login.swf') }"
 )
 foreach ($contract in $requiredLive) { Assert ($updates.Contains($contract)) "live_contract_missing=$contract" }
 
@@ -106,7 +108,8 @@ foreach ($entry in $historical) {
 }
 foreach ($critical in @(
   'client/ClientInterface-HalloweenParty2015.swf','close_ups/Close_upsQuest_interface-HalloweenParty2015.swf',
-  'content/ContentFeatures-HalloweenParty2015.swf','content/ContentParty_icon-HalloweenParty2015.swf','content/ContentLogo-HalloweenParty2015.swf'
+  'content/ContentFeatures-HalloweenParty2015.swf','content/ContentParty_icon-HalloweenParty2015.swf','content/ContentLogo-HalloweenParty2015.swf',
+  'close_ups/Hallo15_dialogue_login.swf'
 )) { Assert ($historicalTargets.Contains($critical)) "critical_historical_missing=$critical" }
 
 $canonicalManifest = Get-Content -LiteralPath $canonicalManifestPath -Raw | ConvertFrom-Json
@@ -156,4 +159,4 @@ foreach ($id in $musicIds) {
 $physicalSwfs = @(Get-ChildItem -LiteralPath $assetRoot -Filter '*.swf' -File -Recurse)
 Assert ($physicalSwfs.Count -eq 140) "physical_swfs=$($physicalSwfs.Count) expected=140"
 
-Write-Host "WADDLE_PARTY2015_VERIFY=PASS runtime=exact-cparchives-2015 historical_verified=132 canonical_provenance=16 canonical_swfs=8 physical_swfs=140 dialogues=34 tiles=9 music=38 interface=historical-2015 quest=historical-2015 party_map=base-runtime dynamic_loader_assets=verified mixed_2310=false"
+Write-Host "WADDLE_PARTY2015_VERIFY=PASS runtime=exact-cparchives-2015 historical_verified=132 canonical_provenance=16 canonical_swfs=8 physical_swfs=140 dialogues=34 hallo_login=historical-alias tiles=9 music=38 interface=historical-2015 quest=historical-2015 party_map=base-runtime dynamic_loader_assets=verified mixed_2310=false"
