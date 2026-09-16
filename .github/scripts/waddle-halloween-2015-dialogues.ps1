@@ -25,12 +25,12 @@ function Resolve-FFDec([string]$Explicit) {
 $repo = (Resolve-Path -LiteralPath $RepoRoot).Path
 $partyRoot = Join-Path $repo 'media\default\party2015'
 $dialogueRoot = Join-Path $partyRoot 'close_ups'
-$preservedStringsPath = Join-Path $partyRoot 'game_configs\game_strings.json'
+$localizationPath = Join-Path $partyRoot 'game_configs\halloween2015_dialogue_strings.json'
 if (-not (Test-Path -LiteralPath $dialogueRoot -PathType Container)) {
   throw "WADDLE_PARTY2015_DIALOGUES=FAIL closeups_missing=$dialogueRoot"
 }
-if (-not (Test-Path -LiteralPath $preservedStringsPath -PathType Leaf)) {
-  throw "WADDLE_PARTY2015_DIALOGUES=FAIL preserved_game_strings_missing=$preservedStringsPath"
+if (-not (Test-Path -LiteralPath $localizationPath -PathType Leaf)) {
+  throw "WADDLE_PARTY2015_DIALOGUES=FAIL localization_contract_missing=$localizationPath"
 }
 $dialogues = @(Get-ChildItem -LiteralPath $dialogueRoot -Filter 'Hallo15_dialogue_*.swf' -File | Sort-Object Name)
 if ($dialogues.Count -lt 30) {
@@ -65,24 +65,20 @@ foreach ($dialogue in $dialogues) {
 
 $sorted = @($tokens | Sort-Object)
 foreach ($token in $sorted) { Write-Host "WADDLE_PARTY2015_DIALOGUE_TOKEN=$token" }
-if ($sorted.Count -lt 10) {
-  throw "WADDLE_PARTY2015_DIALOGUES=FAIL token_inventory_too_small=$($sorted.Count) dialogues=$($dialogues.Count)"
+if ($sorted.Count -ne 38) {
+  throw "WADDLE_PARTY2015_DIALOGUES=FAIL token_inventory=$($sorted.Count) expected=38 dialogues=$($dialogues.Count)"
 }
 
-# The original dialogue SWFs are authoritative for which localization keys are
-# required. Their values are sourced from the byte-verified preserved
-# game_configs/game_strings.json, not reconstructed by hand in TypeScript.
-$preserved = Get-Content -LiteralPath $preservedStringsPath -Raw | ConvertFrom-Json
-if ($null -eq $preserved.lang) {
-  throw 'WADDLE_PARTY2015_DIALOGUES=FAIL preserved_lang_missing'
-}
+# The SWFs define the required key set. The versioned localization contract is the
+# single runtime source of values; the original CPImagined game_strings remains
+# untouched and is separately checked for its nine custom finale values.
+$contract = Get-Content -LiteralPath $localizationPath -Raw | ConvertFrom-Json
+if ($null -eq $contract.strings) { throw 'WADDLE_PARTY2015_DIALOGUES=FAIL strings_missing' }
 $available = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
 $empty = New-Object 'System.Collections.Generic.List[string]'
-foreach ($entry in @($preserved.lang)) {
-  if ($null -eq $entry -or $entry.Count -lt 2) { continue }
-  $key = [string]$entry[0]
-  if (-not $key.StartsWith('w.app.p2015.halloween.',[StringComparison]::Ordinal)) { continue }
-  $value = [string]$entry[1]
+foreach ($property in @($contract.strings.PSObject.Properties)) {
+  $key = [string]$property.Name
+  $value = [string]$property.Value
   [void]$available.Add($key)
   if ([string]::IsNullOrWhiteSpace($value)) { $empty.Add($key) | Out-Null }
 }
@@ -91,25 +87,28 @@ if ($empty.Count -gt 0) {
 }
 
 $missing = @($sorted | Where-Object { -not $available.Contains($_) })
+$extra = @($available | Where-Object { $sorted -cnotcontains $_ } | Sort-Object)
 foreach ($token in $missing) { Write-Host "WADDLE_PARTY2015_DIALOGUE_MISSING=$token" }
+foreach ($token in $extra) { Write-Host "WADDLE_PARTY2015_DIALOGUE_EXTRA=$token" }
 
 $report = [ordered]@{
-  schema = 'waddle-party-dialogue-audit/v3'
+  schema = 'waddle-party-dialogue-audit/v4'
   party = 'Halloween Party 2015'
   dialogues = $dialogues.Count
   requiredTokens = $sorted
-  preservedLocalizationCount = $available.Count
-  localizationSource = 'party2015/game_configs/game_strings.json'
+  localizationCount = $available.Count
+  localizationSource = 'party2015/game_configs/halloween2015_dialogue_strings.json'
   missingTokens = $missing
+  extraTokens = $extra
   files = $fileTokenMap
-  complete = ($missing.Count -eq 0)
+  complete = ($missing.Count -eq 0 -and $extra.Count -eq 0 -and $available.Count -eq 38)
 }
 $reportPath = Join-Path $work 'localization-audit.json'
 $report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $reportPath -Encoding UTF8
 
-if ($RequireComplete -and $missing.Count -gt 0) {
-  throw "WADDLE_PARTY2015_DIALOGUES=FAIL missing_localizations=$($missing.Count) tokens=$($sorted.Count) dialogues=$($dialogues.Count) report=$reportPath"
+if ($RequireComplete -and ($missing.Count -gt 0 -or $extra.Count -gt 0 -or $available.Count -ne 38)) {
+  throw "WADDLE_PARTY2015_DIALOGUES=FAIL missing=$($missing.Count) extra=$($extra.Count) available=$($available.Count) tokens=$($sorted.Count) dialogues=$($dialogues.Count) report=$reportPath"
 }
 
-$status = if ($missing.Count -eq 0) { 'PASS' } else { 'INCOMPLETE' }
-Write-Host "WADDLE_PARTY2015_DIALOGUES=$status dialogues=$($dialogues.Count) tokens=$($sorted.Count) preserved=$($available.Count) missing=$($missing.Count) require_complete=$RequireComplete source=canonical-game-strings report=$reportPath"
+$status = if ($missing.Count -eq 0 -and $extra.Count -eq 0 -and $available.Count -eq 38) { 'PASS' } else { 'INCOMPLETE' }
+Write-Host "WADDLE_PARTY2015_DIALOGUES=$status dialogues=$($dialogues.Count) tokens=$($sorted.Count) localization=$($available.Count) missing=$($missing.Count) extra=$($extra.Count) require_complete=$RequireComplete source=versioned-contract report=$reportPath"
