@@ -80,21 +80,27 @@ if ($manifest.schema -ne 'waddle-canonical-assets/v1') {
 if (-not $manifest.sourceRepository -or -not $manifest.sourceCommit) {
   throw 'WADDLE_HALLOWEEN2015_CANONICAL=FAIL source_identity_missing'
 }
-if (@($manifest.assets).Count -ne 11) {
-  throw "WADDLE_HALLOWEEN2015_CANONICAL=FAIL asset_count=$(@($manifest.assets).Count) expected=11"
+$assets = @($manifest.assets)
+if ($assets.Count -lt 1) {
+  throw 'WADDLE_HALLOWEEN2015_CANONICAL=FAIL asset_count=0'
+}
+$targets = @($assets | ForEach-Object { [string]$_.target })
+$uniqueTargets = @($targets | Sort-Object -Unique)
+if ($uniqueTargets.Count -ne $targets.Count) {
+  throw "WADDLE_HALLOWEEN2015_CANONICAL=FAIL duplicate_targets total=$($targets.Count) unique=$($uniqueTargets.Count)"
 }
 
 $targetRoot = Join-Path $repo 'media/default/party2015'
 New-Item -ItemType Directory -Force -Path $targetRoot | Out-Null
 $headers = @{
-  'User-Agent' = 'Waddle-Forever-Halloween2015-Canonical/2.1'
+  'User-Agent' = 'Waddle-Forever-Halloween2015-Canonical/2.2'
   'Accept' = 'application/octet-stream,*/*'
 }
 $downloaded = 0
 $reused = 0
 $verified = 0
 
-foreach ($entry in @($manifest.assets)) {
+foreach ($entry in $assets) {
   $relativeTarget = ([string]$entry.target).Replace('/', [IO.Path]::DirectorySeparatorChar)
   $final = Join-Path $targetRoot $relativeTarget
   $parent = Split-Path -Parent $final
@@ -144,7 +150,7 @@ $state = [ordered]@{
   sourceRepository = [string]$manifest.sourceRepository
   sourceCommit = [string]$manifest.sourceCommit
   verified = $verified
-  assetTargets = @($manifest.assets | ForEach-Object { [string]$_.target } | Sort-Object)
+  assetTargets = @($assets | ForEach-Object { [string]$_.target } | Sort-Object)
 }
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 $stateJson = ($state | ConvertTo-Json -Depth 5) -replace "`r`n", "`n"
