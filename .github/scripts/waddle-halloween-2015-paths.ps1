@@ -15,9 +15,24 @@ if (-not (Test-Path -LiteralPath $pathsPath -PathType Leaf)) {
 }
 
 $updates = ([IO.File]::ReadAllText($updatesPath) -replace "`r`n", "`n")
-$paths = Get-Content -LiteralPath $pathsPath -Raw | ConvertFrom-Json
-if ($null -eq $paths.global) {
-  throw 'WADDLE_HALLOWEEN2015_PATHS=FAIL global_paths_missing'
+$pathsText = [IO.File]::ReadAllText($pathsPath)
+
+function Get-PreservedPath([string]$Key,[bool]$Required = $true) {
+  # Windows PowerShell 5 ConvertFrom-Json is case-insensitive and rejects this
+  # original file because it legitimately contains both prizebooth/prizeBooth.
+  # Extract only the exact case-sensitive string keys required by this party gate
+  # instead of rewriting or normalizing the preserved asset.
+  $pattern = '"' + [regex]::Escape($Key) + '"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"'
+  $matches = @([regex]::Matches($pathsText,$pattern,[Text.RegularExpressions.RegexOptions]::CultureInvariant))
+  if ($matches.Count -eq 0) {
+    if ($Required) { throw "WADDLE_HALLOWEEN2015_PATHS=FAIL preserved_key_missing=$Key" }
+    return $null
+  }
+  if ($matches.Count -ne 1) {
+    throw "WADDLE_HALLOWEEN2015_PATHS=FAIL preserved_key_ambiguous=$Key matches=$($matches.Count)"
+  }
+  $value = $matches[0].Groups[1].Value
+  return $value.Replace('\/','/').Replace('\\','\')
 }
 
 # These are the party-specific late-AS3 routes for which we have byte-preserved
@@ -40,12 +55,8 @@ $contracts = @(
 )
 
 foreach ($contract in $contracts) {
-  $property = $paths.global.PSObject.Properties[$contract.key]
-  if ($null -eq $property) {
-    throw "WADDLE_HALLOWEEN2015_PATHS=FAIL preserved_key_missing=$($contract.key)"
-  }
-  $actual = ([string]$property.Value).Replace('\','/')
-  if ($actual -ne $contract.route) {
+  $actual = (Get-PreservedPath $contract.key).Replace('\','/')
+  if ($actual -cne $contract.route) {
     throw "WADDLE_HALLOWEEN2015_PATHS=FAIL preserved_route key=$($contract.key) expected=$($contract.route) actual=$actual"
   }
   if (-not $updates.Contains($contract.source)) {
@@ -60,10 +71,10 @@ foreach ($contract in $contracts) {
 $archiveOnly = @('halloIglooList','petShopAdopt')
 $archiveOnlyDetails = @()
 foreach ($key in $archiveOnly) {
-  $property = $paths.global.PSObject.Properties[$key]
-  if ($null -ne $property) {
-    $archiveOnlyDetails += "$key=$(([string]$property.Value).Replace('\','/'))"
+  $value = Get-PreservedPath $key $false
+  if ($null -ne $value) {
+    $archiveOnlyDetails += "$key=$($value.Replace('\','/'))"
   }
 }
 
-Write-Host "WADDLE_HALLOWEEN2015_PATHS=PASS supported=$($contracts.Count) preserved_literal_routes=true archive_only=$($archiveOnlyDetails -join ',')"
+Write-Host "WADDLE_HALLOWEEN2015_PATHS=PASS supported=$($contracts.Count) preserved_literal_routes=true parser=case-sensitive archive_only=$($archiveOnlyDetails -join ',')"
