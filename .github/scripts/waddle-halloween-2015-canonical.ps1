@@ -1,5 +1,8 @@
 [CmdletBinding()]
-param([string]$RepoRoot = $env:GITHUB_WORKSPACE)
+param(
+  [string]$RepoRoot = $env:GITHUB_WORKSPACE,
+  [string]$ManifestPath
+)
 
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -60,11 +63,17 @@ function Escape-Path([string]$Path) {
 }
 
 $repo = (Resolve-Path -LiteralPath $RepoRoot).Path
-$manifestPath = Join-Path $repo '.github/manifests/halloween-2015-canonical.json'
-if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
-  throw "WADDLE_HALLOWEEN2015_CANONICAL=FAIL manifest_missing=$manifestPath"
+if ([string]::IsNullOrWhiteSpace($ManifestPath)) {
+  # The hydrator belongs to the checked-out PR/workflow. The target RepoRoot may
+  # deliberately be the untouched canonical V: checkout, so never assume that
+  # checkout contains the same script/manifest revision.
+  $ManifestPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'manifests/halloween-2015-canonical.json'
 }
-$manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+$manifestPathResolved = (Resolve-Path -LiteralPath $ManifestPath -ErrorAction SilentlyContinue).Path
+if (-not $manifestPathResolved -or -not (Test-Path -LiteralPath $manifestPathResolved -PathType Leaf)) {
+  throw "WADDLE_HALLOWEEN2015_CANONICAL=FAIL manifest_missing=$ManifestPath"
+}
+$manifest = Get-Content -LiteralPath $manifestPathResolved -Raw | ConvertFrom-Json
 if ($manifest.schema -ne 'waddle-canonical-assets/v1') {
   throw "WADDLE_HALLOWEEN2015_CANONICAL=FAIL schema=$($manifest.schema)"
 }
@@ -78,7 +87,7 @@ if (@($manifest.assets).Count -ne 11) {
 $targetRoot = Join-Path $repo 'media/default/party2015'
 New-Item -ItemType Directory -Force -Path $targetRoot | Out-Null
 $headers = @{
-  'User-Agent' = 'Waddle-Forever-Halloween2015-Canonical/2.0'
+  'User-Agent' = 'Waddle-Forever-Halloween2015-Canonical/2.1'
   'Accept' = 'application/octet-stream,*/*'
 }
 $downloaded = 0
@@ -141,4 +150,4 @@ $utf8 = New-Object System.Text.UTF8Encoding($false)
 $stateJson = ($state | ConvertTo-Json -Depth 5) -replace "`r`n", "`n"
 [IO.File]::WriteAllText((Join-Path $targetRoot 'canonical-state.json'), $stateJson + "`n", $utf8)
 
-Write-Host "WADDLE_HALLOWEEN2015_CANONICAL=PASS assets=$verified downloaded=$downloaded reused=$reused source=$($manifest.sourceRepository)@$($manifest.sourceCommit) state=deterministic"
+Write-Host "WADDLE_HALLOWEEN2015_CANONICAL=PASS assets=$verified downloaded=$downloaded reused=$reused source=$($manifest.sourceRepository)@$($manifest.sourceCommit) manifest=$manifestPathResolved target=$targetRoot state=deterministic"
