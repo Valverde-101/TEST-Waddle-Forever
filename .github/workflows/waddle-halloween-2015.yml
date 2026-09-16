@@ -90,8 +90,11 @@ jobs:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     permissions:
       contents: write
+      actions: write
     runs-on: windows-latest
     timeout-minutes: 30
+    env:
+      GH_ACTIONS_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -155,8 +158,24 @@ jobs:
           $staged=@(git diff --cached --name-only)
           if($staged.Count -gt 0){
             git commit -m 'fix(party): publish complete preserved Halloween 2015 stack'
+            if($LASTEXITCODE -ne 0){throw "WADDLE_PARTY2015_PUBLISH=FAIL commit_exit=$LASTEXITCODE"}
             $branch='${{ github.event.pull_request.head.ref || github.ref_name }}'
+            $publishedSha=(git rev-parse HEAD | Out-String).Trim().ToLowerInvariant()
+            if($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($publishedSha)){throw 'WADDLE_PARTY2015_PUBLISH=FAIL published_sha_unavailable'}
             git push origin "HEAD:$branch"
+            if($LASTEXITCODE -ne 0){throw "WADDLE_PARTY2015_PUBLISH=FAIL push_exit=$LASTEXITCODE branch=$branch sha=$publishedSha"}
+            $headers=@{
+              Authorization="Bearer $env:GH_ACTIONS_TOKEN"
+              Accept='application/vnd.github+json'
+              'X-GitHub-Api-Version'='2022-11-28'
+              'User-Agent'='waddle-halloween-2015-hydration'
+            }
+            $body=@{ref=$branch} | ConvertTo-Json -Compress
+            foreach($workflow in @('androidbuild-local-integration.yml','waddle-validated-source-sync.yml')){
+              $uri="https://api.github.com/repos/${{ github.repository }}/actions/workflows/$workflow/dispatches"
+              Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -ContentType 'application/json' -Body $body -TimeoutSec 30
+              Write-Host "WADDLE_PARTY2015_REDISPATCH=PASS workflow=$workflow branch=$branch published_sha=$publishedSha"
+            }
           }
           Write-Host "WADDLE_PARTY2015_PUBLISH=PASS historical_swfs=$historicalCount canonical_assets=$($canonicalAssets.Count) canonical_swfs=$($canonicalSwfs.Count) total_swfs=$expectedSwfs"
       - name: Verify historical SWFs plus all canonical runtime/config supplements
