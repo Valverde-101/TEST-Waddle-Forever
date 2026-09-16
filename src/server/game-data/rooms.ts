@@ -366,7 +366,7 @@ export const ROOMS: Record<RoomName, Room> = {
     preCpipName: null
   },
   'pufflepark': {
-    id: 890,
+    id: 434,
     name: 'Puffle Park',
     preCpipName: null
   },
