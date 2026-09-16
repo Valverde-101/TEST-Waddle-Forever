@@ -257,6 +257,10 @@ export const UPDATES_2015: Update[] = [
         globalChanges: {
           'content/party_icon.swf': [ref('content/ContentParty_icon-HalloweenParty2015.swf'), 'party_icon', 'scavenger_hunt_icon'],
           'close_ups/quest_interface.swf': [ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf'), 'w.p2015.may.partyinterface', 'w.app.generic.partyinterface', 'scavenger_hunt'],
+          // The archived interface resolves the first-login crumb through this
+          // literal route. Serve the exact 2015 dialogue SWF under that alias;
+          // do not substitute CPImagined's later halloLogin recreation.
+          'close_ups/halloLogin.swf': [ref('close_ups/Hallo15_dialogue_login.swf'), 'w.p2015.may.login'],
           ...dialogueGlobalChanges,
           ...tileGlobalChanges,
           'close_ups/tiles_minigame8v2.swf': [ref('close_ups/Close_upsTiles_minigame8-HalloweenParty2015.swf'), 'halloHerbertGame'],
@@ -270,6 +274,7 @@ export const UPDATES_2015: Update[] = [
         },
         localChanges: {
           'close_ups/quest_interface.swf': { en: ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf') },
+          'close_ups/halloLogin.swf': { en: ref('close_ups/Hallo15_dialogue_login.swf') },
           ...dialogueLocalChanges,
           ...tileLocalChanges,
           'membership/party1.swf': { en: ref('membership/MembershipParty1-HalloweenParty2015.swf') },
