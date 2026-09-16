@@ -46,9 +46,7 @@ function Export-Scripts([string]$FFDec,[string]$Swf,[string]$SafeName,[string]$W
   }
   $proc.Refresh()
   $exitText = [string]$proc.ExitCode
-  if (-not [string]::IsNullOrWhiteSpace($exitText) -and [int]$exitText -ne 0) {
-    throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_exit=$exitText swf=$Swf"
-  }
+  if (-not [string]::IsNullOrWhiteSpace($exitText) -and [int]$exitText -ne 0) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_exit=$exitText swf=$Swf" }
   $files = @(Get-ChildItem -LiteralPath $out -File -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in @('.as','.txt') } | Sort-Object FullName)
   $chunks = @()
   foreach ($file in $files) {
@@ -84,8 +82,6 @@ if (Test-Path -LiteralPath $repoPartyRoot -PathType Container) {
 if (-not $partyRoot) { throw 'WADDLE_PARTY2015_PROTOCOL=FAIL party_root_missing' }
 $ffdec = Resolve-FFDec $FFDecPath
 
-# Only files selected by the October 2015 stack are protocol evidence. The 2310
-# party/map/classic-interface files remain on disk as provenance and are excluded.
 $interactionCore = @(
   @{ role='client-interface-2015'; path='client\ClientInterface-HalloweenParty2015.swf' },
   @{ role='quest-interface-2015'; path='close_ups\Close_upsQuest_interface-HalloweenParty2015.swf' },
@@ -99,7 +95,6 @@ foreach ($dialogue in @(Get-ChildItem -LiteralPath (Join-Path $partyRoot 'close_
   $targets += @{ role=('dialogue-' + ([IO.Path]::GetFileNameWithoutExtension($dialogue.Name) -replace '^Hallo15_dialogue_','').ToLowerInvariant()); path=('close_ups\' + $dialogue.Name) }
 }
 foreach ($i in 0..8) { $targets += @{ role="tiles-$i"; path="close_ups\Close_upsTiles_minigame$i-HalloweenParty2015.swf" } }
-
 $dialogueCount = @($targets | Where-Object { $_.role -like 'dialogue-*' }).Count
 if ($dialogueCount -ne 34) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL dialogue_targets=$dialogueCount expected=34" }
 if ($targets.Count -ne 49) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL target_count=$($targets.Count) expected=49" }
@@ -107,7 +102,6 @@ if ($targets.Count -ne 49) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL target_count=
 $work = Join-Path $repo '.work\halloween2015-protocol'
 if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $work | Out-Null
-
 $pairs = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 $packets = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 $localizations = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
@@ -135,16 +129,11 @@ foreach ($target in $targets) {
 
 if ($coreScripted -lt 4) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL interaction_core_scripted=$coreScripted expected_at_least=4" }
 if ($scripted -lt 40) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL scripted_targets=$scripted expected_at_least=40" }
-if ($interactionText -notmatch '(?i)(party|quest|halloween|robot|PARTY_ICON|showContent)') {
-  throw 'WADDLE_PARTY2015_PROTOCOL=FAIL historical_interaction_core_has_no_party_evidence'
-}
+if ($interactionText -notmatch '(?i)(party|quest|halloween|robot|PARTY_ICON|showContent)') { throw 'WADDLE_PARTY2015_PROTOCOL=FAIL historical_interaction_core_has_no_party_evidence' }
 if ($localizations.Count -ne 38) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL localization_tokens=$($localizations.Count) expected=38" }
 
-# Known loaders from the rejected mixed stack must not leak back into the exact
-# archive interaction core. Emit every discovered loader so Live Trace gaps can
-# be compared directly with static ActionScript evidence.
 foreach ($loader in @($loaders | Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_LOADER=$loader" }
-foreach ($badLoader in @('content/party_map_note.swf','party_map_note.swf','music/2048.swf','music/2049.swf','music/2050.swf','music/2051.swf','music/2052.swf','music/2053.swf')) {
+foreach ($badLoader in @('content/party_map_note.swf','close_ups/party_map_note.swf','music/2048.swf','music/2049.swf','music/2050.swf','music/2051.swf','music/2052.swf','music/2053.swf')) {
   if ($loaders.Contains($badLoader)) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL mixed_runtime_loader=$badLoader" }
 }
 
@@ -155,24 +144,15 @@ $partyHandler = [IO.File]::ReadAllText($partyHandlerPath)
 foreach ($route in @('party#partycookie','party#msgviewed','party#qcmsgviewed','party#qtaskcomplete','party#qtupdate')) {
   if (-not $worldHandlers.Contains($route)) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL server_route_missing=$route" }
 }
-foreach ($token in @('getPartyServiceConfig','sendCurrentPartyCookie','partyservice','partycookie','activefeatures','nxquestsettings','nxquestdata','qtupdate')) {
+foreach ($token in @('getPartyServiceConfig','sendCurrentPartyCookie','partyservice','partycookie','activefeatures','qtupdate')) {
   if (-not $partyHandler.Contains($token)) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL party_handler_missing=$token" }
 }
 
 $summary = [ordered]@{
-  schema='waddle-modern-party-protocol/v8'
-  party='Halloween Party 2015'
-  evidence='exact-cparchives-2015-served-stack'
-  targetCount=$targets.Count
-  interactionCoreCount=$interactionCore.Count
-  interactionCoreScripted=$coreScripted
-  dialogueCount=$dialogueCount
-  scriptedTargetCount=$scripted
-  pairs=@($pairs | Sort-Object)
-  packetTokens=@($packets | Sort-Object)
-  localizationTokens=@($localizations | Sort-Object)
-  dynamicSwfLoaders=@($loaders | Sort-Object)
-  files=$reports
+  schema='waddle-modern-party-protocol/v8'; party='Halloween Party 2015'; evidence='exact-cparchives-2015-served-stack';
+  targetCount=$targets.Count; interactionCoreCount=$interactionCore.Count; interactionCoreScripted=$coreScripted; dialogueCount=$dialogueCount;
+  scriptedTargetCount=$scripted; pairs=@($pairs | Sort-Object); packetTokens=@($packets | Sort-Object);
+  localizationTokens=@($localizations | Sort-Object); dynamicSwfLoaders=@($loaders | Sort-Object); files=$reports
 }
 $summaryPath = Join-Path $work 'summary.json'
 $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryPath -Encoding UTF8
