@@ -77,6 +77,7 @@ $timelinePath = Join-Path $repo 'src/client/views/timeline/timeline-static.ts'
 $htmlPath = Join-Path $repo 'src/client/views/timeline/timeline.html'
 $canonicalManifestPath = Join-Path $repo '.github/manifests/halloween-2015-canonical.json'
 $partyRoot = Join-Path $repo 'media/default/party2015'
+$historicalManifestPath = Join-Path $partyRoot 'manifest.json'
 
 $files = Read-Normalized $filesPath
 Require-Contains $files "const PARTY2015 = 'party2015';" 'party2015_file_ref_constant'
@@ -114,14 +115,15 @@ foreach ($contract in @(
   "'play/v2/client/QuestCommunicator.swf': P + 'client/QuestCommunicator.swf'",
   "'play/v2/content/global/content/party.swf': P + 'content/party.swf'",
   "'play/v2/content/global/content/map.swf': P + 'content/map.swf'",
-  "'play/v2/client/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'",
-  "'play/v2/content/global/content/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'",
+  "'play/v2/client/interface.swf': P + 'client/ClientInterface-HalloweenClassic2015.swf'",
+  "'play/v2/content/global/content/interface.swf': P + 'client/ClientInterface-HalloweenClassic2015.swf'",
   "'play/v2/content/global/content/features.swf'",
   "'play/v2/content/global/content/party_icon.swf': P + 'content/ContentParty_icon-HalloweenParty2015.swf'",
   "'play/v2/content/global/logo/logo.swf'",
   "'content/map.swf': [P + 'content/map.swf', 'w.p2015.may.partymap']",
   "'content/party_icon.swf': [P + 'content/ContentParty_icon-HalloweenParty2015.swf', 'party_icon', 'scavenger_hunt_icon']",
-  "'close_ups/quest_interface.swf'",
+  "'close_ups/quest_interface.swf': [P + 'close_ups/Close_upsQuest_interface-HalloweenClassic2015.swf', 'w.p2015.may.partyinterface', 'w.app.generic.partyinterface', 'scavenger_hunt']",
+  "'close_ups/quest_interface.swf': { en: P + 'close_ups/Close_upsQuest_interface-HalloweenClassic2015.swf' }",
   "'close_ups/ghostAdopt.swf': [P + 'close_ups/ghostAdopt.swf', 'ghostAdopt']",
   "'close_ups/skipDialogue.swf': [P + 'close_ups/skipDialogue.swf', 'skipDialogue']",
   "'close_ups/ghostAdopt.swf': { en: P + 'close_ups/ghostAdopt.swf' }",
@@ -134,6 +136,8 @@ foreach ($contract in @(
 }
 Require-NotContains $party "'play/v2/content/global/content/logo.swf'" 'legacy_wrong_logo_route'
 Require-NotContains $party 'PartyRuntime-CPImagined-HalloweenClassic.swf' 'obsolete_runtime_alias'
+Require-NotContains $party "'play/v2/client/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'" 'mixed_historical_client_interface'
+Require-NotContains $party "'close_ups/quest_interface.swf': { en: P + 'close_ups/Close_upsQuest_interface-HalloweenParty2015.swf' }" 'mixed_historical_quest_interface'
 
 $general = Read-Normalized $generalPath
 Require-Contains $general "const MODERN_PARTY_ICON_ROUTE = 'play/v2/content/global/content/party_icon.swf';" 'modern_party_icon_route'
@@ -189,6 +193,8 @@ if ($uniqueCanonicalTargets.Count -ne $canonicalTargets.Count) {
 }
 $requiredCanonicalTargets = @(
   'content/party.swf','content/map.swf','client/QuestCommunicator.swf',
+  'client/ClientInterface-HalloweenClassic2015.swf',
+  'close_ups/Close_upsQuest_interface-HalloweenClassic2015.swf',
   'close_ups/ghostAdopt.swf','close_ups/skipDialogue.swf',
   'game_configs/game_configs.bin','game_configs/game_strings.json','game_configs/general.json',
   'game_configs/paths.json','game_configs/rooms.json'
@@ -196,6 +202,55 @@ $requiredCanonicalTargets = @(
 foreach ($target in $requiredCanonicalTargets) {
   if (-not ($canonicalTargets -contains $target)) {
     throw "WADDLE_PARTY2015_SOURCE=FAIL canonical_target_missing=$target"
+  }
+}
+
+# Pin the two interaction-sensitive companions to the exact Halloween Classic
+# source blobs. A wrong path/size/blob here can still produce a visually loaded
+# but non-interactive party, so metadata drift is a hard failure.
+$canonicalByTarget = @{}
+foreach ($entry in $canonicalAssets) { $canonicalByTarget[[string]$entry.target] = $entry }
+$pinnedCompanions = @(
+  @{
+    target = 'client/ClientInterface-HalloweenClassic2015.swf'
+    sourcePath = 'parties/2310 2 halloween classic edition/interface/interface.swf'
+    bytes = 1670806
+    gitBlobSha = '5286f60dbfc51c780691f8427e2a4f8b0b63dc21'
+  },
+  @{
+    target = 'close_ups/Close_upsQuest_interface-HalloweenClassic2015.swf'
+    sourcePath = 'parties/2310 2 halloween classic edition/party interface/quest_interface.swf'
+    bytes = 597937
+    gitBlobSha = '1a51f8e7283068cba3678d1d225ea155dc6afd5a'
+  }
+)
+foreach ($expected in $pinnedCompanions) {
+  $target = [string]$expected.target
+  if (-not $canonicalByTarget.ContainsKey($target)) { throw "WADDLE_PARTY2015_SOURCE=FAIL companion_missing=$target" }
+  $entry = $canonicalByTarget[$target]
+  if ([string]$entry.sourcePath -ne [string]$expected.sourcePath) { throw "WADDLE_PARTY2015_SOURCE=FAIL companion_source target=$target" }
+  if ([long]$entry.bytes -ne [long]$expected.bytes) { throw "WADDLE_PARTY2015_SOURCE=FAIL companion_bytes target=$target" }
+  if (([string]$entry.gitBlobSha).ToLowerInvariant() -ne ([string]$expected.gitBlobSha).ToLowerInvariant()) { throw "WADDLE_PARTY2015_SOURCE=FAIL companion_blob target=$target" }
+}
+
+# Historical CPArchives media and canonical supplements are different layers.
+# Specifically prevent the interaction companions from ever reusing the two
+# historical paths; doing so would overwrite media while the publish workflow
+# still counted them as additional SWFs.
+if (-not (Test-Path -LiteralPath $historicalManifestPath -PathType Leaf)) { throw "WADDLE_PARTY2015_SOURCE=FAIL historical_manifest_missing=$historicalManifestPath" }
+$historicalManifest = Get-Content -LiteralPath $historicalManifestPath -Raw | ConvertFrom-Json
+$historicalTargets = @($historicalManifest.assets | ForEach-Object { [string]$_.relativePath })
+foreach ($companion in $pinnedCompanions) {
+  if ($historicalTargets -contains [string]$companion.target) {
+    throw "WADDLE_PARTY2015_SOURCE=FAIL companion_overwrites_historical=$($companion.target)"
+  }
+}
+foreach ($historicalOnly in @('client/ClientInterface-HalloweenParty2015.swf','close_ups/Close_upsQuest_interface-HalloweenParty2015.swf')) {
+  if (-not ($historicalTargets -contains $historicalOnly)) {
+    throw "WADDLE_PARTY2015_SOURCE=FAIL historical_companion_missing=$historicalOnly"
+  }
+  if ($canonicalTargets -contains $historicalOnly) {
+    throw "WADDLE_PARTY2015_SOURCE=FAIL canonical_reuses_historical=$historicalOnly"
   }
 }
 
@@ -225,4 +280,4 @@ $html = Read-Normalized $htmlPath
 foreach ($year in 2013..2017) { Require-Regex $html ('<option(?:\s+value="{0}")?>{0}</option>' -f $year) ("timeline_year_{0}" -f $year) }
 
 $canonicalSwfs = @($canonicalAssets | Where-Object { [string]$_.kind -eq 'swf' }).Count
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source runtime=preserved-halloween canonical_manifest=$($canonicalAssets.Count) canonical_swfs=$canonicalSwfs canonical_present=$presentCanonical config_bundle=true quest_communicator=true ghost_adopt=true skip_dialogue=true map_2015=true native_namespace=true bimp_telemetry=true activefeatures=20150501 partyservice=true client_interface=party2015 room_ids=delegated_to_preserved_parity years=2005-2017 mutation=false"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source runtime=preserved-halloween canonical_manifest=$($canonicalAssets.Count) canonical_swfs=$canonicalSwfs canonical_present=$presentCanonical config_bundle=true quest_communicator=true ghost_adopt=true skip_dialogue=true map_2015=true native_namespace=true bimp_telemetry=true activefeatures=20150501 partyservice=true client_interface=coherent-halloween-classic companion_quest=true historical_overlap=false room_ids=delegated_to_preserved_parity years=2005-2017 mutation=false"
