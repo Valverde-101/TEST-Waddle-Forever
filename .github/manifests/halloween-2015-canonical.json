@@ -3,7 +3,7 @@
   "party": "Halloween Party 2015",
   "sourceRepository": "CPImagined/CPImagined-Archive",
   "sourceCommit": "130504b8cbbba1666e31442f6ca27f6687157e63",
-  "description": "Preserved late-AS3 Halloween 2015 runtime/configuration supplements. Paths are pinned to an immutable source commit and verified using Git blob SHA-1 plus byte length before Waddle serves them.",
+  "description": "Preserved late-AS3 Halloween 2015 runtime/configuration supplements. Paths are pinned to an immutable source commit and verified using Git blob SHA-1 plus byte length before Waddle serves them. party.swf, interface.swf and quest_interface.swf are kept from the same 2310 recreation runtime so the party icon/quest bootstrap is not composed from incompatible builds.",
   "assets": [
     {
       "target": "content/party.swf",
@@ -17,6 +17,20 @@
       "sourcePath": "parties/2310 2 halloween classic edition/map.swf",
       "bytes": 243088,
       "gitBlobSha": "ac69c389aef36ba7abb555b4bc1154359e43db11",
+      "kind": "swf"
+    },
+    {
+      "target": "client/interface-runtime.swf",
+      "sourcePath": "parties/2310 2 halloween classic edition/interface/interface.swf",
+      "bytes": 1670806,
+      "gitBlobSha": "5286f60dbfc51c780691f8427e2a4f8b0b63dc21",
+      "kind": "swf"
+    },
+    {
+      "target": "close_ups/quest_interface-runtime.swf",
+      "sourcePath": "parties/2310 2 halloween classic edition/party interface/quest_interface.swf",
+      "bytes": 597937,
+      "gitBlobSha": "1a51f8e7283068cba3678d1d225ea155dc6afd5a",
       "kind": "swf"
     },
     {
