@@ -113,16 +113,16 @@ export const UPDATES_2015: Update[] = [
           town: 1052
         },
         fileChanges: {
-          // Preserved late-AS3 bootstrap/configuration layer. These are hydrated
-          // from the immutable CPImagined archive by waddle-halloween-2015.ps1.
+          // Keep the late-AS3 bootstrap as one coherent runtime family. party.swf,
+          // interface.swf, quest_interface.swf and game_configs all come from the
+          // pinned 2310 Halloween Classic recreation; historical 2015 room/dialogue
+          // art remains mapped below where it does not own bootstrap behaviour.
           'play/en/web_service/game_configs.bin': P + 'game_configs/game_configs.bin',
           'play/v2/client/QuestCommunicator.swf': P + 'client/QuestCommunicator.swf',
           'play/v2/content/global/content/party.swf': P + 'content/party.swf',
           'play/v2/content/global/content/map.swf': P + 'content/map.swf',
-          // The late-AS3 boot sequence requests the client module here. Keeping the
-          // old content/global alias as well covers shells that resolve it by path.
-          'play/v2/client/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf',
-          'play/v2/content/global/content/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf',
+          'play/v2/client/interface.swf': P + 'client/interface-runtime.swf',
+          'play/v2/content/global/content/interface.swf': P + 'client/interface-runtime.swf',
           'play/v2/content/global/content/features.swf': P + 'content/ContentFeatures-HalloweenParty2015.swf',
           'play/v2/content/global/content/party_icon.swf': P + 'content/ContentParty_icon-HalloweenParty2015.swf',
           'play/v2/content/global/logo/logo.swf': P + 'content/ContentLogo-HalloweenParty2015.swf',
@@ -176,13 +176,12 @@ export const UPDATES_2015: Update[] = [
         },
         // Late-AS3 party code discovers content by SHELL.getPath(), while the
         // preserved game_configs bundle may also issue the literal route returned
-        // by its paths.json. Keep both route spellings when Waddle's historical
-        // archive used a different filename, and bind the crumb to the preserved
-        // 2015 spelling.
+        // by its paths.json. Keep both route spellings and keep the MayParty quest
+        // crumb on the same runtime quest interface as party.swf.
         globalChanges: {
           'content/map.swf': [P + 'content/map.swf', 'w.p2015.may.partymap'],
           'content/party_icon.swf': [P + 'content/ContentParty_icon-HalloweenParty2015.swf', 'party_icon', 'scavenger_hunt_icon'],
-          'close_ups/quest_interface.swf': [P + 'close_ups/Close_upsQuest_interface-HalloweenParty2015.swf', 'w.p2015.may.partyinterface', 'w.app.generic.partyinterface', 'scavenger_hunt'],
+          'close_ups/quest_interface.swf': [P + 'close_ups/quest_interface-runtime.swf', 'w.p2015.may.partyinterface', 'w.app.generic.partyinterface', 'scavenger_hunt'],
           'close_ups/dialogue_login.swf': P + 'close_ups/Hallo15_dialogue_login.swf',
           'close_ups/halloLogin.swf': [P + 'close_ups/halloLogin.swf', 'w.p2015.may.login'],
           'close_ups/ghostAdopt.swf': [P + 'close_ups/ghostAdopt.swf', 'ghostAdopt'],
@@ -213,7 +212,7 @@ export const UPDATES_2015: Update[] = [
           'close_ups/halloGaryFinal.swf': [P + 'close_ups/Hallo15_dialogue_Gary_final.swf', 'halloGaryFinal']
         },
         localChanges: {
-          'close_ups/quest_interface.swf': { en: P + 'close_ups/Close_upsQuest_interface-HalloweenParty2015.swf' },
+          'close_ups/quest_interface.swf': { en: P + 'close_ups/quest_interface-runtime.swf' },
           'close_ups/halloLogin.swf': { en: P + 'close_ups/halloLogin.swf' },
           'close_ups/ghostAdopt.swf': { en: P + 'close_ups/ghostAdopt.swf' },
           'close_ups/skipDialogue.swf': { en: P + 'close_ups/skipDialogue.swf' },
