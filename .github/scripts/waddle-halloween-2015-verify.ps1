@@ -39,7 +39,7 @@ $timelinePath = Join-Path $repo 'src/client/views/timeline/timeline-static.ts'
 $timelineHtmlPath = Join-Path $repo 'src/client/views/timeline/timeline.html'
 $assetRoot = Join-Path $canonical 'media/default/party2015'
 $manifestPath = Join-Path $assetRoot 'manifest.json'
-$runtimePath = Join-Path $repo 'media/default/archives/PartyRuntime-CPImagined-HalloweenClassic.swf'
+$runtimePath = Join-Path $repo 'media/default/svanilla/media/play/v2/content/global/content/party.swf'
 
 Assert (Test-Path -LiteralPath $updatePath -PathType Leaf) "updates_missing=$updatePath"
 Assert (Test-Path -LiteralPath $filesPath -PathType Leaf) "files_registry_missing=$filesPath"
@@ -52,7 +52,7 @@ Assert (Test-Path -LiteralPath $protocolPath -PathType Leaf) "protocol_missing=$
 Assert (Test-Path -LiteralPath $timelinePath -PathType Leaf) "timeline_missing=$timelinePath"
 Assert (Test-Path -LiteralPath $timelineHtmlPath -PathType Leaf) "timeline_html_missing=$timelineHtmlPath"
 Assert (Test-Path -LiteralPath $manifestPath -PathType Leaf) "manifest_missing=$manifestPath"
-Assert (Test-Swf $runtimePath) "modern_party_runtime_invalid=$runtimePath"
+Assert (Test-Swf $runtimePath) "native_party_runtime_invalid=$runtimePath"
 
 $updates = [IO.File]::ReadAllText($updatePath)
 $files = [IO.File]::ReadAllText($filesPath)
@@ -76,16 +76,17 @@ Assert ($files.Contains('  PARTY2015,')) 'party2015_fileref_registry_missing'
 Assert ($timeline.Contains('getDateFromDateInfo(days[days.length - 1])')) 'dynamic_timeline_end_missing'
 Assert ($timelineHtml.Contains('<option>2015</option>')) 'timeline_2015_option_missing'
 
-# Real execution traces from the late-AS3 client request /play/v2/client/interface.swf.
-# Keep the content/global route as an alias only; never reject the actually requested route.
+# Real execution traces show the client requests /play/v2/client/interface.swf.
 Assert ($updates.Contains("'play/v2/client/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'")) 'client_interface_route_missing'
 Assert ($updates.Contains("'play/v2/content/global/content/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'")) 'content_interface_alias_missing'
 Assert ($updates.Contains("'play/v2/content/global/content/features.swf': P + 'content/ContentFeatures-HalloweenParty2015.swf'")) 'modern_features_route_missing'
 Assert ($updates.Contains("'play/v2/content/global/logo/logo.swf': P + 'content/ContentLogo-HalloweenParty2015.swf'")) 'modern_logo_route_missing'
 Assert (-not $updates.Contains("'play/v2/content/global/content/logo.swf'")) 'legacy_wrong_logo_route_present'
 Assert ($updates.Contains("'play/v2/content/global/content/party_icon.swf': P + 'content/ContentParty_icon-HalloweenParty2015.swf'")) 'modern_party_icon_route_missing'
-Assert ($updates.Contains("'play/v2/content/global/content/party.swf': 'archives:PartyRuntime-CPImagined-HalloweenClassic.swf'")) 'modern_party_runtime_route_missing'
-Assert (-not $updates.Contains('PartyRuntime-CPImaginedReference.swf')) 'runtime_leaked_into_party2015_inventory'
+# Halloween 2015 archive contains an event Interface but no event-specific Party client.
+# The native svanilla party.swf is the protocol/framework runtime and must not be shadowed.
+Assert (-not $updates.Contains("'play/v2/content/global/content/party.swf'")) 'event_specific_party_runtime_override_present'
+Assert (-not $updates.Contains('PartyRuntime-CPImagined-HalloweenClassic.swf')) 'cpimagined_party_runtime_present'
 Assert ($updates.Contains("'w.p2015.may.partyinterface'")) 'quest_global_path_missing'
 Assert ($updates.Contains("'w.p2015.may.login'")) 'login_global_path_missing'
 Assert ($updates.Contains("'halloHerbertGame'")) 'herbert_game_global_path_missing'
@@ -99,9 +100,9 @@ Assert ($partyHandlers.Contains("await sendCurrentPartyCookie(ctx);`n  await sen
 Assert ($partyHandlers.Contains("action: 'modern-party-bootstrap'")) 'party_eager_bootstrap_trace_missing'
 Assert ($partyHandlers.Contains("action: 'partycookie-partyservice'")) 'party_cookie_fallback_trace_missing'
 Assert ($joinHandlers.Contains('await sendModernPartyBootstrap(ctx);')) 'join_eager_party_bootstrap_missing'
-Assert ($protocol.Contains("action: 's%fair#fair'")) 'fair_cookie_bootstrap_alias_missing'
-Assert ($protocol.Contains("action: 's%fair#partycookie'")) 'fair_partycookie_alias_missing'
-Assert ($protocol.Contains("action: 's%fair#qtaskcomplete'")) 'fair_task_alias_missing'
+Assert ($protocol.Contains("action: 's%party#partycookie'")) 'party_cookie_selector_compatibility_missing'
+Assert ($protocol.Contains("exactArguments: ['0']")) 'party_cookie_fixed_selector_missing'
+Assert (-not $protocol.Contains('s%fair#')) 'fair_runtime_alias_present'
 
 $matches = [regex]::Matches($updates, "P\s*\+\s*'([^']+\.swf)'", [Text.RegularExpressions.RegexOptions]::IgnoreCase)
 $refs = @($matches | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
@@ -155,4 +156,4 @@ Assert ($closeUpRefs.Count -eq 44) "close_up_ref_count=$($closeUpRefs.Count) exp
 
 $runtimeInfo = Get-Item -LiteralPath $runtimePath
 $runtimeSha = (Get-FileHash -LiteralPath $runtimePath -Algorithm SHA256).Hash
-Write-Host "WADDLE_PARTY2015_VERIFY=PASS source_refs=132 rooms=$($roomRefs.Count) music=$($musicRefs.Count) closeups=$($closeUpRefs.Count) manifest_total=$($manifest.total) runtime_bytes=$($runtimeInfo.Length) runtime_sha256=$runtimeSha activefeatures=20150501 partyservice=true client_interface=true eager_bootstrap=true fair_aliases=true global_paths=true exclusive_end=2015-11-05 root=$assetRoot"
+Write-Host "WADDLE_PARTY2015_VERIFY=PASS source_refs=132 rooms=$($roomRefs.Count) music=$($musicRefs.Count) closeups=$($closeUpRefs.Count) manifest_total=$($manifest.total) runtime=svanilla-native runtime_bytes=$($runtimeInfo.Length) runtime_sha256=$runtimeSha activefeatures=20150501 partyservice=true client_interface=true eager_bootstrap=true fair_aliases=false global_paths=true exclusive_end=2015-11-05 root=$assetRoot"
