@@ -12,13 +12,14 @@ on:
       - '.github/scripts/waddle-halloween-2015.ps1'
       - '.github/scripts/waddle-halloween-2015-canonical.ps1'
       - '.github/scripts/waddle-halloween-2015-source.ps1'
+      - '.github/scripts/waddle-halloween-2015-data.ps1'
+      - '.github/scripts/waddle-halloween-2015-paths.ps1'
       - '.github/scripts/waddle-halloween-2015-postfix.ps1'
       - '.github/scripts/waddle-halloween-2015-verify.ps1'
       - '.github/scripts/waddle-halloween-2015-protocol.ps1'
       - '.github/scripts/waddle-halloween-2015-dialogues.ps1'
       - '.github/scripts/waddle-halloween-2015-versioning.ps1'
       - '.github/scripts/waddle-halloween-2015-gameplay.ps1'
-      - '.github/scripts/waddle-halloween-2015-data.ps1'
       - '.github/workflows/waddle-halloween-2015.yml'
       - '.gitignore'
       - 'media/default/party2015/**'
@@ -70,6 +71,7 @@ jobs:
           $ErrorActionPreference='Stop'
           ./.github/scripts/waddle-halloween-2015-source.ps1 -RepoRoot $env:GITHUB_WORKSPACE
           ./.github/scripts/waddle-halloween-2015-data.ps1 -RepoRoot $env:GITHUB_WORKSPACE
+          ./.github/scripts/waddle-halloween-2015-paths.ps1 -RepoRoot $env:GITHUB_WORKSPACE
           ./.github/scripts/waddle-halloween-2015-postfix.ps1 -RepoRoot $env:GITHUB_WORKSPACE
           ./.github/scripts/waddle-halloween-2015-versioning.ps1 -RepoRoot $env:GITHUB_WORKSPACE
           ./.github/scripts/waddle-halloween-2015-gameplay.ps1 -RepoRoot $env:GITHUB_WORKSPACE
@@ -77,7 +79,7 @@ jobs:
           $changes = @(git status --porcelain)
           if($LASTEXITCODE -ne 0){throw "WADDLE_PARTY2015_SOURCE_GATE=FAIL git_status_exit=$LASTEXITCODE"}
           if($changes.Count -gt 0){$changes | ForEach-Object { Write-Host $_ }; throw "WADDLE_PARTY2015_SOURCE_GATE=FAIL generated_diff_count=$($changes.Count)"}
-          Write-Host 'WADDLE_PARTY2015_SOURCE_GATE=PASS generated_diff_count=0 architecture=data_driven timeline=data_driven assets=manifest_driven runtime=preserved interactions=preserved'
+          Write-Host 'WADDLE_PARTY2015_SOURCE_GATE=PASS generated_diff_count=0 architecture=data_driven timeline=data_driven assets=manifest_driven runtime=preserved interactions=preserved paths=preserved-literal'
 
   hydrate-publish-and-verify-assets:
     needs: validate-pr-source
@@ -116,6 +118,7 @@ jobs:
           & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-versioning.ps1') -RepoRoot $env:GITHUB_WORKSPACE -PatchGenerator
           & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-source.ps1') -RepoRoot $env:GITHUB_WORKSPACE
           & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-data.ps1') -RepoRoot $env:GITHUB_WORKSPACE
+          & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-paths.ps1') -RepoRoot $env:GITHUB_WORKSPACE
           & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-postfix.ps1') -RepoRoot $env:GITHUB_WORKSPACE
           & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-gameplay.ps1') -RepoRoot $env:GITHUB_WORKSPACE
           & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-timeline-modern.ps1') -RepoRoot $env:GITHUB_WORKSPACE
