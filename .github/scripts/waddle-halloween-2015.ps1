@@ -189,4 +189,14 @@ $manifest = [ordered]@{
 }
 $manifestPath = Join-Path $target 'manifest.json'
 $manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
-Write-Host "WADDLE_PARTY2015_ASSETS=PASS required=132 total=$($manifestAssets.Count) downloaded=$downloaded reused=$reused root=$target source=$pageUsed"
+
+# The wiki inventory is only the visual/event asset layer. Hydrate the preserved
+# late-AS3 runtime/configuration supplements separately from an immutable Git commit
+# and verify every byte using the versioned canonical manifest.
+$canonicalHydrator = Join-Path $canonical '.github/scripts/waddle-halloween-2015-canonical.ps1'
+if (-not (Test-Path -LiteralPath $canonicalHydrator -PathType Leaf)) {
+  throw "WADDLE_PARTY2015_ASSETS=FAIL canonical_hydrator_missing=$canonicalHydrator"
+}
+& $canonicalHydrator -RepoRoot $canonical
+
+Write-Host "WADDLE_PARTY2015_ASSETS=PASS required=132 total=$($manifestAssets.Count) downloaded=$downloaded reused=$reused canonical_supplements=11 root=$target source=$pageUsed"
