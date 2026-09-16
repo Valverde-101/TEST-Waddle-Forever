@@ -52,20 +52,21 @@ const getRuntimePathsJson: FileGenerator = (d) => {
 };
 
 const HALLOWEEN_2015_LOCALIZATION_PREFIX = 'w.app.p2015.halloween.';
+const HALLOWEEN_2015_LOCALIZATION_COUNT = 38;
+const HALLOWEEN_2015_LOCALIZATION_FILE = 'halloween2015_dialogue_strings.json';
 const MODERN_CONFIG_BUNDLE_ROUTE = 'play/en/web_service/game_configs.bin';
 
 /**
  * Waddle historically generated game_strings.json from its own timeline. Modern
- * parties can additionally ship an immutable game_configs.bin together with the
- * exact game_strings.json that their SWFs were authored against. Serving the
- * bundle while discarding those strings leaves dialogue SWFs technically loaded
- * but with empty/missing text and can prevent dialogue-driven progression.
+ * parties can additionally ship an immutable game_configs.bin. Halloween 2015's
+ * preserved bundle contains only the custom finale subset of the localization
+ * namespace, while the original dialogue SWFs require 38 keys in total.
  *
- * When a preserved modern config bundle is active, read only its sibling
- * Halloween-2015 localization namespace and merge it over Waddle's generated
- * strings. The config-bundle route is temporary, so the overlay automatically
- * disappears when the party ends. Unrelated CPImagined strings are intentionally
- * not imported.
+ * Keep the preserved bundle byte-for-byte intact and mount the complete,
+ * versioned localization contract stored beside it. The config-bundle route is
+ * temporary, so the overlay automatically disappears when the party ends. Only
+ * the Halloween namespace is imported; unrelated strings can never leak into
+ * other dates or parties.
  */
 const getRuntimeGameStringsJson: FileGenerator = (d) => {
   const base = JSON.parse(getGameStrings(d)) as {
@@ -78,18 +79,24 @@ const getRuntimeGameStringsJson: FileGenerator = (d) => {
     return JSON.stringify(base);
   }
 
-  const sibling = path.join(path.dirname(configBundle), 'game_strings.json');
-  const sourcePath = path.join(MEDIA_DIRECTORY, sibling);
-  if (!fs.existsSync(sourcePath)) {
-    throw new Error(`Modern config bundle is active but sibling game_strings.json is missing: ${sourcePath}`);
+  const localizationRelativePath = path.join(path.dirname(configBundle), HALLOWEEN_2015_LOCALIZATION_FILE);
+  const localizationPath = path.join(MEDIA_DIRECTORY, localizationRelativePath);
+  if (!fs.existsSync(localizationPath)) {
+    throw new Error(`Halloween 2015 config bundle is active but localization contract is missing: ${localizationPath}`);
   }
 
-  const preserved = JSON.parse(fs.readFileSync(sourcePath, 'utf8')) as {
-    lang?: unknown[];
-    [key: string]: unknown;
+  const localization = JSON.parse(fs.readFileSync(localizationPath, 'utf8')) as {
+    namespace?: unknown;
+    strings?: Record<string, unknown>;
+    totalKeys?: unknown;
   };
-  if (!Array.isArray(preserved.lang)) {
-    throw new Error(`Invalid preserved game_strings.json: missing lang array at ${sourcePath}`);
+  if (localization.namespace !== HALLOWEEN_2015_LOCALIZATION_PREFIX || localization.totalKeys !== HALLOWEEN_2015_LOCALIZATION_COUNT || localization.strings === null || typeof localization.strings !== 'object') {
+    throw new Error(`Invalid Halloween 2015 localization contract: ${localizationPath}`);
+  }
+
+  const entries = Object.entries(localization.strings);
+  if (entries.length !== HALLOWEEN_2015_LOCALIZATION_COUNT) {
+    throw new Error(`Halloween 2015 localization contract expected ${HALLOWEEN_2015_LOCALIZATION_COUNT} keys but found ${entries.length}: ${localizationPath}`);
   }
 
   const merged = new Map<string, string>();
@@ -99,21 +106,11 @@ const getRuntimeGameStringsJson: FileGenerator = (d) => {
     }
   }
 
-  let imported = 0;
-  for (const entry of preserved.lang) {
-    if (!Array.isArray(entry) || entry.length < 2 || typeof entry[0] !== 'string' || typeof entry[1] !== 'string') {
-      continue;
-    }
-    const [key, value] = entry;
-    if (!key.startsWith(HALLOWEEN_2015_LOCALIZATION_PREFIX)) {
-      continue;
+  for (const [key, value] of entries) {
+    if (!key.startsWith(HALLOWEEN_2015_LOCALIZATION_PREFIX) || typeof value !== 'string' || value.trim().length === 0) {
+      throw new Error(`Invalid Halloween 2015 localization entry: ${key}`);
     }
     merged.set(key, value);
-    imported++;
-  }
-
-  if (imported === 0) {
-    throw new Error(`Preserved Halloween 2015 game_strings.json contains no ${HALLOWEEN_2015_LOCALIZATION_PREFIX} entries: ${sourcePath}`);
   }
 
   base.lang = Array.from(merged.entries());
