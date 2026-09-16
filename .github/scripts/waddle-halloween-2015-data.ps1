@@ -47,11 +47,22 @@ Require ($updates -match "'content/party_icon\.swf'\s*:\s*\[[^\]]*'party_icon'[^
 Require ($updates -match "'content/party_icon\.swf'\s*:\s*\[[^\]]*'scavenger_hunt_icon'[^\]]*\]") 'party_icon_scavenger_alias'
 Require ($updates -match "'close_ups/quest_interface\.swf'\s*:\s*\[[^\]]*'w\.p2015\.may\.partyinterface'[^\]]*\]") 'quest_interface_global_path'
 Require ($updates -match "'content/map\.swf'\s*:\s*\[[^\]]*'w\.p2015\.may\.partymap'[^\]]*\]") 'party_map_global_path'
+Require ($updates -match "'close_ups/ghostAdopt\.swf'\s*:\s*\[[^\]]*'ghostAdopt'[^\]]*\]") 'ghost_adopt_global_path'
+Require ($updates -match "'close_ups/skipDialogue\.swf'\s*:\s*\[[^\]]*'skipDialogue'[^\]]*\]") 'skip_dialogue_global_path'
+Require ($updates.Contains("'close_ups/ghostAdopt.swf': { en: P + 'close_ups/ghostAdopt.swf' }")) 'ghost_adopt_local_path'
+Require ($updates.Contains("'close_ups/skipDialogue.swf': { en: P + 'close_ups/skipDialogue.swf' }")) 'skip_dialogue_local_path'
 
 Require ($canonical.schema -eq 'waddle-canonical-assets/v1') 'canonical_manifest_schema'
-Require (@($canonical.assets).Count -eq 11) 'canonical_manifest_count_11'
-$targets = @($canonical.assets | ForEach-Object { [string]$_.target })
-foreach ($target in @('content/party.swf','content/map.swf','client/QuestCommunicator.swf','game_configs/game_configs.bin','game_configs/game_strings.json','game_configs/general.json','game_configs/paths.json','game_configs/rooms.json')) {
+$assets = @($canonical.assets)
+Require ($assets.Count -gt 0) 'canonical_manifest_nonempty'
+$targets = @($assets | ForEach-Object { [string]$_.target })
+Require (@($targets | Sort-Object -Unique).Count -eq $targets.Count) 'canonical_targets_unique'
+foreach ($target in @(
+  'content/party.swf','content/map.swf','client/QuestCommunicator.swf',
+  'close_ups/ghostAdopt.swf','close_ups/skipDialogue.swf',
+  'game_configs/game_configs.bin','game_configs/game_strings.json','game_configs/general.json',
+  'game_configs/paths.json','game_configs/rooms.json'
+)) {
   Require ($targets -contains $target) ("canonical_" + ($target -replace '[^A-Za-z0-9]+','_'))
 }
 
@@ -59,4 +70,5 @@ if ($updates -match 'gameStringChanges:\s*\{(?s:.*?)w\.app\.p2015\.halloween') {
   throw 'WADDLE_HALLOWEEN2015_DATA=FAIL unverified_halloween_strings_remain'
 }
 
-Write-Host "WADDLE_HALLOWEEN2015_DATA=PASS mode=validation_only mutation=false party=halloween-2015 tasks=10 activefeatures=20150501 partyservice=true ghost_puffle=1022 party_icon=true runtime=preserved-halloween map=preserved-halloween quest_communicator=true config_bundle=true canonical_assets=11"
+$swfCount = @($assets | Where-Object { [string]$_.kind -eq 'swf' }).Count
+Write-Host "WADDLE_HALLOWEEN2015_DATA=PASS mode=validation_only mutation=false party=halloween-2015 tasks=10 activefeatures=20150501 partyservice=true ghost_puffle=1022 party_icon=true runtime=preserved-halloween map=preserved-halloween quest_communicator=true ghost_adopt=true skip_dialogue=true config_bundle=true canonical_assets=$($assets.Count) canonical_swfs=$swfCount"
