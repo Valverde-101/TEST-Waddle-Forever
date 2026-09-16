@@ -3,7 +3,7 @@
   "party": "Halloween Party 2015",
   "sourceRepository": "CPImagined/CPImagined-Archive",
   "sourceCommit": "130504b8cbbba1666e31442f6ca27f6687157e63",
-  "description": "Preserved late-AS3 Halloween 2015 runtime/configuration supplements. Paths are pinned to an immutable source commit and verified using Git blob SHA-1 plus byte length before Waddle serves them.",
+  "description": "Preserved late-AS3 Halloween 2015 runtime/configuration supplements. Paths are pinned to an immutable source commit and verified using Git blob SHA-1 plus byte length before Waddle serves them. Historical CPArchives SWFs remain untouched; coherent Halloween Classic companion interface assets are hydrated to distinct target paths so canonical supplements never overwrite the 132 historical files.",
   "assets": [
     {
       "target": "content/party.swf",
@@ -20,17 +20,17 @@
       "kind": "swf"
     },
     {
-      "target": "client/ClientInterface-HalloweenParty2015.swf",
+      "target": "client/ClientInterface-HalloweenClassic2015.swf",
       "sourcePath": "parties/2310 2 halloween classic edition/interface/interface.swf",
-      "bytes": 1674979,
-      "gitBlobSha": "4a317412d23cd8e8c61307376868fa8cb95edf70",
+      "bytes": 1670806,
+      "gitBlobSha": "5286f60dbfc51c780691f8427e2a4f8b0b63dc21",
       "kind": "swf"
     },
     {
-      "target": "close_ups/CloseUpsQuestInterface-HalloweenParty2015.swf",
-      "sourcePath": "parties/2310 2 halloween classic edition/quest_interface/quest_interface.swf",
-      "bytes": 597024,
-      "gitBlobSha": "7ec667d22ea2f3352c4eae9393d5bee3ff88d2e5",
+      "target": "close_ups/Close_upsQuest_interface-HalloweenClassic2015.swf",
+      "sourcePath": "parties/2310 2 halloween classic edition/party interface/quest_interface.swf",
+      "bytes": 597937,
+      "gitBlobSha": "1a51f8e7283068cba3678d1d225ea155dc6afd5a",
       "kind": "swf"
     },
     {
