@@ -32,12 +32,26 @@ function Test-Swf([string]$Path) {
   }
 }
 
+function Test-ZipConfig([string]$Path) {
+  if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
+  $stream = [IO.File]::OpenRead($Path)
+  try {
+    if ($stream.Length -lt 4) { return $false }
+    $header = New-Object byte[] 4
+    if ($stream.Read($header,0,4) -ne 4) { return $false }
+    return $header[0] -eq 0x50 -and $header[1] -eq 0x4B -and $header[2] -eq 0x03 -and $header[3] -eq 0x04
+  } finally {
+    $stream.Dispose()
+  }
+}
+
 function Test-CanonicalAsset($Entry,[string]$Path) {
   if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
   $item = Get-Item -LiteralPath $Path
   if ([long]$item.Length -ne [long]$Entry.bytes) { return $false }
   if ((Get-GitBlobSha $Path) -ne ([string]$Entry.gitBlobSha).ToLowerInvariant()) { return $false }
   if ([string]$Entry.kind -eq 'swf' -and -not (Test-Swf $Path)) { return $false }
+  if ([string]$Entry.kind -eq 'zip-config' -and -not (Test-ZipConfig $Path)) { return $false }
   return $true
 }
 
@@ -57,11 +71,14 @@ if ($manifest.schema -ne 'waddle-canonical-assets/v1') {
 if (-not $manifest.sourceRepository -or -not $manifest.sourceCommit) {
   throw 'WADDLE_HALLOWEEN2015_CANONICAL=FAIL source_identity_missing'
 }
+if (@($manifest.assets).Count -ne 11) {
+  throw "WADDLE_HALLOWEEN2015_CANONICAL=FAIL asset_count=$(@($manifest.assets).Count) expected=11"
+}
 
 $targetRoot = Join-Path $repo 'media/default/party2015'
 New-Item -ItemType Directory -Force -Path $targetRoot | Out-Null
 $headers = @{
-  'User-Agent' = 'Waddle-Forever-Halloween2015-Canonical/1.0'
+  'User-Agent' = 'Waddle-Forever-Halloween2015-Canonical/2.0'
   'Accept' = 'application/octet-stream,*/*'
 }
 $downloaded = 0
@@ -110,16 +127,18 @@ foreach ($entry in @($manifest.assets)) {
   $verified++
 }
 
+# Keep the Git-owned state deterministic. Download/reuse counters and timestamps
+# belong in CI output, not in a tracked file that would create a commit every run.
 $state = [ordered]@{
-  schema = 'waddle-canonical-assets-state/v1'
-  party = $manifest.party
-  sourceRepository = $manifest.sourceRepository
-  sourceCommit = $manifest.sourceCommit
+  schema = 'waddle-canonical-assets-state/v2'
+  party = [string]$manifest.party
+  sourceRepository = [string]$manifest.sourceRepository
+  sourceCommit = [string]$manifest.sourceCommit
   verified = $verified
-  downloaded = $downloaded
-  reused = $reused
-  generatedAt = [DateTime]::UtcNow.ToString('o')
+  assetTargets = @($manifest.assets | ForEach-Object { [string]$_.target } | Sort-Object)
 }
-$state | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $targetRoot 'canonical-state.json') -Encoding UTF8
+$utf8 = New-Object System.Text.UTF8Encoding($false)
+$stateJson = ($state | ConvertTo-Json -Depth 5) -replace "`r`n", "`n"
+[IO.File]::WriteAllText((Join-Path $targetRoot 'canonical-state.json'), $stateJson + "`n", $utf8)
 
-Write-Host "WADDLE_HALLOWEEN2015_CANONICAL=PASS assets=$verified downloaded=$downloaded reused=$reused source=$($manifest.sourceRepository)@$($manifest.sourceCommit)"
+Write-Host "WADDLE_HALLOWEEN2015_CANONICAL=PASS assets=$verified downloaded=$downloaded reused=$reused source=$($manifest.sourceRepository)@$($manifest.sourceCommit) state=deterministic"
