@@ -83,7 +83,7 @@ jobs:
           $changes = @(git status --porcelain)
           if($LASTEXITCODE -ne 0){throw "WADDLE_PARTY2015_SOURCE_GATE=FAIL git_status_exit=$LASTEXITCODE"}
           if($changes.Count -gt 0){$changes | ForEach-Object { Write-Host $_ }; throw "WADDLE_PARTY2015_SOURCE_GATE=FAIL generated_diff_count=$($changes.Count)"}
-          Write-Host 'WADDLE_PARTY2015_SOURCE_GATE=PASS generated_diff_count=0 architecture=data_driven timeline=data_driven assets=manifest_driven runtime=preserved interactions=preserved localization=preserved-strict paths=preserved-literal rooms=preserved-id-parity'
+          Write-Host 'WADDLE_PARTY2015_SOURCE_GATE=PASS generated_diff_count=0 architecture=data_driven timeline=data_driven assets=manifest_driven runtime=preserved interactions=preserved localization=complete-contract paths=preserved-literal rooms=preserved-id-parity'
 
   hydrate-publish-and-verify-assets:
     needs: validate-pr-source
@@ -142,7 +142,7 @@ jobs:
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- '.gitignore' 'media/default/party2015' 'src/server/updates/2015.ts' 'src/server/updates/index.ts' 'src/server/timelines/game-data.ts' 'src/server/game-data/files.ts' 'src/server/game-data/rooms.ts' 'src/server/game-data/party.ts' 'src/server/game-logic/party-progress.ts' 'src/server/database/database.ts' 'src/server/socket-server/world/world-penguin.ts' 'src/server/socket-server/xt-handler.ts' 'src/server/socket-server/handlers/protocol.ts' 'src/server/socket-server/handlers/party.ts' 'src/server/socket-server/handlers/puffle.ts' 'src/server/socket-server/world-handlers.ts' 'src/client/views/timeline/timeline.ts' 'src/client/views/timeline/timeline-static.ts' 'src/client/views/timeline/timeline.html'
+          git add -- '.gitignore' 'media/default/party2015' 'src/server/updates/2015.ts' 'src/server/updates/index.ts' 'src/server/timelines/game-data.ts' 'src/server/game-data/files.ts' 'src/server/game-data/rooms.ts' 'src/server/game-data/party.ts' 'src/server/game-logic/party-progress.ts' 'src/server/database/database.ts' 'src/server/socket-server/world/world-penguin.ts' 'src/server/socket-server/xt-handler.ts' 'src/server/socket-server/handlers/protocol.ts' 'src/server/socket-server/handlers/party.ts' 'src/server/socket-server/handlers/puffle.ts' 'src/server/socket-server/world-handlers.ts' 'src/server/file-generators/general.json.ts' 'src/server/file-generators/index.ts' 'src/client/views/timeline/timeline.ts' 'src/client/views/timeline/timeline-static.ts' 'src/client/views/timeline/timeline.html'
 
           $cachedSwfs=@(git ls-files --cached -- 'media/default/party2015' | Where-Object {$_ -match '(?i)\.swf$'})
           if($cachedSwfs.Count -ne $expectedSwfs){throw "WADDLE_PARTY2015_PUBLISH=FAIL cached_swfs=$($cachedSwfs.Count) expected=$expectedSwfs"}
