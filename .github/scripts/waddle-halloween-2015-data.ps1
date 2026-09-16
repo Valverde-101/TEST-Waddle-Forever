@@ -54,6 +54,8 @@ Require ($updates.Contains("'play/v2/content/global/content/party_icon.swf': ref
 Require ($updates.Contains("'play/v2/client/QuestCommunicator.swf': ref('client/QuestCommunicator.swf')")) 'quest_communicator'
 Require ($updates.Contains("'close_ups/quest_interface.swf': [ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf'), 'w.p2015.may.partyinterface', 'w.app.generic.partyinterface', 'scavenger_hunt']")) 'quest_interface_global_historical_2015'
 Require ($updates.Contains("'close_ups/quest_interface.swf': { en: ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf') }")) 'quest_interface_local_historical_2015'
+Require ($updates.Contains("'close_ups/halloLogin.swf': [ref('close_ups/Hallo15_dialogue_login.swf'), 'w.p2015.may.login']")) 'hallo_login_global_historical_2015'
+Require ($updates.Contains("'close_ups/halloLogin.swf': { en: ref('close_ups/Hallo15_dialogue_login.swf') }")) 'hallo_login_local_historical_2015'
 Require ($updates -match "'content/party_icon\.swf'\s*:\s*\[[^\]]*'party_icon'[^\]]*'scavenger_hunt_icon'[^\]]*\]") 'party_icon_crumbs'
 
 # Root regression guards: these requests caused the visually loaded but inert
@@ -66,8 +68,7 @@ foreach ($stale in @(
   'ClientInterface-HalloweenClassic2015.swf',
   'Close_upsQuest_interface-HalloweenClassic2015.swf',
   "'close_ups/ghostAdopt.swf'",
-  "'close_ups/skipDialogue.swf'",
-  "'close_ups/halloLogin.swf'"
+  "'close_ups/skipDialogue.swf'"
 )) { Require (-not $updates.Contains($stale)) ("no_mixed_2310_" + ($stale -replace '[^A-Za-z0-9]+','_').Trim('_')) }
 
 Require ([int]$historical.requiredCount -eq 132) 'historical_required_count_132'
@@ -93,4 +94,4 @@ $canonicalTargets = @($canonicalAssets | ForEach-Object { [string]$_.target })
 Require (@($canonicalTargets | Sort-Object -Unique).Count -eq $canonicalTargets.Count) 'canonical_targets_unique'
 Require ($canonicalTargets -contains 'client/QuestCommunicator.swf') 'canonical_quest_communicator_source'
 
-Write-Host "WADDLE_HALLOWEEN2015_DATA=PASS mode=validation_only mutation=false party=halloween-2015 tasks=10 activefeatures=20150501 partyservice=true runtime=base-modern interface=exact-cparchives-2015 quest_interface=exact-cparchives-2015 dialogues=exact-cparchives-2015 rooms=exact-cparchives-2015 music=exact-cparchives-2015 quest_communicator=true historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) mixed_2310=false"
+Write-Host "WADDLE_HALLOWEEN2015_DATA=PASS mode=validation_only mutation=false party=halloween-2015 tasks=10 activefeatures=20150501 partyservice=true runtime=base-modern interface=exact-cparchives-2015 quest_interface=exact-cparchives-2015 hallo_login=exact-cparchives-2015 dialogues=exact-cparchives-2015 rooms=exact-cparchives-2015 music=exact-cparchives-2015 quest_communicator=true historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) mixed_2310=false"
