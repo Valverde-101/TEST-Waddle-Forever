@@ -55,9 +55,6 @@ Assert ($updates.Contains("partyEndDate: '2015-11-05 00:00:00'")) 'partyservice_
 Assert ($updates.Contains("date: '2015-11-05'")) 'party_end_date_missing'
 Assert ($updates.Contains("end: ['party']")) 'party_end_missing'
 
-# These are the files actually selected by the October 2015 event. The 2310
-# recreation remains useful provenance, but it must never silently replace the
-# archived October 2015 interface/quest pair or the base party/map runtime.
 $requiredLive = @(
   "'play/v2/client/QuestCommunicator.swf': ref('client/QuestCommunicator.swf')",
   "'play/v2/client/interface.swf': ref('client/ClientInterface-HalloweenParty2015.swf')",
@@ -71,34 +68,26 @@ $requiredLive = @(
 foreach ($contract in $requiredLive) { Assert ($updates.Contains($contract)) "live_contract_missing=$contract" }
 
 foreach ($stale in @(
-  "ref('content/party.swf')",
-  "ref('content/map.swf')",
+  "ref('content/party.swf')","ref('content/map.swf')",
   "ref('client/ClientInterface-HalloweenClassic2015.swf')",
   "ref('close_ups/Close_upsQuest_interface-HalloweenClassic2015.swf')",
-  "ref('close_ups/ghostAdopt.swf')",
-  "ref('close_ups/skipDialogue.swf')",
-  "ref('game_configs/game_configs.bin')",
-  "'w.p2015.may.partymap'",
+  "ref('close_ups/ghostAdopt.swf')","ref('close_ups/skipDialogue.swf')",
+  "ref('game_configs/game_configs.bin')","'w.p2015.may.partymap'",
   '2048.swf','2049.swf','2050.swf','2051.swf','2052.swf','2053.swf'
-)) {
-  Assert (-not $updates.Contains($stale)) "mixed_or_missing_runtime_dependency=$stale"
-}
+)) { Assert (-not $updates.Contains($stale)) "mixed_or_missing_runtime_dependency=$stale" }
 Assert ($updates.Contains('...dialogueGlobalChanges')) 'dialogue_global_routes_missing'
 Assert ($updates.Contains('...dialogueLocalChanges')) 'dialogue_local_routes_missing'
 Assert ($updates.Contains('...tileGlobalChanges')) 'tile_global_routes_missing'
 Assert ($updates.Contains('...tileLocalChanges')) 'tile_local_routes_missing'
 Assert ($updates.Contains('...musicFileChanges')) 'music_routes_missing'
 
-# Server bootstrap/aliases are required by the preserved late-AS3 client.
-foreach ($token in @('activefeatures','partycookie','partyservice','nxquestsettings','nxquestdata')) {
+foreach ($token in @('activefeatures','partycookie','partyservice','qtupdate')) {
   Assert ($partyHandlers.Contains($token)) "party_handler_missing=$token"
 }
 foreach ($alias in @('halloween#partycookie','halloween#msgviewed','halloween#qcmsgviewed','halloween#qtaskcomplete','halloween#qtupdate')) {
   Assert ($xtHandler.Contains($alias)) "native_namespace_alias_missing=$alias"
 }
 
-# Validate all 132 CPArchives files byte-for-byte. This is the historical source
-# of truth for the event, not merely a count of whatever happens to be on disk.
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 Assert ([int]$manifest.requiredCount -eq 132) "historical_required=$($manifest.requiredCount) expected=132"
 $historical = @($manifest.assets | Where-Object { [bool]$_.required })
@@ -116,16 +105,10 @@ foreach ($entry in $historical) {
   Assert ($sha256 -eq ([string]$entry.sha256).ToUpperInvariant()) "historical_sha256=$relative"
 }
 foreach ($critical in @(
-  'client/ClientInterface-HalloweenParty2015.swf',
-  'close_ups/Close_upsQuest_interface-HalloweenParty2015.swf',
-  'content/ContentFeatures-HalloweenParty2015.swf',
-  'content/ContentParty_icon-HalloweenParty2015.swf',
-  'content/ContentLogo-HalloweenParty2015.swf'
+  'client/ClientInterface-HalloweenParty2015.swf','close_ups/Close_upsQuest_interface-HalloweenParty2015.swf',
+  'content/ContentFeatures-HalloweenParty2015.swf','content/ContentParty_icon-HalloweenParty2015.swf','content/ContentLogo-HalloweenParty2015.swf'
 )) { Assert ($historicalTargets.Contains($critical)) "critical_historical_missing=$critical" }
 
-# The 2310/canonical manifest stays independently byte-pinned. It is provenance
-# and may supply QuestCommunicator, but its party/map/classic interfaces are not
-# counted as the live Halloween 2015 runtime.
 $canonicalManifest = Get-Content -LiteralPath $canonicalManifestPath -Raw | ConvertFrom-Json
 Assert ($canonicalManifest.schema -eq 'waddle-canonical-assets/v1') "canonical_schema=$($canonicalManifest.schema)"
 $canonicalAssets = @($canonicalManifest.assets)
@@ -140,27 +123,17 @@ foreach ($entry in $canonicalAssets) {
   $item = Get-Item -LiteralPath $path
   Assert ([int64]$item.Length -eq [int64]$entry.bytes) "canonical_bytes=$target"
   Assert ((Get-GitBlobSha $path) -eq ([string]$entry.gitBlobSha).ToLowerInvariant()) "canonical_blob=$target"
-  if ([string]$entry.kind -eq 'swf') {
-    $canonicalSwfs++
-    Assert (Test-Swf $path) "canonical_invalid_swf=$target"
-  }
+  if ([string]$entry.kind -eq 'swf') { $canonicalSwfs++; Assert (Test-Swf $path) "canonical_invalid_swf=$target" }
 }
 Assert ($canonicalSwfs -eq 8) "canonical_swfs=$canonicalSwfs expected=8"
 Assert ($canonicalTargets.Contains('client/QuestCommunicator.swf')) 'quest_communicator_provenance_missing'
 
-# Every generated dialogue/tile/music target used by the data-driven update must
-# exist. This catches the class of bug where icon/rooms load but a late loader 404s.
 $dialogueNames = @(
-  'dialogue_login','dialogue_AA_start','dialogue_AA_instruct','dialogue_AA_congrats',
-  'dialogue_Cad_start','dialogue_Cad_instruct','dialogue_Cad_congrats',
-  'dialogue_Dot_start','dialogue_Dot_instruct','dialogue_Dot_congrats',
-  'dialogue_PH_start','dialogue_PH_instruct','dialogue_PH_congrats',
-  'dialogue_RH_start','dialogue_RH_instruct','dialogue_RH_congrats',
-  'dialogue_Rook_start','dialogue_Rook_instruct','dialogue_Rook_congrats','dialogue_Rookie_bot',
-  'dialogue_Sen_start','dialogue_Sen_instruct','dialogue_Sen_congrats',
-  'dialogue_Gary_instruct','dialogue_Gary_instruct_2','dialogue_Gary_instruct_3','dialogue_Gary_lair',
-  'dialogue_Gary_congrats','dialogue_Gary_final','dialogue_Herbert_caged','dialogue_Herbert_escape',
-  'dialogue_Herbot','dialogue_Herbert_monologue','dialogue_Herbert_monologue_2'
+  'dialogue_login','dialogue_AA_start','dialogue_AA_instruct','dialogue_AA_congrats','dialogue_Cad_start','dialogue_Cad_instruct','dialogue_Cad_congrats',
+  'dialogue_Dot_start','dialogue_Dot_instruct','dialogue_Dot_congrats','dialogue_PH_start','dialogue_PH_instruct','dialogue_PH_congrats',
+  'dialogue_RH_start','dialogue_RH_instruct','dialogue_RH_congrats','dialogue_Rook_start','dialogue_Rook_instruct','dialogue_Rook_congrats','dialogue_Rookie_bot',
+  'dialogue_Sen_start','dialogue_Sen_instruct','dialogue_Sen_congrats','dialogue_Gary_instruct','dialogue_Gary_instruct_2','dialogue_Gary_instruct_3','dialogue_Gary_lair',
+  'dialogue_Gary_congrats','dialogue_Gary_final','dialogue_Herbert_caged','dialogue_Herbert_escape','dialogue_Herbot','dialogue_Herbert_monologue','dialogue_Herbert_monologue_2'
 )
 Assert ($dialogueNames.Count -eq 34) "dialogue_contract=$($dialogueNames.Count) expected=34"
 foreach ($name in $dialogueNames) {
