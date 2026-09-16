@@ -5,9 +5,11 @@ const MODERN_PARTY_ICON_ROUTE = 'play/v2/content/global/content/party_icon.swf';
 export function getGeneralJson(d: GameData): string {
   const hunt = d.getHunt();
   const fair = d.getFair();
-  // Modern interfaces gate their party button on party_options.party_icon_active.
-  // Derive it from the canonical routed asset instead of a party-specific flag so
-  // any modern party that supplies content/party_icon.swf activates the UI.
+  // Late-AS3 interfaces use both flags. `party_icon_active` controls loading the
+  // icon module while `hunt_active` enables its scavenger/quest interaction path.
+  // Derive both from the canonical modern party icon route so a party cannot end
+  // up in the broken state where party_icon.swf downloads successfully but its
+  // UI remains inert. Legacy scavenger hunts/fairs keep their existing signals.
   const modernPartyIconActive = d.lookupFile(MODERN_PARTY_ICON_ROUTE) !== undefined;
 
   return JSON.stringify({
@@ -16,7 +18,7 @@ export function getGeneralJson(d: GameData): string {
     },
     "party_options": {
       "fair_ticket_active": d.getFair(),
-      "hunt_active": hunt !== null || fair || d.getPartyIcon(),
+      "hunt_active": hunt !== null || fair || d.getPartyIcon() || modernPartyIconActive,
       "itemRewardID": hunt?.global.reward ?? 0,
       "isMapNoteActive": d.getMapNote(),
       "showPartyAnnouncement": false,
