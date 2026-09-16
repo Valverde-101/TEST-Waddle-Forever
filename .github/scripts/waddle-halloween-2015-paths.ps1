@@ -13,7 +13,7 @@ foreach ($path in @($updatesPath,$fileGeneratorsPath,$preservedPathsPath)) {
 }
 $updates = ([IO.File]::ReadAllText($updatesPath) -replace "`r`n", "`n")
 $generators = ([IO.File]::ReadAllText($fileGeneratorsPath) -replace "`r`n", "`n")
-$preservedPaths = [IO.File]::ReadAllText($preservedPathsPath)
+$preservedPaths = ([IO.File]::ReadAllText($preservedPathsPath)).Replace('\/','/')
 
 function Require([bool]$Condition,[string]$Label) {
   if(-not $Condition){throw "WADDLE_HALLOWEEN2015_PATHS=FAIL missing_contract=$Label"}
@@ -33,7 +33,7 @@ Require ($updates.Contains("'content/party_icon.swf': [ref('content/ContentParty
 # This exact preserved crumb is the initial event-dialogue entry point. The route
 # name comes from the preserved paths table, but the bytes are the CPArchives 2015
 # dialogue_login SWF, not CPImagined's later halloLogin recreation.
-Require ($preservedPaths -match '"w\.p2015\.may\.login"\s*:\s*"close_ups\\/halloLogin\.swf"') 'preserved_hallo_login_crumb'
+Require ($preservedPaths -match '"w\.p2015\.may\.login"\s*:\s*"close_ups/halloLogin\.swf"') 'preserved_hallo_login_crumb'
 Require ($updates.Contains("'close_ups/halloLogin.swf': [ref('close_ups/Hallo15_dialogue_login.swf'), 'w.p2015.may.login']")) 'historical_hallo_login_global'
 Require ($updates.Contains("'close_ups/halloLogin.swf': { en: ref('close_ups/Hallo15_dialogue_login.swf') }")) 'historical_hallo_login_local'
 
