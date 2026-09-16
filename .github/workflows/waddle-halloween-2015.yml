@@ -94,24 +94,17 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
           fetch-depth: 0
-      - name: Hydrate historical assets plus canonical 2015 runtime/config
+      - name: Hydrate historical assets plus canonical runtime in exact PR worktree
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $canonical='V:\AndroidBuild\Repositories\TEST-Waddle-Forever'
-          if(-not(Test-Path -LiteralPath (Join-Path $canonical '.git'))){throw "WADDLE_PARTY2015_ASSETS=FAIL expected_canonical_missing=$canonical"}
-          & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015.ps1') -Mode assets -RepoRoot $canonical
-      - name: Publish canonical Halloween 2015 stack into the PR branch
+          & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015.ps1') -Mode assets -RepoRoot $env:GITHUB_WORKSPACE
+      - name: Validate and publish complete Halloween 2015 stack
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $canonical='V:\AndroidBuild\Repositories\TEST-Waddle-Forever'
-          $source=Join-Path $canonical 'media\default\party2015'
           $target=Join-Path $env:GITHUB_WORKSPACE 'media\default\party2015'
-          if(-not(Test-Path -LiteralPath $source -PathType Container)){throw "WADDLE_PARTY2015_PUBLISH=FAIL source_missing=$source"}
-          if(Test-Path -LiteralPath $target){Remove-Item -LiteralPath $target -Recurse -Force}
-          New-Item -ItemType Directory -Force -Path (Split-Path -Parent $target) | Out-Null
-          Copy-Item -LiteralPath $source -Destination $target -Recurse -Force
+          if(-not(Test-Path -LiteralPath $target -PathType Container)){throw "WADDLE_PARTY2015_PUBLISH=FAIL target_missing=$target"}
 
           & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-versioning.ps1') -RepoRoot $env:GITHUB_WORKSPACE -PatchGenerator
           & (Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-source.ps1') -RepoRoot $env:GITHUB_WORKSPACE
