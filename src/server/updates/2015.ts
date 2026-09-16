@@ -182,6 +182,8 @@ export const UPDATES_2015: Update[] = [
           'content/party_icon.swf': [P + 'content/ContentParty_icon-HalloweenParty2015.swf', 'party_icon', 'scavenger_hunt_icon'],
           'close_ups/quest_interface.swf': [P + 'close_ups/Close_upsQuest_interface-HalloweenParty2015.swf', 'w.p2015.may.partyinterface', 'w.app.generic.partyinterface', 'scavenger_hunt'],
           'close_ups/dialogue_login.swf': [P + 'close_ups/Hallo15_dialogue_login.swf', 'w.p2015.may.login'],
+          'close_ups/ghostAdopt.swf': [P + 'close_ups/ghostAdopt.swf', 'ghostAdopt'],
+          'close_ups/skipDialogue.swf': [P + 'close_ups/skipDialogue.swf', 'skipDialogue'],
           'close_ups/tiles_minigame0.swf': P + 'close_ups/Close_upsTiles_minigame0-HalloweenParty2015.swf',
           'close_ups/tiles_minigame1.swf': P + 'close_ups/Close_upsTiles_minigame1-HalloweenParty2015.swf',
           'close_ups/tiles_minigame2.swf': P + 'close_ups/Close_upsTiles_minigame2-HalloweenParty2015.swf',
@@ -201,6 +203,8 @@ export const UPDATES_2015: Update[] = [
         },
         localChanges: {
           'close_ups/quest_interface.swf': { en: P + 'close_ups/Close_upsQuest_interface-HalloweenParty2015.swf' },
+          'close_ups/ghostAdopt.swf': { en: P + 'close_ups/ghostAdopt.swf' },
+          'close_ups/skipDialogue.swf': { en: P + 'close_ups/skipDialogue.swf' },
           'close_ups/tiles_minigame0.swf': { en: P + 'close_ups/Close_upsTiles_minigame0-HalloweenParty2015.swf' },
           'close_ups/tiles_minigame1.swf': { en: P + 'close_ups/Close_upsTiles_minigame1-HalloweenParty2015.swf' },
           'close_ups/tiles_minigame2.swf': { en: P + 'close_ups/Close_upsTiles_minigame2-HalloweenParty2015.swf' },
