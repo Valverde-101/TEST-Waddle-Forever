@@ -82,11 +82,15 @@ $files = Read-Normalized $filesPath
 Require-Contains $files "const PARTY2015 = 'party2015';" 'party2015_file_ref_constant'
 Require-Regex $files '(?m)^\s*PARTY2015,\s*$' 'party2015_file_ref_registration'
 
+# This gate only proves that the modern room symbols exist in the Waddle source.
+# Numeric ID parity belongs to waddle-halloween-2015-rooms.ps1, which compares
+# against the preserved rooms.json. Keeping IDs in both scripts previously let an
+# obsolete hardcoded 890 survive after Puffle Park was corrected to canonical 434.
 $rooms = Read-Normalized $roomsPath
-$roomContracts = [ordered]@{ dojosnow=326; hotellobby=430; hotelspa=431; hotelroof=432; cloudforest=433; skatepark=435; pufflewild=436; pufflepark=890 }
-foreach ($entry in $roomContracts.GetEnumerator()) {
-  $escaped = [regex]::Escape([string]$entry.Key)
-  Require-Regex $rooms ("(?s)'{0}'\s*:\s*\{{.*?\bid\s*:\s*{1}\b" -f $escaped,[int]$entry.Value) ("room_{0}_{1}" -f $entry.Key,$entry.Value)
+$modernRoomKeys = @('dojosnow','hotellobby','hotelspa','hotelroof','cloudforest','pufflepark','skatepark','pufflewild')
+foreach ($roomKey in $modernRoomKeys) {
+  $escaped = [regex]::Escape($roomKey)
+  Require-Regex $rooms ("(?s)'{0}'\s*:\s*\{{.*?\bid\s*:\s*\d+\b" -f $escaped) ("room_symbol_{0}" -f $roomKey)
 }
 
 $party = Read-Normalized $partyPath
@@ -141,6 +145,8 @@ $fileGenerators = Read-Normalized $fileGeneratorsPath
 Require-Contains $fileGenerators 'const getRuntimePathsJson: FileGenerator' 'runtime_paths_generator'
 Require-Contains $fileGenerators '...Object.fromEntries(d.getGlobalPaths())' 'global_paths_merge'
 Require-Contains $fileGenerators "'play/en/web_service/game_configs/paths.json': getRuntimePathsJson" 'runtime_paths_registration'
+Require-Contains $fileGenerators 'const getRuntimeGameStringsJson: FileGenerator' 'runtime_game_strings_generator'
+Require-Contains $fileGenerators "'play/en/web_service/game_configs/game_strings.json': getRuntimeGameStringsJson" 'runtime_game_strings_registration'
 
 $dependencies = Read-Normalized $dependenciesPath
 Require-Regex $dependencies '(?s)const DEPENDENCIES_VANILLA = \{.*?"boot"\s*:\s*\[.*?"id"\s*:\s*"party"' 'modern_party_boot_dependency'
@@ -219,4 +225,4 @@ $html = Read-Normalized $htmlPath
 foreach ($year in 2013..2017) { Require-Regex $html ('<option(?:\s+value="{0}")?>{0}</option>' -f $year) ("timeline_year_{0}" -f $year) }
 
 $canonicalSwfs = @($canonicalAssets | Where-Object { [string]$_.kind -eq 'swf' }).Count
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source runtime=preserved-halloween canonical_manifest=$($canonicalAssets.Count) canonical_swfs=$canonicalSwfs canonical_present=$presentCanonical config_bundle=true quest_communicator=true ghost_adopt=true skip_dialogue=true map_2015=true native_namespace=true bimp_telemetry=true activefeatures=20150501 partyservice=true client_interface=party2015 exclusive_end=2015-11-05 years=2005-2017 mutation=false"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source runtime=preserved-halloween canonical_manifest=$($canonicalAssets.Count) canonical_swfs=$canonicalSwfs canonical_present=$presentCanonical config_bundle=true quest_communicator=true ghost_adopt=true skip_dialogue=true map_2015=true native_namespace=true bimp_telemetry=true activefeatures=20150501 partyservice=true client_interface=party2015 room_ids=delegated_to_preserved_parity years=2005-2017 mutation=false"
