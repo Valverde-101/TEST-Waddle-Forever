@@ -95,7 +95,11 @@ foreach ($route in @(
   "'play/v2/content/global/content/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'",
   "'play/v2/content/global/content/features.swf': P + 'content/ContentFeatures-HalloweenParty2015.swf'",
   "'play/v2/content/global/content/party_icon.swf': P + 'content/ContentParty_icon-HalloweenParty2015.swf'",
-  "'play/v2/content/global/logo/logo.swf': P + 'content/ContentLogo-HalloweenParty2015.swf'"
+  "'play/v2/content/global/logo/logo.swf': P + 'content/ContentLogo-HalloweenParty2015.swf'",
+  "'close_ups/ghostAdopt.swf': [P + 'close_ups/ghostAdopt.swf', 'ghostAdopt']",
+  "'close_ups/skipDialogue.swf': [P + 'close_ups/skipDialogue.swf', 'skipDialogue']",
+  "'close_ups/ghostAdopt.swf': { en: P + 'close_ups/ghostAdopt.swf' }",
+  "'close_ups/skipDialogue.swf': { en: P + 'close_ups/skipDialogue.swf' }"
 )) { Assert ($updates.Contains($route)) "route_missing=$route" }
 Assert (-not $updates.Contains("'play/v2/content/global/content/logo.swf'")) 'legacy_wrong_logo_route_present'
 Assert ($updates.Contains("'w.p2015.may.partymap'")) 'map_global_path_missing'
@@ -117,7 +121,8 @@ foreach ($alias in @('halloween#partycookie','halloween#msgviewed','halloween#qc
   Assert ($xtHandler.Contains($alias)) "native_namespace_alias_missing=$alias"
 }
 
-# The archive-page manifest describes exactly the 132 original visual/event SWFs.
+# The archive-page manifest remains the immutable inventory of the 132 historical
+# visual/event SWFs collected for the party.
 $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
 Assert ([int]$manifest.requiredCount -eq 132) "manifest_required_count=$($manifest.requiredCount) expected=132"
 $manifestByRelative = @{}
@@ -128,15 +133,27 @@ foreach ($asset in @($manifest.assets)) {
 $requiredManifest = @($manifest.assets | Where-Object { [bool]$_.required })
 Assert ($requiredManifest.Count -eq 132) "manifest_required_entries=$($requiredManifest.Count) expected=132"
 
-# 2015.ts additionally routes exactly three preserved runtime SWFs. Keep them
-# outside the historical 132 count so the provenance of both layers stays clear.
+# Canonical supplements are manifest-driven. This includes runtime/config and any
+# recovered interaction close-ups such as ghostAdopt/skipDialogue.
+$canonicalManifest = Get-Content -LiteralPath $canonicalManifestPath -Raw | ConvertFrom-Json
+Assert ($canonicalManifest.schema -eq 'waddle-canonical-assets/v1') "canonical_schema=$($canonicalManifest.schema)"
+$canonicalAssets = @($canonicalManifest.assets)
+Assert ($canonicalAssets.Count -gt 0) 'canonical_asset_count=0'
+$canonicalTargets = @($canonicalAssets | ForEach-Object { [string]$_.target })
+Assert (@($canonicalTargets | Sort-Object -Unique).Count -eq $canonicalTargets.Count) 'canonical_targets_not_unique'
+$canonicalSwfRefs = @($canonicalAssets | Where-Object { [string]$_.kind -eq 'swf' } | ForEach-Object { ([string]$_.target).Replace('\\','/') } | Sort-Object -Unique)
+Assert ($canonicalSwfRefs.Count -gt 0) 'canonical_swf_count=0'
+foreach ($requiredCanonical in @('content/party.swf','content/map.swf','client/QuestCommunicator.swf','close_ups/ghostAdopt.swf','close_ups/skipDialogue.swf','game_configs/game_configs.bin')) {
+  Assert ($canonicalTargets -contains $requiredCanonical) "canonical_target_missing=$requiredCanonical"
+}
+
 $matches = [regex]::Matches($updates, "P\s*\+\s*'([^']+\.swf)'", [Text.RegularExpressions.RegexOptions]::IgnoreCase)
-$refs = @($matches | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
-$runtimeSwfRefs = @('content/party.swf','content/map.swf','client/QuestCommunicator.swf')
-$coreRefs = @($refs | Where-Object { $runtimeSwfRefs -notcontains $_ })
-Assert ($refs.Count -eq 135) "all_swf_ref_count=$($refs.Count) expected=135"
-Assert ($coreRefs.Count -eq 132) "historical_swf_ref_count=$($coreRefs.Count) expected=132"
-foreach ($runtimeRef in $runtimeSwfRefs) { Assert ($refs -contains $runtimeRef) "runtime_ref_missing=$runtimeRef" }
+$refs = @($matches | ForEach-Object { $_.Groups[1].Value.Replace('\\','/') } | Sort-Object -Unique)
+$coreRefs = @($refs | Where-Object { $canonicalSwfRefs -notcontains $_ })
+$expectedTotalSwfRefs = $requiredManifest.Count + $canonicalSwfRefs.Count
+Assert ($refs.Count -eq $expectedTotalSwfRefs) "all_swf_ref_count=$($refs.Count) expected=$expectedTotalSwfRefs"
+Assert ($coreRefs.Count -eq $requiredManifest.Count) "historical_swf_ref_count=$($coreRefs.Count) expected=$($requiredManifest.Count)"
+foreach ($runtimeRef in $canonicalSwfRefs) { Assert ($refs -contains $runtimeRef) "canonical_swf_ref_missing=$runtimeRef" }
 
 $missing = New-Object System.Collections.Generic.List[string]
 $invalid = New-Object System.Collections.Generic.List[string]
@@ -156,11 +173,6 @@ $requiredPaths = @($requiredManifest | ForEach-Object { ([string]$_.relativePath
 $notReferenced = @($requiredPaths | Where-Object { $coreRefs -notcontains $_ })
 Assert ($notReferenced.Count -eq 0) "required_not_referenced=$($notReferenced.Count) files=$($notReferenced -join ',')"
 
-# The canonical supplement manifest is immutable and byte-verifiable.
-$canonicalManifest = Get-Content -LiteralPath $canonicalManifestPath -Raw | ConvertFrom-Json
-Assert ($canonicalManifest.schema -eq 'waddle-canonical-assets/v1') "canonical_schema=$($canonicalManifest.schema)"
-$canonicalAssets = @($canonicalManifest.assets)
-Assert ($canonicalAssets.Count -eq 11) "canonical_asset_count=$($canonicalAssets.Count) expected=11"
 $canonicalMissing = New-Object System.Collections.Generic.List[string]
 foreach ($entry in $canonicalAssets) {
   $target = [string]$entry.target
@@ -179,13 +191,15 @@ Assert (Test-ZipConfig $gameConfigs) 'game_configs_bin_not_zip'
 Assert ((Get-Item -LiteralPath $gameConfigs).Length -eq 232384) 'game_configs_bin_size_mismatch'
 
 $allSwfs = @(Get-ChildItem -LiteralPath $assetRoot -Filter '*.swf' -File -Recurse)
-Assert ($allSwfs.Count -eq 135) "physical_swfs=$($allSwfs.Count) expected=135"
+$expectedPhysicalSwfs = $requiredManifest.Count + $canonicalSwfRefs.Count
+Assert ($allSwfs.Count -eq $expectedPhysicalSwfs) "physical_swfs=$($allSwfs.Count) expected=$expectedPhysicalSwfs"
 
 $roomRefs = @($coreRefs | Where-Object { $_ -like 'rooms/*' })
 $musicRefs = @($coreRefs | Where-Object { $_ -like 'music/*' })
 $closeUpRefs = @($coreRefs | Where-Object { $_ -like 'close_ups/*' })
+$canonicalCloseUps = @($canonicalSwfRefs | Where-Object { $_ -like 'close_ups/*' })
 Assert ($roomRefs.Count -eq 41) "room_ref_count=$($roomRefs.Count) expected=41"
 Assert ($musicRefs.Count -eq 38) "music_ref_count=$($musicRefs.Count) expected=38"
-Assert ($closeUpRefs.Count -eq 44) "close_up_ref_count=$($closeUpRefs.Count) expected=44"
+Assert ($closeUpRefs.Count -eq 44) "historical_close_up_ref_count=$($closeUpRefs.Count) expected=44"
 
-Write-Host "WADDLE_PARTY2015_VERIFY=PASS historical_swfs=132 runtime_swfs=3 total_swfs=135 canonical_assets=11 game_configs_bin=true quest_communicator=true party_runtime=true party_map=true rooms=$($roomRefs.Count) music=$($musicRefs.Count) closeups=$($closeUpRefs.Count) activefeatures=20150501 partyservice=true halloween_namespace=true bimp_telemetry=true global_paths=true exclusive_end=2015-11-05 root=$assetRoot"
+Write-Host "WADDLE_PARTY2015_VERIFY=PASS historical_swfs=$($requiredManifest.Count) canonical_swfs=$($canonicalSwfRefs.Count) total_swfs=$expectedPhysicalSwfs canonical_assets=$($canonicalAssets.Count) canonical_closeups=$($canonicalCloseUps.Count) game_configs_bin=true quest_communicator=true ghost_adopt=true skip_dialogue=true party_runtime=true party_map=true rooms=$($roomRefs.Count) music=$($musicRefs.Count) historical_closeups=$($closeUpRefs.Count) activefeatures=20150501 partyservice=true halloween_namespace=true bimp_telemetry=true global_paths=true exclusive_end=2015-11-05 root=$assetRoot"
