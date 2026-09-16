@@ -12,26 +12,15 @@ function Read-N([string]$Path) {
 function Require([bool]$Condition,[string]$Label) {
   if(-not $Condition){throw "WADDLE_HALLOWEEN2015_DATA=FAIL missing_contract=$Label"}
 }
-function Test-Swf([string]$Path) {
-  if(-not(Test-Path -LiteralPath $Path -PathType Leaf)){return $false}
-  $stream = [IO.File]::OpenRead($Path)
-  try {
-    if($stream.Length -lt 8){return $false}
-    $signature = New-Object byte[] 3
-    if($stream.Read($signature,0,3) -ne 3){return $false}
-    return @('FWS','CWS','ZWS') -contains [Text.Encoding]::ASCII.GetString($signature)
-  } finally {
-    $stream.Dispose()
-  }
-}
 
-# Committed source is authoritative. This gate is validation-only: it must never
-# rewrite party data or force a temporary third-party runtime back into 2015.ts.
+# Committed source is authoritative. This gate validates the data contract only;
+# the canonical hydrator owns downloading byte-exact preserved runtime assets.
 $pufflePath = Join-Path $repo 'src/server/socket-server/handlers/puffle.ts'
 $updatesPath = Join-Path $repo 'src/server/updates/2015.ts'
-$runtimePath = Join-Path $repo 'media/default/svanilla/media/play/v2/content/global/content/party.swf'
+$canonicalManifestPath = Join-Path $repo '.github/manifests/halloween-2015-canonical.json'
 $puffle = Read-N $pufflePath
 $updates = Read-N $updatesPath
+$canonical = Get-Content -LiteralPath $canonicalManifestPath -Raw | ConvertFrom-Json
 
 Require ($puffle.Contains('category === PuffleCategory.Creature ? puffleInfo.cost')) 'creature_price_from_puffle_data'
 Require ($updates.Contains("partyName: 'Halloween Party 2015'")) 'party_name'
@@ -50,19 +39,24 @@ $iconAsset = "P + 'content/ContentParty_icon-HalloweenParty2015.swf'"
 Require ($updates.Contains("'play/v2/client/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'")) 'client_interface_route'
 Require ($updates.Contains("'play/v2/content/global/content/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'")) 'content_interface_alias'
 Require ($updates.Contains("'play/v2/content/global/content/party_icon.swf': $iconAsset")) 'party_icon_canonical_route'
+Require ($updates.Contains("'play/v2/content/global/content/party.swf': P + 'content/party.swf'")) 'preserved_party_runtime'
+Require ($updates.Contains("'play/v2/content/global/content/map.swf': P + 'content/map.swf'")) 'preserved_party_map'
+Require ($updates.Contains("'play/v2/client/QuestCommunicator.swf': P + 'client/QuestCommunicator.swf'")) 'quest_communicator'
+Require ($updates.Contains("'play/en/web_service/game_configs.bin': P + 'game_configs/game_configs.bin'")) 'game_configs_bundle'
 Require ($updates -match "'content/party_icon\.swf'\s*:\s*\[[^\]]*'party_icon'[^\]]*\]") 'party_icon_global_crumb'
 Require ($updates -match "'content/party_icon\.swf'\s*:\s*\[[^\]]*'scavenger_hunt_icon'[^\]]*\]") 'party_icon_scavenger_alias'
 Require ($updates -match "'close_ups/quest_interface\.swf'\s*:\s*\[[^\]]*'w\.p2015\.may\.partyinterface'[^\]]*\]") 'quest_interface_global_path'
+Require ($updates -match "'content/map\.swf'\s*:\s*\[[^\]]*'w\.p2015\.may\.partymap'[^\]]*\]") 'party_map_global_path'
 
-# The event archive does not contain its own party.swf. Use the native svanilla
-# framework runtime at the canonical URL and reject the old Fair/May substitute.
-Require (Test-Swf $runtimePath) 'native_party_runtime'
-Require (-not $updates.Contains("'play/v2/content/global/content/party.swf'")) 'no_event_party_runtime_override'
-Require (-not $updates.Contains('PartyRuntime-CPImagined-HalloweenClassic.swf')) 'no_cpimagined_party_runtime'
+Require ($canonical.schema -eq 'waddle-canonical-assets/v1') 'canonical_manifest_schema'
+Require (@($canonical.assets).Count -eq 11) 'canonical_manifest_count_11'
+$targets = @($canonical.assets | ForEach-Object { [string]$_.target })
+foreach ($target in @('content/party.swf','content/map.swf','client/QuestCommunicator.swf','game_configs/game_configs.bin','game_configs/game_strings.json','game_configs/general.json','game_configs/paths.json','game_configs/rooms.json')) {
+  Require ($targets -contains $target) ("canonical_" + ($target -replace '[^A-Za-z0-9]+','_'))
+}
 
 if ($updates -match 'gameStringChanges:\s*\{(?s:.*?)w\.app\.p2015\.halloween') {
   throw 'WADDLE_HALLOWEEN2015_DATA=FAIL unverified_halloween_strings_remain'
 }
 
-$runtimeInfo = Get-Item -LiteralPath $runtimePath
-Write-Host "WADDLE_HALLOWEEN2015_DATA=PASS mode=validation_only mutation=false party=halloween-2015 tasks=10 activefeatures=20150501 partyservice=true ghost_puffle=1022 party_icon=canonical_plus_aliases quest_path=true runtime=svanilla-native runtime_bytes=$($runtimeInfo.Length)"
+Write-Host "WADDLE_HALLOWEEN2015_DATA=PASS mode=validation_only mutation=false party=halloween-2015 tasks=10 activefeatures=20150501 partyservice=true ghost_puffle=1022 party_icon=true runtime=preserved-halloween map=preserved-halloween quest_communicator=true config_bundle=true canonical_assets=11"
