@@ -174,14 +174,17 @@ export const UPDATES_2015: Update[] = [
           'play/v2/content/global/music/1058.swf': P + 'music/Music1058.swf',
           'play/v2/content/global/music/1067.swf': P + 'music/Music1067.swf'
         },
-        // Late-AS3 party code discovers content by SHELL.getPath(). These routes
-        // must therefore be present in the global paths table as well as physically
-        // routable. The aliases below are preserved from the 2015-era runtime.
+        // Late-AS3 party code discovers content by SHELL.getPath(), while the
+        // preserved game_configs bundle may also issue the literal route returned
+        // by its paths.json. Keep both route spellings when Waddle's historical
+        // archive used a different filename, and bind the crumb to the preserved
+        // 2015 spelling.
         globalChanges: {
           'content/map.swf': [P + 'content/map.swf', 'w.p2015.may.partymap'],
           'content/party_icon.swf': [P + 'content/ContentParty_icon-HalloweenParty2015.swf', 'party_icon', 'scavenger_hunt_icon'],
           'close_ups/quest_interface.swf': [P + 'close_ups/Close_upsQuest_interface-HalloweenParty2015.swf', 'w.p2015.may.partyinterface', 'w.app.generic.partyinterface', 'scavenger_hunt'],
-          'close_ups/dialogue_login.swf': [P + 'close_ups/Hallo15_dialogue_login.swf', 'w.p2015.may.login'],
+          'close_ups/dialogue_login.swf': P + 'close_ups/Hallo15_dialogue_login.swf',
+          'close_ups/halloLogin.swf': [P + 'close_ups/halloLogin.swf', 'w.p2015.may.login'],
           'close_ups/ghostAdopt.swf': [P + 'close_ups/ghostAdopt.swf', 'ghostAdopt'],
           'close_ups/skipDialogue.swf': [P + 'close_ups/skipDialogue.swf', 'skipDialogue'],
           'close_ups/tiles_minigame0.swf': P + 'close_ups/Close_upsTiles_minigame0-HalloweenParty2015.swf',
@@ -192,17 +195,26 @@ export const UPDATES_2015: Update[] = [
           'close_ups/tiles_minigame5.swf': P + 'close_ups/Close_upsTiles_minigame5-HalloweenParty2015.swf',
           'close_ups/tiles_minigame6.swf': P + 'close_ups/Close_upsTiles_minigame6-HalloweenParty2015.swf',
           'close_ups/tiles_minigame7.swf': P + 'close_ups/Close_upsTiles_minigame7-HalloweenParty2015.swf',
-          'close_ups/tiles_minigame8.swf': [P + 'close_ups/Close_upsTiles_minigame8-HalloweenParty2015.swf', 'halloHerbertGame'],
-          'close_ups/dialogue_Herbert_monologue.swf': [P + 'close_ups/Hallo15_dialogue_Herbert_monologue.swf', 'halloHerbertMonologue'],
-          'close_ups/dialogue_Herbert_monologue_2.swf': [P + 'close_ups/Hallo15_dialogue_Herbert_monologue_2.swf', 'halloHerbertMonologue2'],
-          'close_ups/dialogue_Herbot.swf': [P + 'close_ups/Hallo15_dialogue_Herbot.swf', 'halloHerbot'],
-          'close_ups/dialogue_Herbert_caged.swf': [P + 'close_ups/Hallo15_dialogue_Herbert_caged.swf', 'halloHerbertCage'],
-          'close_ups/dialogue_Gary_lair.swf': [P + 'close_ups/Hallo15_dialogue_Gary_lair.swf', 'halloGaryLair'],
-          'close_ups/dialogue_Herbert_escape.swf': [P + 'close_ups/Hallo15_dialogue_Herbert_escape.swf', 'halloHerbertGetaway'],
-          'close_ups/dialogue_Gary_final.swf': [P + 'close_ups/Hallo15_dialogue_Gary_final.swf', 'halloGaryFinal']
+          'close_ups/tiles_minigame8.swf': P + 'close_ups/Close_upsTiles_minigame8-HalloweenParty2015.swf',
+          'close_ups/tiles_minigame8v2.swf': [P + 'close_ups/Close_upsTiles_minigame8-HalloweenParty2015.swf', 'halloHerbertGame'],
+          'close_ups/dialogue_Herbert_monologue.swf': P + 'close_ups/Hallo15_dialogue_Herbert_monologue.swf',
+          'close_ups/halloHerbertMonologue.swf': [P + 'close_ups/Hallo15_dialogue_Herbert_monologue.swf', 'halloHerbertMonologue'],
+          'close_ups/dialogue_Herbert_monologue_2.swf': P + 'close_ups/Hallo15_dialogue_Herbert_monologue_2.swf',
+          'close_ups/halloHerbertMonologue2.swf': [P + 'close_ups/Hallo15_dialogue_Herbert_monologue_2.swf', 'halloHerbertMonologue2'],
+          'close_ups/dialogue_Herbot.swf': P + 'close_ups/Hallo15_dialogue_Herbot.swf',
+          'close_ups/halloHerbot.swf': [P + 'close_ups/Hallo15_dialogue_Herbot.swf', 'halloHerbot'],
+          'close_ups/dialogue_Herbert_caged.swf': P + 'close_ups/Hallo15_dialogue_Herbert_caged.swf',
+          'close_ups/halloHerbertCage.swf': [P + 'close_ups/Hallo15_dialogue_Herbert_caged.swf', 'halloHerbertCage'],
+          'close_ups/dialogue_Gary_lair.swf': P + 'close_ups/Hallo15_dialogue_Gary_lair.swf',
+          'close_ups/halloGaryLair.swf': [P + 'close_ups/Hallo15_dialogue_Gary_lair.swf', 'halloGaryLair'],
+          'close_ups/dialogue_Herbert_escape.swf': P + 'close_ups/Hallo15_dialogue_Herbert_escape.swf',
+          'close_ups/halloHerbertGetaway.swf': [P + 'close_ups/Hallo15_dialogue_Herbert_escape.swf', 'halloHerbertGetaway'],
+          'close_ups/dialogue_Gary_final.swf': P + 'close_ups/Hallo15_dialogue_Gary_final.swf',
+          'close_ups/halloGaryFinal.swf': [P + 'close_ups/Hallo15_dialogue_Gary_final.swf', 'halloGaryFinal']
         },
         localChanges: {
           'close_ups/quest_interface.swf': { en: P + 'close_ups/Close_upsQuest_interface-HalloweenParty2015.swf' },
+          'close_ups/halloLogin.swf': { en: P + 'close_ups/halloLogin.swf' },
           'close_ups/ghostAdopt.swf': { en: P + 'close_ups/ghostAdopt.swf' },
           'close_ups/skipDialogue.swf': { en: P + 'close_ups/skipDialogue.swf' },
           'close_ups/tiles_minigame0.swf': { en: P + 'close_ups/Close_upsTiles_minigame0-HalloweenParty2015.swf' },
