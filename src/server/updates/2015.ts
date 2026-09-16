@@ -117,10 +117,6 @@ export const UPDATES_2015: Update[] = [
           // old content/global alias as well covers shells that resolve it by path.
           'play/v2/client/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf',
           'play/v2/content/global/content/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf',
-          // Late-AS3 parties require a concrete CURRENT_PARTY implementation. Keep
-          // this runtime outside the 132-file party archive so hydration cannot
-          // delete it or distort the canonical Halloween inventory.
-          'play/v2/content/global/content/party.swf': 'archives:PartyRuntime-CPImagined-HalloweenClassic.swf',
           'play/v2/content/global/content/features.swf': P + 'content/ContentFeatures-HalloweenParty2015.swf',
           'play/v2/content/global/content/party_icon.swf': P + 'content/ContentParty_icon-HalloweenParty2015.swf',
           'play/v2/content/global/logo/logo.swf': P + 'content/ContentLogo-HalloweenParty2015.swf',
