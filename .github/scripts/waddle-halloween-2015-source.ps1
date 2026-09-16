@@ -43,12 +43,11 @@ $partyHandlersPath = Join-Path $repo 'src/server/socket-server/handlers/party.ts
 $partyDataPath = Join-Path $repo 'src/server/game-data/party.ts'
 $timelinePath = Join-Path $repo 'src/client/views/timeline/timeline-static.ts'
 $htmlPath = Join-Path $repo 'src/client/views/timeline/timeline.html'
-$runtimePath = Join-Path $repo 'media/default/archives/PartyRuntime-CPImagined-HalloweenClassic.swf'
+$runtimePath = Join-Path $repo 'media/default/svanilla/media/play/v2/content/global/content/party.swf'
 
 $files = Read-Normalized $filesPath
 Require-Contains $files "const PARTY2015 = 'party2015';" 'party2015_file_ref_constant'
 Require-Regex $files '(?m)^\s*PARTY2015,\s*$' 'party2015_file_ref_registration'
-Require-Contains $files "'archives'" 'archives_fileref_registration'
 
 $rooms = Read-Normalized $roomsPath
 $roomContracts = [ordered]@{
@@ -89,7 +88,6 @@ foreach ($contract in @(
   "'halloHerbertGame'",
   "'play/v2/client/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'",
   "'play/v2/content/global/content/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'",
-  "'play/v2/content/global/content/party.swf': 'archives:PartyRuntime-CPImagined-HalloweenClassic.swf'",
   "'play/v2/content/global/content/features.swf'",
   "'play/v2/content/global/content/party_icon.swf': P + 'content/ContentParty_icon-HalloweenParty2015.swf'",
   "'play/v2/content/global/logo/logo.swf'",
@@ -99,13 +97,14 @@ foreach ($contract in @(
   Require-Contains $party $contract ("party_" + ($contract -replace '[^A-Za-z0-9]+','_').Trim('_'))
 }
 Require-NotContains $party "'play/v2/content/global/content/logo.swf'" 'legacy_wrong_logo_route'
-Require-NotContains $party "PartyRuntime-CPImaginedReference.swf" 'runtime_inside_hydrated_party_inventory'
+Require-NotContains $party "'play/v2/content/global/content/party.swf'" 'event_specific_party_runtime_override'
+Require-NotContains $party 'PartyRuntime-CPImagined-HalloweenClassic.swf' 'cpimagined_runtime_reference'
 
 if (-not (Test-Path -LiteralPath $runtimePath -PathType Leaf)) {
   throw "WADDLE_PARTY2015_SOURCE=FAIL runtime_missing=$runtimePath"
 }
 $runtimeInfo = Get-Item -LiteralPath $runtimePath
-if ($runtimeInfo.Length -lt 100000) {
+if ($runtimeInfo.Length -lt 10000) {
   throw "WADDLE_PARTY2015_SOURCE=FAIL runtime_too_small bytes=$($runtimeInfo.Length)"
 }
 $stream = [IO.File]::OpenRead($runtimePath)
@@ -132,26 +131,14 @@ $dependencies = Read-Normalized $dependenciesPath
 Require-Regex $dependencies '(?s)const DEPENDENCIES_VANILLA = \{.*?"boot"\s*:\s*\[.*?"id"\s*:\s*"party"' 'modern_party_boot_dependency'
 
 $xtHandler = Read-Normalized $xtHandlerPath
-Require-Contains $xtHandler 'resolveXtActionAlias' 'xt_party_alias_resolver'
 Require-Contains $xtHandler "const emptyArrayFraming = Array.isArray(signature) && signature.length === 0 && args.length === 1 && args[0] === '';" 'xt_empty_array_frame_detection'
 Require-Contains $xtHandler 'const argsForParsing = emptyArrayFraming ? [] : args;' 'xt_empty_array_frame_normalization'
-Require-Contains $xtHandler "? 'protocol-alias'" 'xt_party_alias_diagnostic'
-Require-Contains $xtHandler 'compatibility: actionAlias !== undefined || compatibility !== undefined || emptyArrayFraming' 'xt_alias_completion_diagnostic'
+Require-NotContains $xtHandler 'resolveXtActionAlias' 'fair_runtime_alias_resolver'
 
 $protocol = Read-Normalized $protocolPath
-foreach ($alias in @(
-  "action: 's%fair#fair'",
-  "canonicalAction: 's%party#partycookie'",
-  "action: 's%fair#partycookie'",
-  "action: 's%fair#msgviewed'",
-  "action: 's%fair#fmsgviewed'",
-  "action: 's%fair#qcmsgviewed'",
-  "action: 's%fair#qtaskcomplete'"
-)) {
-  Require-Contains $protocol $alias ("protocol_" + ($alias -replace '[^A-Za-z0-9]+','_').Trim('_'))
-}
-Require-Contains $protocol "exactArguments: ['0']" 'protocol_fair_cookie_fixed_selector'
-Require-Contains $protocol 'dropArguments: true' 'protocol_fair_cookie_selector_drop'
+Require-Contains $protocol "action: 's%party#partycookie'" 'party_cookie_selector_compatibility'
+Require-Contains $protocol "exactArguments: ['0']" 'party_cookie_fixed_selector'
+Require-NotContains $protocol "s%fair#" 'fair_runtime_alias'
 
 $joinHandlers = Read-Normalized $joinHandlersPath
 Require-Contains $joinHandlers "import { sendModernPartyBootstrap } from './party';" 'join_party_bootstrap_import'
@@ -192,4 +179,4 @@ foreach ($year in 2013..2017) {
   Require-Regex $html ('<option(?:\s+value="{0}")?>{0}</option>' -f $year) ("timeline_year_{0}" -f $year)
 }
 
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source media_prefix=party2015 runtime=archives client_interface=party2015 modern_party_id=20150501 party_start=2015-10-21 exclusive_end=2015-11-05 paths_global_merged=true eager_bootstrap=true fair_aliases=true runtime_sig=$runtimeSig years=2005-2017 mutation=false"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS mode=validate_committed_source media_prefix=party2015 runtime=svanilla-native client_interface=party2015 modern_party_id=20150501 party_start=2015-10-21 exclusive_end=2015-11-05 paths_global_merged=true eager_bootstrap=true fair_aliases=false runtime_sig=$runtimeSig runtime_bytes=$($runtimeInfo.Length) years=2005-2017 mutation=false"
