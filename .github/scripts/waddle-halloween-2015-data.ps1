@@ -13,66 +13,84 @@ function Require([bool]$Condition,[string]$Label) {
   if(-not $Condition){throw "WADDLE_HALLOWEEN2015_DATA=FAIL missing_contract=$Label"}
 }
 
-# Committed source is authoritative. This gate validates the data contract only;
-# the canonical hydrator owns downloading byte-exact preserved runtime assets.
 $pufflePath = Join-Path $repo 'src/server/socket-server/handlers/puffle.ts'
 $updatesPath = Join-Path $repo 'src/server/updates/2015.ts'
+$historicalManifestPath = Join-Path $repo 'media/default/party2015/manifest.json'
 $canonicalManifestPath = Join-Path $repo '.github/manifests/halloween-2015-canonical.json'
 $puffle = Read-N $pufflePath
 $updates = Read-N $updatesPath
+$historical = Get-Content -LiteralPath $historicalManifestPath -Raw | ConvertFrom-Json
 $canonical = Get-Content -LiteralPath $canonicalManifestPath -Raw | ConvertFrom-Json
 
 Require ($puffle.Contains('category === PuffleCategory.Creature ? puffleInfo.cost')) 'creature_price_from_puffle_data'
-Require ($updates.Contains("partyName: 'Halloween Party 2015'")) 'party_name'
-Require ($updates.Contains("activeFeatures: '20150501'")) 'activefeatures_20150501'
-Require ($updates.Contains("id: 'halloween-2015'")) 'party_progress_id'
-Require ($updates.Contains('messageCount: 10')) 'message_count'
-Require ($updates.Contains('communicatorMessageCount: 5')) 'communicator_count'
-Require ($updates.Contains('taskCount: 10')) 'task_count'
-Require ($updates.Contains('maxCoinUpdate: 10')) 'coin_cap'
-Require ($updates.Contains("partyStartDate: '2015-10-21 00:00:00'")) 'party_service_start'
-Require ($updates.Contains("partyEndDate: '2015-11-05 00:00:00'")) 'party_service_end'
-Require ($updates.Contains('unlockDayIndex: 16')) 'party_service_unlock_day'
-Require ($updates.Contains('numOfDaysInParty: 16')) 'party_service_days'
+foreach ($needle in @(
+  "partyName: 'Halloween Party 2015'",
+  "activeFeatures: '20150501'",
+  'gameStringChanges: HALLOWEEN_2015_DIALOGUE_STRINGS',
+  "id: 'halloween-2015'",
+  'messageCount: 10',
+  'communicatorMessageCount: 5',
+  'taskCount: 10',
+  'maxCoinUpdate: 10',
+  "partyStartDate: '2015-10-21 00:00:00'",
+  "partyEndDate: '2015-11-05 00:00:00'",
+  'unlockDayIndex: 16',
+  'numOfDaysInParty: 16',
+  'rooms: HALLOWEEN_2015_ROOMS',
+  'music: HALLOWEEN_2015_MUSIC',
+  '...musicFileChanges',
+  '...dialogueGlobalChanges',
+  '...dialogueLocalChanges',
+  '...tileGlobalChanges',
+  '...tileLocalChanges'
+)) { Require ($updates.Contains($needle)) ("update_" + ($needle -replace '[^A-Za-z0-9]+','_').Trim('_')) }
 
-$iconAsset = "P + 'content/ContentParty_icon-HalloweenParty2015.swf'"
-Require ($updates.Contains("'play/v2/client/interface.swf': P + 'client/ClientInterface-HalloweenClassic2015.swf'")) 'client_interface_route'
-Require ($updates.Contains("'play/v2/content/global/content/interface.swf': P + 'client/ClientInterface-HalloweenClassic2015.swf'")) 'content_interface_alias'
-Require ($updates.Contains("'play/v2/content/global/content/party_icon.swf': $iconAsset")) 'party_icon_canonical_route'
-Require ($updates.Contains("'play/v2/content/global/content/party.swf': P + 'content/party.swf'")) 'preserved_party_runtime'
-Require ($updates.Contains("'play/v2/content/global/content/map.swf': P + 'content/map.swf'")) 'preserved_party_map'
-Require ($updates.Contains("'play/v2/client/QuestCommunicator.swf': P + 'client/QuestCommunicator.swf'")) 'quest_communicator'
-Require ($updates.Contains("'play/en/web_service/game_configs.bin': P + 'game_configs/game_configs.bin'")) 'game_configs_bundle'
-Require ($updates -match "'content/party_icon\.swf'\s*:\s*\[[^\]]*'party_icon'[^\]]*\]") 'party_icon_global_crumb'
-Require ($updates -match "'content/party_icon\.swf'\s*:\s*\[[^\]]*'scavenger_hunt_icon'[^\]]*\]") 'party_icon_scavenger_alias'
-Require ($updates.Contains("'close_ups/quest_interface.swf': [P + 'close_ups/Close_upsQuest_interface-HalloweenClassic2015.swf', 'w.p2015.may.partyinterface', 'w.app.generic.partyinterface', 'scavenger_hunt']")) 'quest_interface_global_path'
-Require ($updates.Contains("'close_ups/quest_interface.swf': { en: P + 'close_ups/Close_upsQuest_interface-HalloweenClassic2015.swf' }")) 'quest_interface_local_path'
-Require ($updates -match "'content/map\.swf'\s*:\s*\[[^\]]*'w\.p2015\.may\.partymap'[^\]]*\]") 'party_map_global_path'
-Require ($updates -match "'close_ups/ghostAdopt\.swf'\s*:\s*\[[^\]]*'ghostAdopt'[^\]]*\]") 'ghost_adopt_global_path'
-Require ($updates -match "'close_ups/skipDialogue\.swf'\s*:\s*\[[^\]]*'skipDialogue'[^\]]*\]") 'skip_dialogue_global_path'
-Require ($updates.Contains("'close_ups/ghostAdopt.swf': { en: P + 'close_ups/ghostAdopt.swf' }")) 'ghost_adopt_local_path'
-Require ($updates.Contains("'close_ups/skipDialogue.swf': { en: P + 'close_ups/skipDialogue.swf' }")) 'skip_dialogue_local_path'
-Require (-not $updates.Contains("P + 'client/ClientInterface-HalloweenParty2015.swf'")) 'historical_interface_not_served'
+# Exact October 2015 interaction family. The preserved CPArchives interface and
+# quest interface are authoritative; the 2310 recreation is archival provenance.
+Require ($updates.Contains("'play/v2/client/interface.swf': ref('client/ClientInterface-HalloweenParty2015.swf')")) 'client_interface_historical_2015'
+Require ($updates.Contains("'play/v2/content/global/content/interface.swf': ref('client/ClientInterface-HalloweenParty2015.swf')")) 'content_interface_historical_2015'
+Require ($updates.Contains("'play/v2/content/global/content/features.swf': ref('content/ContentFeatures-HalloweenParty2015.swf')")) 'features_historical_2015'
+Require ($updates.Contains("'play/v2/content/global/content/party_icon.swf': ref('content/ContentParty_icon-HalloweenParty2015.swf')")) 'party_icon_historical_2015'
+Require ($updates.Contains("'play/v2/client/QuestCommunicator.swf': ref('client/QuestCommunicator.swf')")) 'quest_communicator'
+Require ($updates.Contains("'close_ups/quest_interface.swf': [ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf'), 'w.p2015.may.partyinterface', 'w.app.generic.partyinterface', 'scavenger_hunt']")) 'quest_interface_global_historical_2015'
+Require ($updates.Contains("'close_ups/quest_interface.swf': { en: ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf') }")) 'quest_interface_local_historical_2015'
+Require ($updates -match "'content/party_icon\.swf'\s*:\s*\[[^\]]*'party_icon'[^\]]*'scavenger_hunt_icon'[^\]]*\]") 'party_icon_crumbs'
 
-Require ($canonical.schema -eq 'waddle-canonical-assets/v1') 'canonical_manifest_schema'
-$assets = @($canonical.assets)
-Require ($assets.Count -gt 0) 'canonical_manifest_nonempty'
-$targets = @($assets | ForEach-Object { [string]$_.target })
-Require (@($targets | Sort-Object -Unique).Count -eq $targets.Count) 'canonical_targets_unique'
+# Root regression guards: these requests caused the visually loaded but inert
+# mixed stack (including dynamic 2048 music and party_map_note requests).
+foreach ($stale in @(
+  "'play/en/web_service/game_configs.bin'",
+  "'play/v2/content/global/content/party.swf'",
+  "'play/v2/content/global/content/map.swf'",
+  "'content/map.swf':",
+  'ClientInterface-HalloweenClassic2015.swf',
+  'Close_upsQuest_interface-HalloweenClassic2015.swf',
+  "'close_ups/ghostAdopt.swf'",
+  "'close_ups/skipDialogue.swf'",
+  "'close_ups/halloLogin.swf'"
+)) { Require (-not $updates.Contains($stale)) ("no_mixed_2310_" + ($stale -replace '[^A-Za-z0-9]+','_').Trim('_')) }
+
+Require ([int]$historical.requiredCount -eq 132) 'historical_required_count_132'
+$historicalAssets = @($historical.assets)
+Require ($historicalAssets.Count -eq 132) 'historical_assets_132'
+$historicalTargets = @($historicalAssets | ForEach-Object { [string]$_.relativePath })
 foreach ($target in @(
-  'content/party.swf','content/map.swf','client/QuestCommunicator.swf',
-  'client/ClientInterface-HalloweenClassic2015.swf',
-  'close_ups/Close_upsQuest_interface-HalloweenClassic2015.swf',
-  'close_ups/ghostAdopt.swf','close_ups/skipDialogue.swf',
-  'game_configs/game_configs.bin','game_configs/game_strings.json','game_configs/general.json',
-  'game_configs/paths.json','game_configs/rooms.json'
-)) {
-  Require ($targets -contains $target) ("canonical_" + ($target -replace '[^A-Za-z0-9]+','_'))
-}
+  'client/ClientInterface-HalloweenParty2015.swf',
+  'close_ups/Close_upsQuest_interface-HalloweenParty2015.swf',
+  'content/ContentFeatures-HalloweenParty2015.swf',
+  'content/ContentParty_icon-HalloweenParty2015.swf',
+  'close_ups/Hallo15_dialogue_login.swf',
+  'close_ups/Close_upsTiles_minigame0-HalloweenParty2015.swf',
+  'close_ups/Close_upsTiles_minigame8-HalloweenParty2015.swf'
+)) { Require ($historicalTargets -contains $target) ("historical_" + ($target -replace '[^A-Za-z0-9]+','_')) }
 
-if ($updates -match 'gameStringChanges:\s*\{(?s:.*?)w\.app\.p2015\.halloween') {
-  throw 'WADDLE_HALLOWEEN2015_DATA=FAIL unverified_halloween_strings_remain'
-}
+# Canonical supplements remain byte-pinned provenance but are no longer treated
+# as the live Halloween 2015 family.
+Require ($canonical.schema -eq 'waddle-canonical-assets/v1') 'canonical_manifest_schema'
+$canonicalAssets = @($canonical.assets)
+Require ($canonicalAssets.Count -gt 0) 'canonical_manifest_nonempty'
+$canonicalTargets = @($canonicalAssets | ForEach-Object { [string]$_.target })
+Require (@($canonicalTargets | Sort-Object -Unique).Count -eq $canonicalTargets.Count) 'canonical_targets_unique'
+Require ($canonicalTargets -contains 'client/QuestCommunicator.swf') 'canonical_quest_communicator_source'
 
-$swfCount = @($assets | Where-Object { [string]$_.kind -eq 'swf' }).Count
-Write-Host "WADDLE_HALLOWEEN2015_DATA=PASS mode=validation_only mutation=false party=halloween-2015 tasks=10 activefeatures=20150501 partyservice=true ghost_puffle=1022 party_icon=true runtime=preserved-halloween map=preserved-halloween interface=coherent-halloween-classic quest_interface=coherent-halloween-classic quest_communicator=true ghost_adopt=true skip_dialogue=true config_bundle=true canonical_assets=$($assets.Count) canonical_swfs=$swfCount"
+Write-Host "WADDLE_HALLOWEEN2015_DATA=PASS mode=validation_only mutation=false party=halloween-2015 tasks=10 activefeatures=20150501 partyservice=true runtime=base-modern interface=exact-cparchives-2015 quest_interface=exact-cparchives-2015 dialogues=exact-cparchives-2015 rooms=exact-cparchives-2015 music=exact-cparchives-2015 quest_communicator=true historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) mixed_2310=false"
