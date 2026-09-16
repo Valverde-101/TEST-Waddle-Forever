@@ -33,6 +33,8 @@ $generalPath = Join-Path $repo 'src/server/file-generators/general.json.ts'
 $fileGeneratorsPath = Join-Path $repo 'src/server/file-generators/index.ts'
 $dependenciesPath = Join-Path $repo 'src/server/file-generators/dependencies.json.ts'
 $partyHandlersPath = Join-Path $repo 'src/server/socket-server/handlers/party.ts'
+$joinHandlersPath = Join-Path $repo 'src/server/socket-server/handlers/join.ts'
+$protocolPath = Join-Path $repo 'src/server/socket-server/handlers/protocol.ts'
 $timelinePath = Join-Path $repo 'src/client/views/timeline/timeline-static.ts'
 $timelineHtmlPath = Join-Path $repo 'src/client/views/timeline/timeline.html'
 $assetRoot = Join-Path $canonical 'media/default/party2015'
@@ -45,6 +47,8 @@ Assert (Test-Path -LiteralPath $generalPath -PathType Leaf) "general_generator_m
 Assert (Test-Path -LiteralPath $fileGeneratorsPath -PathType Leaf) "file_generators_missing=$fileGeneratorsPath"
 Assert (Test-Path -LiteralPath $dependenciesPath -PathType Leaf) "dependencies_generator_missing=$dependenciesPath"
 Assert (Test-Path -LiteralPath $partyHandlersPath -PathType Leaf) "party_handlers_missing=$partyHandlersPath"
+Assert (Test-Path -LiteralPath $joinHandlersPath -PathType Leaf) "join_handlers_missing=$joinHandlersPath"
+Assert (Test-Path -LiteralPath $protocolPath -PathType Leaf) "protocol_missing=$protocolPath"
 Assert (Test-Path -LiteralPath $timelinePath -PathType Leaf) "timeline_missing=$timelinePath"
 Assert (Test-Path -LiteralPath $timelineHtmlPath -PathType Leaf) "timeline_html_missing=$timelineHtmlPath"
 Assert (Test-Path -LiteralPath $manifestPath -PathType Leaf) "manifest_missing=$manifestPath"
@@ -56,6 +60,8 @@ $general = [IO.File]::ReadAllText($generalPath)
 $fileGenerators = [IO.File]::ReadAllText($fileGeneratorsPath)
 $dependencies = [IO.File]::ReadAllText($dependenciesPath)
 $partyHandlers = [IO.File]::ReadAllText($partyHandlersPath)
+$joinHandlers = [IO.File]::ReadAllText($joinHandlersPath)
+$protocol = [IO.File]::ReadAllText($protocolPath)
 $timeline = [IO.File]::ReadAllText($timelinePath)
 $timelineHtml = [IO.File]::ReadAllText($timelineHtmlPath)
 
@@ -70,8 +76,10 @@ Assert ($files.Contains('  PARTY2015,')) 'party2015_fileref_registry_missing'
 Assert ($timeline.Contains('getDateFromDateInfo(days[days.length - 1])')) 'dynamic_timeline_end_missing'
 Assert ($timelineHtml.Contains('<option>2015</option>')) 'timeline_2015_option_missing'
 
-Assert ($updates.Contains("'play/v2/content/global/content/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'")) 'modern_interface_route_missing'
-Assert (-not $updates.Contains("'play/v2/client/interface.swf'")) 'legacy_wrong_interface_route_present'
+# Real execution traces from the late-AS3 client request /play/v2/client/interface.swf.
+# Keep the content/global route as an alias only; never reject the actually requested route.
+Assert ($updates.Contains("'play/v2/client/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'")) 'client_interface_route_missing'
+Assert ($updates.Contains("'play/v2/content/global/content/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'")) 'content_interface_alias_missing'
 Assert ($updates.Contains("'play/v2/content/global/content/features.swf': P + 'content/ContentFeatures-HalloweenParty2015.swf'")) 'modern_features_route_missing'
 Assert ($updates.Contains("'play/v2/content/global/logo/logo.swf': P + 'content/ContentLogo-HalloweenParty2015.swf'")) 'modern_logo_route_missing'
 Assert (-not $updates.Contains("'play/v2/content/global/content/logo.swf'")) 'legacy_wrong_logo_route_present'
@@ -86,8 +94,14 @@ Assert ($general.Contains('"party_icon_active": modernPartyIconActive')) 'party_
 Assert ($fileGenerators.Contains('...Object.fromEntries(d.getGlobalPaths())')) 'global_paths_not_merged_into_paths_json'
 Assert ($fileGenerators.Contains("'play/en/web_service/game_configs/paths.json': getRuntimePathsJson")) 'runtime_paths_generator_not_registered'
 Assert ($dependencies -match '(?s)const DEPENDENCIES_VANILLA = \{.*?"boot"\s*:\s*\[.*?"id"\s*:\s*"party"') 'modern_party_boot_dependency_missing'
+Assert ($partyHandlers.Contains("await ctx.msg.send(ctx.penguin, 'activefeatures'")) 'party_activefeatures_bootstrap_missing'
 Assert ($partyHandlers.Contains("await sendCurrentPartyCookie(ctx);`n  await sendCurrentPartyService(ctx);")) 'party_cookie_service_order_missing'
-Assert ($partyHandlers.Contains("action: 'partycookie-partyservice'")) 'party_bootstrap_trace_missing'
+Assert ($partyHandlers.Contains("action: 'modern-party-bootstrap'")) 'party_eager_bootstrap_trace_missing'
+Assert ($partyHandlers.Contains("action: 'partycookie-partyservice'")) 'party_cookie_fallback_trace_missing'
+Assert ($joinHandlers.Contains('await sendModernPartyBootstrap(ctx);')) 'join_eager_party_bootstrap_missing'
+Assert ($protocol.Contains("action: 's%fair#fair'")) 'fair_cookie_bootstrap_alias_missing'
+Assert ($protocol.Contains("action: 's%fair#partycookie'")) 'fair_partycookie_alias_missing'
+Assert ($protocol.Contains("action: 's%fair#qtaskcomplete'")) 'fair_task_alias_missing'
 
 $matches = [regex]::Matches($updates, "P\s*\+\s*'([^']+\.swf)'", [Text.RegularExpressions.RegexOptions]::IgnoreCase)
 $refs = @($matches | ForEach-Object { $_.Groups[1].Value } | Sort-Object -Unique)
@@ -141,4 +155,4 @@ Assert ($closeUpRefs.Count -eq 44) "close_up_ref_count=$($closeUpRefs.Count) exp
 
 $runtimeInfo = Get-Item -LiteralPath $runtimePath
 $runtimeSha = (Get-FileHash -LiteralPath $runtimePath -Algorithm SHA256).Hash
-Write-Host "WADDLE_PARTY2015_VERIFY=PASS source_refs=132 rooms=$($roomRefs.Count) music=$($musicRefs.Count) closeups=$($closeUpRefs.Count) manifest_total=$($manifest.total) runtime_bytes=$($runtimeInfo.Length) runtime_sha256=$runtimeSha activefeatures=20150501 partyservice=true global_paths=true exclusive_end=2015-11-05 root=$assetRoot"
+Write-Host "WADDLE_PARTY2015_VERIFY=PASS source_refs=132 rooms=$($roomRefs.Count) music=$($musicRefs.Count) closeups=$($closeUpRefs.Count) manifest_total=$($manifest.total) runtime_bytes=$($runtimeInfo.Length) runtime_sha256=$runtimeSha activefeatures=20150501 partyservice=true client_interface=true eager_bootstrap=true fair_aliases=true global_paths=true exclusive_end=2015-11-05 root=$assetRoot"
