@@ -39,11 +39,6 @@ $newRangeMarker = 'const lastSelectableYear = Math.max(...selectableYears, paylo
 $needsMaterialization = (-not $timeline.Contains($newSyncMarker)) -or (-not $timeline.Contains($newRangeMarker)) -or (-not $html.Contains('<option>2017</option>'))
 $isGitHubHosted = ($env:GITHUB_ACTIONS -eq 'true') -and (($env:RUNNER_ENVIRONMENT -eq 'github-hosted') -or ($env:RUNNER_NAME -like 'GitHub Actions*'))
 
-# A generator revision can land before its materialized source. The hosted source gate
-# must not manufacture a partial working tree that it cannot commit. The self-hosted
-# publisher is the authority that materializes and commits the generated timeline in
-# one follow-up SHA. Once materialized, this branch is never taken again and the gate
-# returns to strict zero-diff/idempotence behavior.
 if ($needsMaterialization -and $isGitHubHosted) {
   if (-not $timeline.Contains('function syncYearOptions(days: DateInfo[])')) { throw 'WADDLE_TIMELINE_MODERN=FAIL bootstrap_sync_function_missing' }
   if (-not $timeline.Contains('const endDate = getDateFromDateInfo(days[days.length - 1]);')) { throw 'WADDLE_TIMELINE_MODERN=FAIL bootstrap_calendar_end_missing' }
@@ -125,10 +120,7 @@ if (-not $timeline.Contains($newEnd)) {
   $timeline = $timeline.Replace($currentEnd,$newEnd)
 }
 
-$timeline = Replace-Required $timeline `
-  '            if (year !== undefined && month !== undefined)' `
-  '            if (year !== undefined && monthNumber !== undefined)' `
-  'scroll-select-guard'
+$timeline = Replace-Required $timeline '            if (year !== undefined && month !== undefined)' '            if (year !== undefined && monthNumber !== undefined)' 'scroll-select-guard'
 
 $oldFooter = @'
   const as3Footer = document.getElementById('as3-footer')!;
@@ -148,10 +140,7 @@ if ($timeline.Contains($oldFooter)) {
   throw 'WADDLE_TIMELINE_MODERN=FAIL legacy_as3_footer_shape_changed'
 }
 
-$timeline = Replace-Required $timeline `
-  "    const selected = document.querySelectorAll('.selected-day')[0];" `
-  "    const selected = document.querySelectorAll('.selected-list-day')[0];" `
-  'list-selected-scroll'
+$timeline = Replace-Required $timeline "    const selected = document.querySelectorAll('.selected-day')[0];" "    const selected = document.querySelectorAll('.selected-list-day')[0];" 'list-selected-scroll'
 
 $eventAnchor = @'
   currentVersion = settings.version;
@@ -194,17 +183,12 @@ Write-Utf8 $htmlPath $html
 $updates = Read-Normalized $updatesPath
 $party2015 = Read-Normalized $party2015Path
 $updates2016 = Read-Normalized $updates2016Path
-foreach ($needle in @(
-  'import { UPDATES_2015 } from "./2015";',
-  'import { UPDATES_2016 } from "./2016";',
-  '...UPDATES_2015',
-  '...UPDATES_2016'
-)) {
+foreach ($needle in @('import { UPDATES_2015 } from "./2015";','import { UPDATES_2016 } from "./2016";','...UPDATES_2015','...UPDATES_2016')) {
   if (-not $updates.Contains($needle)) { throw "WADDLE_TIMELINE_MODERN=FAIL updates_missing=$needle" }
 }
-if (-not $party2015.Contains("date: '2015-10-21'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL halloween_2015_date_missing' }
-if (-not $party2015.Contains("partyName: 'Halloween Party 2015'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL halloween_2015_party_missing' }
-if (-not $party2015.Contains("date: '2015-11-05'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL halloween_2015_exclusive_end_missing' }
+if ($party2015 -notmatch "date\s*:\s*'2015-10-21'") { throw 'WADDLE_TIMELINE_MODERN=FAIL halloween_2015_date_missing' }
+if ($party2015 -notmatch "partyName\s*:\s*'Halloween Party 2015'") { throw 'WADDLE_TIMELINE_MODERN=FAIL halloween_2015_party_missing' }
+if ($party2015 -notmatch "date\s*:\s*'2015-11-05'") { throw 'WADDLE_TIMELINE_MODERN=FAIL halloween_2015_exclusive_end_missing' }
 if (-not $updates2016.Contains("date: '2016-01-01'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL year_2016_update_missing' }
 if (-not $updates2016.Contains("indexHtml: 'modern-as3'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL modern_as3_entry_missing' }
 
@@ -213,6 +197,5 @@ $updates2011 = Read-Normalized (Join-Path $RepoRoot 'src/server/updates/2011.ts'
 if (-not $updates2010.Contains("dateReference: 'as3'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL as3_cutover_missing' }
 if (-not $updates2011.Contains("dateReference: 'vanilla-engine'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL vanilla_engine_cutover_missing' }
 
-# Temporary update ends are exclusive: 2015-11-05 keeps 2015-11-04 playable.
 & $verifyPath -RepoRoot $RepoRoot -RequiredThroughYear 2017 -RequiredDates @('2015-10-21','2015-11-05')
 Write-Host 'WADDLE_TIMELINE_MODERN=PASS years=configured_plus_payload picker_through=2017 halloween=2015-10-21 exclusive_end=2015-11-05 client_transitions=selectable as3=true vanilla_engine=true legacy_footer=false'
