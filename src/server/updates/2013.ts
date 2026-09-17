@@ -4,7 +4,14 @@ import { CategoryID } from "../game-data/stamps";
 export const UPDATES_2013: Update[] = [
   {
     date: '2013-01-04',
-    end: ['party']
+    end: ['party'],
+    // Puffle Party 2012 wrote shell/interface as persistent top-level fileChanges.
+    // Restore the normal late-AS3 client baseline once the 2012 party lifecycle
+    // has ended so every later timeline date starts from the canonical runtime.
+    fileChanges: {
+      'play/v2/client/shell.swf': 'svanilla:media/play/v2/client/shell.swf',
+      'play/v2/content/global/content/interface.swf': 'svanilla:media/play/v2/content/global/content/interface.swf'
+    }
   },
   {
     date: '2013-05-22',
@@ -267,7 +274,7 @@ export const UPDATES_2013: Update[] = [
             "is_member": 1,
             "rank": 3,
             "description": "Find an item in a puffle treasure dig",
-            "rank_token": "hard"
+            "rank_token": "medium"
           }
         ]
       }
