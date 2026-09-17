@@ -129,18 +129,30 @@ $interactionCore = @(
   @{ role='robot-avatar'; path='avatar\PenguinRobot.swf' }
 )
 
+$robotQuestRooms = @(
+  @{ role='robot-room-shack'; path='rooms\Hallo15_shack.swf' },
+  @{ role='robot-room-dock'; path='rooms\Hallo15_dock.swf' },
+  @{ role='robot-room-forest'; path='rooms\Hallo15_forest.swf' },
+  @{ role='robot-room-village'; path='rooms\Hallo15_village.swf' },
+  @{ role='robot-room-cove'; path='rooms\Hallo15_cove.swf' },
+  @{ role='robot-room-beach'; path='rooms\Hallo15_beach.swf' },
+  @{ role='robot-room-forts'; path='rooms\Hallo15_forts.swf' },
+  @{ role='robot-room-plaza'; path='rooms\Hallo15_plaza.swf' }
+)
+
 $compatibilityTargets = @(
   @{ role='compat-map-2310'; path='content\map.swf' }
 )
 
-$targets = @($interactionCore)
+$targets = @($interactionCore) + @($robotQuestRooms)
 foreach ($dialogue in @(Get-ChildItem -LiteralPath (Join-Path $partyRoot 'close_ups') -Filter 'Hallo15_dialogue_*.swf' -File | Sort-Object Name)) {
   $targets += @{ role=('dialogue-' + ([IO.Path]::GetFileNameWithoutExtension($dialogue.Name) -replace '^Hallo15_dialogue_','').ToLowerInvariant()); path=('close_ups\' + $dialogue.Name) }
 }
 foreach ($i in 0..8) { $targets += @{ role="tiles-$i"; path="close_ups\Close_upsTiles_minigame$i-HalloweenParty2015.swf" } }
+
 $dialogueCount = @($targets | Where-Object { $_.role -like 'dialogue-*' }).Count
 if ($dialogueCount -ne 34) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL dialogue_targets=$dialogueCount expected=34" }
-if ($targets.Count -ne 49) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL target_count=$($targets.Count) expected=49" }
+if ($targets.Count -ne 57) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL target_count=$($targets.Count) expected=57" }
 
 $work = Join-Path $repo '.work\halloween2015-protocol'
 if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force }
@@ -154,8 +166,10 @@ $reports = @()
 $compatibilityReports = @()
 $scripted = 0
 $coreScripted = 0
+$robotRoomScripted = 0
 $compatibilityScripted = 0
 $interactionText = ''
+$robotRoomText = ''
 $compatibilityText = ''
 
 foreach ($target in $targets) {
@@ -168,6 +182,15 @@ foreach ($target in $targets) {
   if (@($interactionCore | Where-Object { $_.role -eq $target.role }).Count -gt 0) {
     if ($evidence.files -gt 0) { $coreScripted++ }
     $interactionText += "`n" + $text
+  }
+  if (@($robotQuestRooms | Where-Object { $_.role -eq $target.role }).Count -gt 0) {
+    if ($evidence.files -gt 0) { $robotRoomScripted++ }
+    $robotRoomText += "`n" + $text
+    $candidateLines = @($text -split "`r?`n" | Where-Object { $_ -match '(?i)(MouseEvent|CLICK|showContent|dialogue|quest|robot|bot|tiles_minigame|item|inventory|qtaskcomplete|qtupdate|party)' } | ForEach-Object { ($_ -replace '\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 80)
+    foreach ($line in $candidateLines) {
+      $safeLine = if ($line.Length -gt 420) { $line.Substring(0,420) } else { $line }
+      Write-Host "WADDLE_PARTY2015_ROBOT_ROOM_EVIDENCE role=$($target.role) line=$safeLine"
+    }
   }
   Add-Evidence -Text $text -Pairs $pairs -Packets $packets -Localizations $localizations -Loaders $loaders
   $reports += [pscustomobject]@{ role=[string]$target.role; file=[string]$target.path; bytes=[int64](Get-Item -LiteralPath $swf).Length; scriptFiles=[int]$evidence.files; ffdecExit=[string]$evidence.exit; ffdecAttempts=[int]$evidence.attempts }
@@ -191,9 +214,11 @@ foreach ($target in $compatibilityTargets) {
 }
 
 if ($coreScripted -lt 4) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL interaction_core_scripted=$coreScripted expected_at_least=4" }
+if ($robotRoomScripted -ne 8) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL robot_room_scripted=$robotRoomScripted expected=8" }
 if ($compatibilityScripted -ne 1) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL compatibility_map_scripted=$compatibilityScripted expected=1" }
-if ($scripted -lt 40) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL scripted_targets=$scripted expected_at_least=40" }
+if ($scripted -lt 48) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL scripted_targets=$scripted expected_at_least=48" }
 if ($interactionText -notmatch '(?i)(party|quest|halloween|robot|PARTY_ICON|showContent)') { throw 'WADDLE_PARTY2015_PROTOCOL=FAIL historical_interaction_core_has_no_party_evidence' }
+if ($robotRoomText -notmatch '(?i)(robot|bot|dialogue|quest|showContent|MouseEvent|CLICK|party)') { throw 'WADDLE_PARTY2015_PROTOCOL=FAIL robot_rooms_have_no_interaction_evidence' }
 if ($compatibilityText -notmatch '(?i)(map|room|joinRoom|showContent|party)') { throw 'WADDLE_PARTY2015_PROTOCOL=FAIL compatibility_map_has_no_map_evidence' }
 if ($localizations.Count -ne 38) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL localization_tokens=$($localizations.Count) expected=38" }
 
@@ -229,8 +254,9 @@ foreach ($alias in @(
 }
 
 $summary = [ordered]@{
-  schema='waddle-modern-party-protocol/v12'; party='Halloween Party 2015'; evidence='exact-cparchives-2015-with-selector-aware-runtime-and-rejected-2310-map';
+  schema='waddle-modern-party-protocol/v13'; party='Halloween Party 2015'; evidence='exact-cparchives-2015-with-selector-aware-runtime-robot-room-interactions-and-rejected-2310-map';
   targetCount=$targets.Count; interactionCoreCount=$interactionCore.Count; interactionCoreScripted=$coreScripted;
+  robotQuestRoomCount=$robotQuestRooms.Count; robotQuestRoomScripted=$robotRoomScripted;
   compatibilityTargetCount=$compatibilityTargets.Count; compatibilityScripted=$compatibilityScripted; compatibilityStatus='rejected';
   mayPartyNamespaceAliases=3; compatibilityLoaders=@($compatibilityLoaders | Sort-Object); dialogueCount=$dialogueCount;
   scriptedTargetCount=$scripted; pairs=@($pairs | Sort-Object); packetTokens=@($packets | Sort-Object);
@@ -240,4 +266,4 @@ $summaryPath = Join-Path $work 'summary.json'
 $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryPath -Encoding UTF8
 foreach ($pair in @($pairs | Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_PAIR=$pair" }
 foreach ($packet in @($packets | Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_PACKET=$packet" }
-Write-Host "WADDLE_PARTY2015_PROTOCOL=PASS runtime=exact-cparchives-2015 selector_runtime=20151101 mayparty_aliases=3 compatibility_map=rejected targets=$($targets.Count) core=$($interactionCore.Count) core_scripted=$coreScripted compatibility_scripted=$compatibilityScripted dialogues=34 tiles=9 scripted_targets=$scripted localization_tokens=$($localizations.Count) dynamic_loaders=$($loaders.Count) server_routes=5 ffdec_retry=true summary=$summaryPath"
+Write-Host "WADDLE_PARTY2015_PROTOCOL=PASS runtime=exact-cparchives-2015 selector_runtime=20151101 mayparty_aliases=3 compatibility_map=rejected targets=$($targets.Count) core=$($interactionCore.Count) core_scripted=$coreScripted robot_rooms=$($robotQuestRooms.Count) robot_room_scripted=$robotRoomScripted compatibility_scripted=$compatibilityScripted dialogues=34 tiles=9 scripted_targets=$scripted localization_tokens=$($localizations.Count) dynamic_loaders=$($loaders.Count) server_routes=5 ffdec_retry=true summary=$summaryPath"
