@@ -202,6 +202,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
           fetch-depth: 0
+      - name: Probe coherent Halloween robot runtime contracts
+        shell: powershell
+        run: ./.github/scripts/waddle-halloween-2015-runtime-compat.ps1 -RepoRoot $env:GITHUB_WORKSPACE
       - name: Derive Halloween 2015 protocol evidence from versioned client SWFs
         shell: powershell
         run: ./.github/scripts/waddle-halloween-2015-protocol.ps1 -RepoRoot $env:GITHUB_WORKSPACE -CanonicalRoot $env:GITHUB_WORKSPACE
