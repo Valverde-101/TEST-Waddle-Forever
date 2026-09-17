@@ -16,10 +16,14 @@ function Match([string]$Text,[string]$Pattern,[string]$Label){Require ($Text -ma
 Require ($generators.Contains('const getRuntimePathsJson: FileGenerator')) 'runtime_paths_generator'
 Require ($generators.Contains('...Object.fromEntries(d.getGlobalPaths())')) 'runtime_global_paths_merge'
 Require ($generators.Contains("'play/en/web_service/game_configs/paths.json': getRuntimePathsJson")) 'runtime_paths_registration'
+Require ($generators.Contains("const LATE_AS3_FEATURES_ROUTE = 'play/v2/content/global/content/features.swf';")) 'late_as3_features_route_guard'
+Require ($generators.Contains("const LATE_AS3_FEATURES_CRUMB = 'w.app.generic.features';")) 'late_as3_features_crumb_guard'
+Require ($generators.Contains("[LATE_AS3_FEATURES_CRUMB]: 'content/features.swf'")) 'late_as3_features_crumb_mapping'
 
 Match $updates "activeFeatures\s*:\s*'20151101'" 'templated_selector'
 Match $updates "'play/v2/content/global/content/party\.swf'\s*:\s*ref\('content/party-runtime-2015\.swf'\)" 'templated_party_runtime'
 Match $updates "'play/v2/client/shell\.swf'\s*:\s*'svanilla:media/play/v2/client/shell\.swf'" 'modern_shell_reset'
+Match $updates "'play/v2/content/global/content/features\.swf'\s*:\s*ref\('content/ContentFeatures-HalloweenParty2015\.swf'\)" 'features_runtime_route'
 Match $updates "'close_ups/quest_interface\.swf'\s*:\s*\[ref\('close_ups/Close_upsQuest_interface-HalloweenParty2015\.swf'\).*?'w\.app\.generic\.partyinterface'" 'generic_quest_interface_crumb'
 Match $updates "'content/party_icon\.swf'\s*:\s*\[[^\]]*'party_icon'[^\]]*'scavenger_hunt_icon'" 'party_icon_crumbs'
 Match $preservedPaths '"w\.p2015\.may\.login"\s*:\s*"close_ups/halloLogin\.swf"' 'preserved_hallo_login_crumb'
@@ -44,4 +48,4 @@ Match $generators "room_key\s*:\s*'partysolo1'" 'solo_room_key'
 Match $generators "path\s*:\s*'partysolo1\.swf'" 'solo_room_path'
 
 foreach($stale in @("ref('content/party-base-2015.swf')","ref('content/party.swf')","ref('content/map.swf')",'ClientInterface-HalloweenClassic2015.swf','Close_upsQuest_interface-HalloweenClassic2015.swf')){Require (-not $updates.Contains($stale)) ('no_mixed_'+($stale-replace'[^A-Za-z0-9]+','_'))}
-Write-Host "WADDLE_HALLOWEEN2015_PATHS=PASS runtime_paths=generated generic_runtime=templated-late-2015 activefeatures=20151101 quest_interface=exact-cparchives-2015 login=exact-cparchives-2015 solo_room=891 mixed_runtime=false"
+Write-Host "WADDLE_HALLOWEEN2015_PATHS=PASS runtime_paths=generated generic_runtime=templated-late-2015 activefeatures=20151101 features_crumb=w.app.generic.features quest_interface=exact-cparchives-2015 login=exact-cparchives-2015 solo_room=891 mixed_runtime=false"
