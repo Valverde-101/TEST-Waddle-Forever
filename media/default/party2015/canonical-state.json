@@ -3,7 +3,7 @@
     "party":  "Halloween Party 2015",
     "sourceRepository":  "CPImagined/CPImagined-Archive",
     "sourceCommit":  "130504b8cbbba1666e31442f6ca27f6687157e63",
-    "verified":  16,
+    "verified":  17,
     "assetTargets":  [
                          "client/ClientInterface-HalloweenClassic2015.swf",
                          "client/QuestCommunicator.swf",
@@ -13,6 +13,7 @@
                          "close_ups/skipDialogue.swf",
                          "content/map.swf",
                          "content/party.swf",
+                         "content/party-base-2015.swf",
                          "game_configs/game_configs.bin",
                          "game_configs/game_strings.json",
                          "game_configs/general.json",
