@@ -41,7 +41,21 @@ const HALLOWEEN_2015_DIALOGUE_STRINGS: Record<string, string> = {
   "w.app.p2015.halloween.finale.HerbertReply1": "WHATEVER!\n\nJust get me out of here so I can destroy you with my actual NEW inventions.",
   "w.app.p2015.halloween.finale.GaryScreen2": "Quick, we can't let Herbot escape! Credit due to Herbert, it seems as if he left the same laser intact that put Herbot out of commission the last time. Blast him with the laser and then short circuit his wires!",
   "w.app.p2015.halloween.finale.HerbertRunaway1": "MWAHAHAHAHA! You can't stop Klutzy and I!\n\nWe'll take over this whole island! Quick Klutzy, to the Skyberg!",
-  "w.app.p2015.halloween.finale.GaryScreen3": "Excellent work!\nHerbert may have gotten away, but we've hopefully set him back just enough to not spoil the rest of our Halloween fun!"
+  "w.app.p2015.halloween.finale.GaryScreen3": "Excellent work!\nHerbert may have gotten away, but we've hopefully set him back just enough to not spoil the rest of our Halloween fun!",
+  "w.app.generic.questui.header": "Robot Rampage",
+  "w.app.generic.questui.subheader": "Stop the malfunctioning mascot robots around the island.",
+  "w.app.generic.questui.subheader1": "Stop the malfunctioning mascot robots around the island.",
+  "w.app.questui.subheader2": "Members can transform into a robot, and everyone can adopt a Ghost Puffle.",
+  "w.app.generic.questui.description.task0": "Gary Bot is threatening the Mine Shack.",
+  "w.app.generic.questui.description.task1": "Find decaf coffee for the Gary Bot.",
+  "w.app.generic.questui.description.task2": "Show Arctic Bot a failed spelling test.",
+  "w.app.generic.questui.description.task3": "Scare Bothopper with a pink flamingo.",
+  "w.app.generic.questui.description.task4": "Show Cadence Bot a bug.",
+  "w.app.generic.questui.description.task5": "Find an ugly sweater for Dot Bot.",
+  "w.app.generic.questui.description.task6": "Use the beard trimmer on Sensei Bot.",
+  "w.app.generic.questui.description.task7": "Show PH Bot a toy UFO.",
+  "w.app.generic.questui.description.task8": "Scare Rookie Bot with clown face paint.",
+  "w.app.generic.questui.description.task9": "Find the secret lair and stop Herbot."
 };
 
 const HALLOWEEN_2015_ROOMS = {
