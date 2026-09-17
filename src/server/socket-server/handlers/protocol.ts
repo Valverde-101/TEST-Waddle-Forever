@@ -31,15 +31,13 @@ export type XtReadOnlyFallback = {
  * bi#ack: Airtower acknowledgement for selected server commands. The payload is
  * variable-length telemetry metadata (time=<epoch>, acknowledged command, ...).
  *
- * nx#bimp: late-AS3 map impression payload. Live Trace consistently shows one
- * opaque string immediately after map.swf opens, followed directly by j#jr; the
- * client does not wait for or consume a server response. Treating it as telemetry
- * removes a false protocol error without fabricating map/gameplay state.
+ * nx#bimp is intentionally not listed here. Modern party clients can use it for
+ * bitmap-interaction payloads that advance quest/drop state, so it must be
+ * dispatched through an explicit handler instead of being silently acknowledged.
  */
 const noResponseClientPackets = new Set<string>([
   's%j#crl',
-  's%bi#ack',
-  's%nx#bimp'
+  's%bi#ack'
 ]);
 
 /**
