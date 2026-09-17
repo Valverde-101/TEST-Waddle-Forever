@@ -21,6 +21,7 @@ function Test-Swf([string]$Path){
 
 $repo=(Resolve-Path -LiteralPath $RepoRoot).Path
 $partyPath=Join-Path $repo 'src/server/updates/2015.ts'
+$gameDataPath=Join-Path $repo 'src/server/timelines/game-data.ts'
 $filesPath=Join-Path $repo 'src/server/game-data/files.ts'
 $roomsPath=Join-Path $repo 'src/server/game-data/rooms.ts'
 $updatesPath=Join-Path $repo 'src/server/updates/updates.ts'
@@ -48,6 +49,9 @@ foreach($roomKey in @('dojosnow','hotellobby','hotelspa','hotelroof','cloudfores
 
 # Validate the timeline semantically. Late-AS3 source files are intentionally
 # compact, so whitespace or formatting must never decide whether integration is valid.
+$gameData=Read-Normalized $gameDataPath
+Require-NotContains $gameData "this.addRoute('play/v2/client/intro_to_cp.swf', 'svanilla:media/play/v2/client/world.swf');" 'intro_module_must_not_boot_world'
+
 $party=Read-Normalized $partyPath
 $partyContracts=@{
   date="date\s*:\s*'2015-10-21'";
