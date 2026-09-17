@@ -51,6 +51,8 @@ const getRuntimePathsJson: FileGenerator = (d) => {
   return JSON.stringify(paths);
 };
 
+const HALLOWEEN_2015_SOLO_ROOM_ROUTE = 'play/v2/content/global/rooms/partysolo1.swf';
+
 /**
  * rooms.json contains a small amount of late-game static metadata that was
  * originally captured from one particular 2017 snapshot. That metadata must not
@@ -61,11 +63,27 @@ const getRuntimePathsJson: FileGenerator = (d) => {
  * room must not advertise the pin, otherwise older clients request
  * content/room_pin/7308.swf while replaying unrelated years such as 2015.
  *
- * Keep the canonical room table unchanged and normalize only the generated view;
- * this makes the fix date-driven and avoids hiding the symptom with a future SWF.
+ * Halloween 2015 also introduces a private event room, partysolo1, with canonical
+ * room id 891. Its SWF was already preserved and routed, but the base Waddle room
+ * snapshot predates the room metadata. Without the 891 entry the Mine Shack
+ * hotspot can emit a join for a room the late-AS3 client cannot resolve/load.
+ * Mount the room only while the exact timeline route is active so it cannot leak
+ * into other dates.
  */
 const getRuntimeRoomsJson: FileGenerator = (d, s) => {
   const rooms = JSON.parse(getRoomsJson(d, s)) as Record<string, {
+    room_id?: number;
+    room_key?: string;
+    name?: string;
+    display_name?: string;
+    music_id?: number;
+    is_member?: number;
+    path?: string;
+    max_users?: number;
+    jump_enabled?: boolean;
+    jump_disabled?: boolean;
+    required_item?: number | null;
+    short_name?: string;
     pin_id?: number;
     pin_x?: number;
     pin_y?: number;
@@ -79,6 +97,27 @@ const getRuntimeRoomsJson: FileGenerator = (d, s) => {
     delete coffee.pin_id;
     delete coffee.pin_x;
     delete coffee.pin_y;
+  }
+
+  if (d.lookupFile(HALLOWEEN_2015_SOLO_ROOM_ROUTE) !== undefined) {
+    rooms['891'] = {
+      room_id: 891,
+      room_key: 'partysolo1',
+      name: 'partysolo1',
+      display_name: 'partysolo1',
+      // The preserved Halloween SWF controls its own event audio. Do not import
+      // the later recreation's 2055 soundtrack into the exact 2015 stack.
+      music_id: 0,
+      is_member: 0,
+      path: 'partysolo1.swf',
+      max_users: 800,
+      jump_enabled: false,
+      jump_disabled: true,
+      required_item: null,
+      short_name: 'partysolo1'
+    };
+  } else {
+    delete rooms['891'];
   }
 
   return JSON.stringify(rooms);
