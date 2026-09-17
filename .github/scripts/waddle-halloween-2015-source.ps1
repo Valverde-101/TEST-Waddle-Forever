@@ -110,10 +110,6 @@ foreach ($contract in @(
   Require-Contains $party $contract ("party_" + ($contract -replace '[^A-Za-z0-9]+','_').Trim('_'))
 }
 
-# Root rule: October 2015 uses the exact CPArchives interaction family on top
-# of a byte-pinned late-2015 generic party runtime that understands selector
-# 20150501/MayParty. The later 2310 replacement runtime/map/interface stack and
-# Waddle's selector-incompatible svanilla party.swf must never become live here.
 foreach ($stale in @(
   "'play/en/web_service/game_configs.bin'",
   "'play/v2/content/global/content/party.swf': ref('content/party.swf')",
@@ -129,8 +125,6 @@ foreach ($stale in @(
 }
 Require-NotContains $party "'play/v2/content/global/content/logo.swf'" 'legacy_wrong_logo_route'
 
-# The dynamic route tables are generated from the party's committed changes;
-# they are the authoritative way the preserved interface resolves crumbs.
 $fileGenerators = Read-Normalized $fileGeneratorsPath
 Require-Contains $fileGenerators 'const getRuntimePathsJson: FileGenerator' 'runtime_paths_generator'
 Require-Contains $fileGenerators '...Object.fromEntries(d.getGlobalPaths())' 'global_paths_merge'
@@ -150,10 +144,14 @@ $dependencies = Read-Normalized $dependenciesPath
 Require-Regex $dependencies '(?s)const DEPENDENCIES_VANILLA = \{.*?"boot"\s*:\s*\[.*?"id"\s*:\s*"party"' 'modern_party_boot_dependency'
 
 $xtHandler = Read-Normalized $xtHandlerPath
-foreach ($alias in @('halloween#partycookie','halloween#msgviewed','halloween#qcmsgviewed','halloween#qtaskcomplete','halloween#qtupdate')) {
+foreach ($alias in @(
+  'halloween#partycookie','halloween#msgviewed','halloween#qcmsgviewed','halloween#qtaskcomplete','halloween#qtupdate',
+  'fair#fair','fair#partycookie','fair#msgviewed'
+)) {
   Require-Contains $xtHandler $alias ("native_alias_" + ($alias -replace '[^A-Za-z0-9]+','_'))
 }
 Require-Contains $xtHandler 'const canonicalizeXtAction' 'native_namespace_canonicalizer'
+Require-Contains $xtHandler "['s%fair#fair', 's%party#partycookie']" 'mayparty_cookie_request_alias'
 
 $protocol = Read-Normalized $protocolPath
 Require-Contains $protocol "action: 's%party#partycookie'" 'party_cookie_selector_compatibility'
@@ -206,4 +204,4 @@ $updates = Read-Normalized $updatesPath
 Require-Contains $updates 'import { UPDATES_2015 } from "./2015";' 'updates_2015_import'
 Require-Contains $updates '...UPDATES_2015' 'updates_2015_registration'
 
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=selector-aware-2015 temporal_room_metadata=true historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical party_map=base-runtime map_note=false game_configs=base-runtime client_interface=historical-2015 quest_interface=historical-2015 hallo_login=historical-2015 dialogues=historical-2015 music=historical-2015 native_namespace=true activefeatures=20150501 partyservice=true mutation=false"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=selector-aware-2015 temporal_room_metadata=true historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical party_map=base-runtime map_note=false game_configs=base-runtime client_interface=historical-2015 quest_interface=historical-2015 hallo_login=historical-2015 dialogues=historical-2015 music=historical-2015 native_namespace=true mayparty_namespace=true activefeatures=20150501 partyservice=true mutation=false"
