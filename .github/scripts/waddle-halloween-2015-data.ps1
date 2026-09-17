@@ -47,6 +47,10 @@ foreach ($needle in @(
 
 # Exact October 2015 interaction family. The preserved CPArchives interface and
 # quest interface are authoritative; the 2310 recreation is archival provenance.
+# The generic party boot module itself is Waddle's canonical late-AS3 runtime and
+# must explicitly replace the persistent 2012 Halloween override before the 2015
+# interaction stack is loaded.
+Require ($updates.Contains("'play/v2/content/global/content/party.swf': 'svanilla:media/play/v2/content/global/content/party.swf'")) 'party_runtime_canonical_late_as3'
 Require ($updates.Contains("'play/v2/client/interface.swf': ref('client/ClientInterface-HalloweenParty2015.swf')")) 'client_interface_historical_2015'
 Require ($updates.Contains("'play/v2/content/global/content/interface.swf': ref('client/ClientInterface-HalloweenParty2015.swf')")) 'content_interface_historical_2015'
 Require ($updates.Contains("'play/v2/content/global/content/features.swf': ref('content/ContentFeatures-HalloweenParty2015.swf')")) 'features_historical_2015'
@@ -58,11 +62,12 @@ Require ($updates.Contains("'close_ups/halloLogin.swf': [ref('close_ups/Hallo15_
 Require ($updates.Contains("'close_ups/halloLogin.swf': { en: ref('close_ups/Hallo15_dialogue_login.swf') }")) 'hallo_login_local_historical_2015'
 Require ($updates -match "'content/party_icon\.swf'\s*:\s*\[[^\]]*'party_icon'[^\]]*'scavenger_hunt_icon'[^\]]*\]") 'party_icon_crumbs'
 
-# Root regression guards: these requests caused the visually loaded but inert
-# mixed stack (including dynamic 2048 music and party_map_note requests).
+# Root regression guards: reject the actual 2310 replacement stack, not the
+# canonical generic party route. This distinction is what prevents a 2012 party
+# boot module from leaking into 2015 while keeping recreation assets provenance-only.
 foreach ($stale in @(
   "'play/en/web_service/game_configs.bin'",
-  "'play/v2/content/global/content/party.swf'",
+  "'play/v2/content/global/content/party.swf': ref('content/party.swf')",
   "'play/v2/content/global/content/map.swf'",
   "'content/map.swf':",
   'ClientInterface-HalloweenClassic2015.swf',
@@ -94,4 +99,4 @@ $canonicalTargets = @($canonicalAssets | ForEach-Object { [string]$_.target })
 Require (@($canonicalTargets | Sort-Object -Unique).Count -eq $canonicalTargets.Count) 'canonical_targets_unique'
 Require ($canonicalTargets -contains 'client/QuestCommunicator.swf') 'canonical_quest_communicator_source'
 
-Write-Host "WADDLE_HALLOWEEN2015_DATA=PASS mode=validation_only mutation=false party=halloween-2015 tasks=10 activefeatures=20150501 partyservice=true runtime=base-modern interface=exact-cparchives-2015 quest_interface=exact-cparchives-2015 hallo_login=exact-cparchives-2015 dialogues=exact-cparchives-2015 rooms=exact-cparchives-2015 music=exact-cparchives-2015 quest_communicator=true historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) mixed_2310=false"
+Write-Host "WADDLE_HALLOWEEN2015_DATA=PASS mode=validation_only mutation=false party=halloween-2015 tasks=10 activefeatures=20150501 partyservice=true runtime=canonical-svanilla-late-as3 interface=exact-cparchives-2015 quest_interface=exact-cparchives-2015 hallo_login=exact-cparchives-2015 dialogues=exact-cparchives-2015 rooms=exact-cparchives-2015 music=exact-cparchives-2015 quest_communicator=true historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) mixed_2310=false"
