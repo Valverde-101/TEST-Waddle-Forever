@@ -46,11 +46,10 @@ foreach ($needle in @(
 )) { Require ($updates.Contains($needle)) ("update_" + ($needle -replace '[^A-Za-z0-9]+','_').Trim('_')) }
 
 # Exact October 2015 interaction family. The preserved CPArchives interface and
-# quest interface are authoritative; the 2310 recreation is archival provenance.
-# The generic party boot module itself is Waddle's canonical late-AS3 runtime and
-# must explicitly replace the persistent 2012 Halloween override before the 2015
-# interaction stack is loaded.
-Require ($updates.Contains("'play/v2/content/global/content/party.swf': 'svanilla:media/play/v2/content/global/content/party.swf'")) 'party_runtime_canonical_late_as3'
+# quest interface are authoritative. The live generic party module must be the
+# byte-pinned late-2015 base runtime that recognizes selector 20150501/MayParty;
+# Waddle's svanilla party.swf does not contain that selector.
+Require ($updates.Contains("'play/v2/content/global/content/party.swf': ref('content/party-base-2015.swf')")) 'party_runtime_selector_aware_2015'
 Require ($updates.Contains("'play/v2/client/interface.swf': ref('client/ClientInterface-HalloweenParty2015.swf')")) 'client_interface_historical_2015'
 Require ($updates.Contains("'play/v2/content/global/content/interface.swf': ref('client/ClientInterface-HalloweenParty2015.swf')")) 'content_interface_historical_2015'
 Require ($updates.Contains("'play/v2/content/global/content/features.swf': ref('content/ContentFeatures-HalloweenParty2015.swf')")) 'features_historical_2015'
@@ -62,19 +61,17 @@ Require ($updates.Contains("'close_ups/halloLogin.swf': [ref('close_ups/Hallo15_
 Require ($updates.Contains("'close_ups/halloLogin.swf': { en: ref('close_ups/Hallo15_dialogue_login.swf') }")) 'hallo_login_local_historical_2015'
 Require ($updates -match "'content/party_icon\.swf'\s*:\s*\[[^\]]*'party_icon'[^\]]*'scavenger_hunt_icon'[^\]]*\]") 'party_icon_crumbs'
 
-# Root regression guards: reject the actual 2310 replacement stack, not the
-# canonical generic party route. This distinction is what prevents a 2012 party
-# boot module from leaking into 2015 while keeping recreation assets provenance-only.
 foreach ($stale in @(
   "'play/en/web_service/game_configs.bin'",
   "'play/v2/content/global/content/party.swf': ref('content/party.swf')",
+  "'play/v2/content/global/content/party.swf': 'svanilla:media/play/v2/content/global/content/party.swf'",
   "'play/v2/content/global/content/map.swf'",
   "'content/map.swf':",
   'ClientInterface-HalloweenClassic2015.swf',
   'Close_upsQuest_interface-HalloweenClassic2015.swf',
   "'close_ups/ghostAdopt.swf'",
   "'close_ups/skipDialogue.swf'"
-)) { Require (-not $updates.Contains($stale)) ("no_mixed_2310_" + ($stale -replace '[^A-Za-z0-9]+','_').Trim('_')) }
+)) { Require (-not $updates.Contains($stale)) ("no_mixed_runtime_" + ($stale -replace '[^A-Za-z0-9]+','_').Trim('_')) }
 
 Require ([int]$historical.requiredCount -eq 132) 'historical_required_count_132'
 $historicalAssets = @($historical.assets)
@@ -90,13 +87,12 @@ foreach ($target in @(
   'close_ups/Close_upsTiles_minigame8-HalloweenParty2015.swf'
 )) { Require ($historicalTargets -contains $target) ("historical_" + ($target -replace '[^A-Za-z0-9]+','_')) }
 
-# Canonical supplements remain byte-pinned provenance but are no longer treated
-# as the live Halloween 2015 family.
 Require ($canonical.schema -eq 'waddle-canonical-assets/v1') 'canonical_manifest_schema'
 $canonicalAssets = @($canonical.assets)
 Require ($canonicalAssets.Count -gt 0) 'canonical_manifest_nonempty'
 $canonicalTargets = @($canonicalAssets | ForEach-Object { [string]$_.target })
 Require (@($canonicalTargets | Sort-Object -Unique).Count -eq $canonicalTargets.Count) 'canonical_targets_unique'
 Require ($canonicalTargets -contains 'client/QuestCommunicator.swf') 'canonical_quest_communicator_source'
+Require ($canonicalTargets -contains 'content/party-base-2015.swf') 'canonical_selector_aware_party_runtime'
 
-Write-Host "WADDLE_HALLOWEEN2015_DATA=PASS mode=validation_only mutation=false party=halloween-2015 tasks=10 activefeatures=20150501 partyservice=true runtime=canonical-svanilla-late-as3 interface=exact-cparchives-2015 quest_interface=exact-cparchives-2015 hallo_login=exact-cparchives-2015 dialogues=exact-cparchives-2015 rooms=exact-cparchives-2015 music=exact-cparchives-2015 quest_communicator=true historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) mixed_2310=false"
+Write-Host "WADDLE_HALLOWEEN2015_DATA=PASS mode=validation_only mutation=false party=halloween-2015 tasks=10 activefeatures=20150501 partyservice=true runtime=selector-aware-2015 interface=exact-cparchives-2015 quest_interface=exact-cparchives-2015 hallo_login=exact-cparchives-2015 dialogues=exact-cparchives-2015 rooms=exact-cparchives-2015 music=exact-cparchives-2015 quest_communicator=true historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) mixed_runtime=false"
