@@ -80,7 +80,7 @@ const compatibilityRules: XtCompatibilityRule[] = [
 ];
 
 /**
- * Narrow vanilla read-only fallbacks proven against Solero/Houdini contracts.
+ * Narrow vanilla read-only fallbacks proven against preserved server contracts.
  *
  * p#getdigcooldown returns seconds remaining until another puffle treasure dig.
  * Waddle does not persist a treasure-dig cooldown, so zero is the truthful
@@ -88,6 +88,12 @@ const compatibilityRules: XtCompatibilityRule[] = [
  *
  * f#epfgm retrieves EPF communication messages. Waddle has no EPF COM-message
  * store, so the canonical empty response is unread=0 with no message payload.
+ *
+ * musictrack#broadcastingmusictracks asks SoundStudio for the live shared-track
+ * playlist. Solero/Houdini's vanilla contract returns (0, -1, "") when no shared
+ * playlist exists. Waddle has no persisted SoundStudio broadcast queue, so that
+ * exact empty state is truthful and prevents room entry from becoming an
+ * unhandled protocol error.
  *
  * Keep these exact and response-bearing. They must not be converted into the
  * no-response acknowledgement set because the vanilla client waits for them.
@@ -104,6 +110,12 @@ const readOnlyFallbacks: XtReadOnlyFallback[] = [
     responseAction: 'epfgm',
     responseArgs: [0],
     reason: 'vanilla EPF COM-message query; offline Waddle has no COM-message store'
+  },
+  {
+    action: 's%musictrack#broadcastingmusictracks',
+    responseAction: 'broadcastingmusictracks',
+    responseArgs: [0, -1, ''],
+    reason: 'vanilla SoundStudio broadcast query; offline Waddle has no shared live playlist, matching the canonical empty playlist response'
   }
 ];
 
