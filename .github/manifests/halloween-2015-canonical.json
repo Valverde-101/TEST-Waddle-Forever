@@ -3,7 +3,7 @@
   "party": "Halloween Party 2015",
   "sourceRepository": "CPImagined/CPImagined-Archive",
   "sourceCommit": "130504b8cbbba1666e31442f6ca27f6687157e63",
-  "description": "Preserved late-AS3 Halloween 2015 runtime/configuration supplements. Paths are pinned to an immutable source commit and verified using Git blob SHA-1 plus byte length before Waddle serves them. Historical CPArchives SWFs remain untouched; coherent Halloween Classic companion interface assets are hydrated to distinct target paths so canonical supplements never overwrite the 132 historical files.",
+  "description": "Preserved late-AS3 Halloween 2015 runtime/configuration supplements. Git-backed supplements are pinned to an immutable source commit and archive-backed runtime supplements are pinned by HTTPS URL, exact byte length and SHA-256. Historical CPArchives SWFs remain untouched; coherent supplements are hydrated to distinct target paths so no preserved historical file is overwritten.",
   "assets": [
     {
       "target": "content/party.swf",
@@ -17,6 +17,13 @@
       "sourcePath": "parties/2310 2 halloween classic edition/hadnler stuff/global content/party.swf",
       "bytes": 61387,
       "gitBlobSha": "ab12a27ebb1776bc30cc14d8ef748413f093ea80",
+      "kind": "swf"
+    },
+    {
+      "target": "content/party-runtime-2015.swf",
+      "sourceUrl": "https://toolbox.solero.me/cparchives/static/images/archives/a/ae/ClientParty-OperationCrustacean.swf",
+      "bytes": 39406,
+      "sha256": "d30fcd85c2f4a6b9ef6d1b81aac3a6d2f592af5f68ae13bb9d1564cb5b115cf7",
       "kind": "swf"
     },
     {
