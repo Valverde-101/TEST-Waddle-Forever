@@ -56,7 +56,7 @@ env:
 
 concurrency:
   group: waddle-halloween-2015-${{ github.event.pull_request.number || 'manual' }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   validate-pr-source:
@@ -154,8 +154,12 @@ jobs:
 
           $staged=@(git diff --cached --name-only)
           if($staged.Count -gt 0){
+            if('${{ github.event_name }}' -eq 'pull_request'){
+              $staged | ForEach-Object { Write-Host "WADDLE_PARTY2015_PUBLISH_PENDING=$_" }
+              throw 'WADDLE_PARTY2015_PUBLISH=FAIL generated_changes_must_be_committed_by_author_not_bot'
+            }
             git commit -m 'fix(party): publish complete preserved Halloween 2015 stack'
-            $branch='${{ github.event.pull_request.head.ref || github.ref_name }}'
+            $branch='${{ github.ref_name }}'
             git push origin "HEAD:$branch"
           }
           Write-Host "WADDLE_PARTY2015_PUBLISH=PASS historical_swfs=$historicalCount canonical_assets=$($canonicalAssets.Count) canonical_swfs=$($canonicalSwfs.Count) total_swfs=$expectedSwfs"
