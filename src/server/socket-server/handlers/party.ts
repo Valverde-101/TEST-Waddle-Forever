@@ -86,7 +86,7 @@ const getCurrentPartyCookie = (ctx: Parameters<PenguinHandler<[]>>[0]) => {
   return config === null ? EMPTY_PARTY_COOKIE : ctx.penguin.partyProgress.getCookie(config);
 };
 
-const sendCurrentPartyCookie: PenguinHandler<[]> = async (ctx) => {
+export const sendCurrentPartyCookie: PenguinHandler<[]> = async (ctx) => {
   await ctx.msg.send(ctx.penguin, 'partycookie', JSON.stringify(getCurrentPartyCookie(ctx)));
 };
 
@@ -184,6 +184,72 @@ export const handlePartyTaskComplete: PenguinHandler<[number]> = async (ctx, tas
   const { penguin, prst, data } = ctx;
   const config = data.getPartyProgress();
   if (config !== null && penguin.partyProgress.setTaskComplete(config, taskIndex)) {
+    prst(penguin);
+    await sendCurrentPartyCookie(ctx);
+  }
+};
+
+const MODERN_BITMAP_PARTY_HINTS = [
+  'halloween',
+  'robot',
+  'rampage',
+  'quest',
+  'pickup',
+  'drop',
+  'item',
+  'reward',
+  'unlock',
+  'task',
+  'bot'
+];
+
+const pickNextIncompleteTask = (cookie: { questTaskStatus?: unknown[] }) => {
+  const status = Array.isArray(cookie.questTaskStatus) ? cookie.questTaskStatus : [];
+  const incompleteIndex = status.findIndex(value => value !== 1 && value !== true);
+  return incompleteIndex >= 0 ? incompleteIndex : status.length;
+};
+
+/**
+ * Late AS3 parties can report room-object/item pickups through nx#bimp instead
+ * of the generic party#qtaskcomplete packet. Treat only party-looking bitmap
+ * interactions as quest progress; passive map impressions remain diagnostics.
+ */
+export const handleModernBitmapInteraction: PenguinHandler<[string]> = async (ctx, payload) => {
+  const { penguin, prst, data } = ctx;
+  const config = data.getPartyProgress();
+  const normalizedPayload = payload.toLowerCase();
+  const looksLikePartyInteraction = MODERN_BITMAP_PARTY_HINTS.some(hint => normalizedPayload.includes(hint));
+
+  if (config === null || !looksLikePartyInteraction) {
+    publishWaddleLiveTrace({
+      category: 'XT',
+      phase: 'handled',
+      source: 'party-bitmap-interaction',
+      action: 's%nx#bimp',
+      direction: 'in',
+      status: config === null ? 'no-active-party' : 'observed-non-party-bitmap',
+      payloadPreview: payload.slice(0, 256)
+    });
+    return;
+  }
+
+  const beforeCookie = getCurrentPartyCookie(ctx) as { questTaskStatus?: unknown[] };
+  const taskIndex = pickNextIncompleteTask(beforeCookie);
+  const completed = penguin.partyProgress.setTaskComplete(config, taskIndex);
+
+  publishWaddleLiveTrace({
+    category: 'XT',
+    phase: 'handled',
+    source: 'party-bitmap-interaction',
+    action: 's%nx#bimp',
+    direction: 'in',
+    status: completed ? 'quest-task-completed' : 'quest-task-already-complete',
+    partyId: config.id,
+    taskIndex,
+    payloadPreview: payload.slice(0, 256)
+  });
+
+  if (completed) {
     prst(penguin);
     await sendCurrentPartyCookie(ctx);
   }
