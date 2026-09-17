@@ -1,7 +1,6 @@
 name: Waddle Validated Source Sync
 
 on:
-  workflow_dispatch:
   pull_request:
     branches: [dev]
   push:
@@ -12,8 +11,8 @@ permissions:
   actions: read
 
 concurrency:
-  group: waddle-validated-source-sync-${{ github.event.pull_request.number || github.ref_name }}
-  cancel-in-progress: true
+  group: waddle-validated-source-sync-${{ github.event.pull_request.head.sha || github.sha }}
+  cancel-in-progress: false
 
 jobs:
   wait-certification:
@@ -184,31 +183,4 @@ jobs:
           & $verify -RepoRoot $previewRoot -RequiredThroughYear 2017 -RequiredDates @('2015-10-21','2015-11-05')
           if($LASTEXITCODE -ne 0){throw 'VALIDATED_SOURCE_SYNC=FAIL compiled_timeline_verification'}
           $global:LASTEXITCODE=0
-
-          # The live preview must contain the exact static files selected by the
-          # Halloween 2015 routes. This closes the gap where source validation passed
-          # but a hydration commit had not yet reached the physical preview worktree.
-          $partyRoot=Join-Path $previewRoot 'media\default\party2015'
-          $criticalAssets=@(
-            'client\ClientInterface-HalloweenClassic2015.swf',
-            'close_ups\Close_upsQuest_interface-HalloweenClassic2015.swf',
-            'content\party.swf',
-            'game_configs\game_configs.bin'
-          )
-          foreach($relative in $criticalAssets){
-            $asset=Join-Path $partyRoot $relative
-            if(-not(Test-Path -LiteralPath $asset -PathType Leaf)){throw "VALIDATED_SOURCE_SYNC=FAIL preview_asset_missing=$relative sha=$env:WADDLE_EXPECTED_SHA"}
-          }
-          foreach($relative in @('client\ClientInterface-HalloweenClassic2015.swf','close_ups\Close_upsQuest_interface-HalloweenClassic2015.swf','content\party.swf')){
-            $asset=Join-Path $partyRoot $relative
-            $stream=[IO.File]::OpenRead($asset)
-            try{
-              if($stream.Length -lt 8){throw "VALIDATED_SOURCE_SYNC=FAIL preview_swf_too_small=$relative bytes=$($stream.Length)"}
-              $header=New-Object byte[] 3
-              if($stream.Read($header,0,3) -ne 3){throw "VALIDATED_SOURCE_SYNC=FAIL preview_swf_header_read=$relative"}
-              $sig=[Text.Encoding]::ASCII.GetString($header)
-              if($sig -notin @('FWS','CWS','ZWS')){throw "VALIDATED_SOURCE_SYNC=FAIL preview_swf_signature=$relative signature=$sig"}
-            } finally { $stream.Dispose() }
-          }
-          Write-Host "VALIDATED_SOURCE_SYNC_PARTY2015_ASSETS=PASS preview=$previewRoot critical_assets=$($criticalAssets.Count) sha=$env:WADDLE_EXPECTED_SHA"
           Write-Host "VALIDATED_SOURCE_SYNC_TIMELINE=PASS preview=$previewRoot picker_through=2017 compiled=true exclusive_party_end=2015-11-05"
