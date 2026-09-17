@@ -13,7 +13,8 @@ $listMatch=[regex]::Match($updates,'const\s+HALLOWEEN_2015_MUSIC_IDS\s*=\s*\[([^
 Require $listMatch.Success 'music_id_set_present'
 $actual=@([regex]::Matches($listMatch.Groups[1].Value,'\d+')|ForEach-Object{[int]$_.Value})
 Require ($actual.Count-eq$musicIds.Count) 'music_id_count_38'
-Require ((Compare-Object -ReferenceObject $musicIds -DifferenceObject $actual).Count-eq0) 'music_id_set_38'
+$diff=@(Compare-Object -ReferenceObject $musicIds -DifferenceObject $actual)
+Require ($diff.Count-eq0) 'music_id_set_38'
 Require ($updates-match'const\s+musicFileChanges\s*=\s*Object\.fromEntries\s*\(') 'music_generator'
 Require ($updates-match'HALLOWEEN_2015_MUSIC_IDS\.map\s*\(\s*id\s*=>\s*\[') 'music_generator_ids'
 Require ($updates.Contains('`play/v2/content/global/music/${id}.swf`')) 'music_generator_route'
