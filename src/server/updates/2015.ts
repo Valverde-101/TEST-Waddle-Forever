@@ -45,252 +45,90 @@ const HALLOWEEN_2015_DIALOGUE_STRINGS: Record<string, string> = {
 };
 
 const HALLOWEEN_2015_ROOMS = {
-  "beach": ref('rooms/Hallo15_beach.swf'),
-  "beacon": ref('rooms/Hallo15_beacon.swf'),
-  "book": ref('rooms/Hallo15_book.swf'),
-  "cave": ref('rooms/Hallo15_cave.swf'),
-  "shop": ref('rooms/Hallo15_shop.swf'),
-  "cloudforest": ref('rooms/Hallo15_cloudforest.swf'),
-  "coffee": ref('rooms/Hallo15_coffee.swf'),
-  "cove": ref('rooms/Hallo15_cove.swf'),
-  "dance": ref('rooms/Hallo15_dance.swf'),
-  "dock": ref('rooms/Hallo15_dock.swf'),
-  "dojo": ref('rooms/Hallo15_dojo.swf'),
-  "dojoext": ref('rooms/Hallo15_dojoext.swf'),
-  "agentlobbymulti": ref('rooms/Hallo15_agentlobbymulti.swf'),
-  "dojofire": ref('rooms/Hallo15_dojofire.swf'),
-  "forest": ref('rooms/Hallo15_forest.swf'),
-  "party1": ref('rooms/Hallo15_party1.swf'),
-  "party2": ref('rooms/Hallo15_party2.swf'),
-  "berg": ref('rooms/Hallo15_berg.swf'),
-  "light": ref('rooms/Hallo15_light.swf'),
-  "attic": ref('rooms/Hallo15_attic.swf'),
-  "lounge": ref('rooms/Hallo15_lounge.swf'),
-  "shack": ref('rooms/Hallo15_shack.swf'),
-  "pet": ref('rooms/Hallo15_pet.swf'),
-  "pizza": ref('rooms/Hallo15_pizza.swf'),
-  "plaza": ref('rooms/Hallo15_plaza.swf'),
-  "stage": ref('rooms/Hallo15_mall.swf'),
-  "hotellobby": ref('rooms/Hallo15_hotellobby.swf'),
-  "hotelroof": ref('rooms/Hallo15_hotelroof.swf'),
-  "hotelspa": ref('rooms/Hallo15_hotelspa.swf'),
-  "pufflepark": ref('rooms/Hallo15_park.swf'),
-  "pufflewild": ref('rooms/Hallo15_pufflewild.swf'),
-  "eco": ref('rooms/Hallo15_school.swf'),
-  "skatepark": ref('rooms/Hallo15_skatepark.swf'),
-  "mtn": ref('rooms/Hallo15_mtn.swf'),
-  "lodge": ref('rooms/Hallo15_lodge.swf'),
-  "village": ref('rooms/Hallo15_village.swf'),
-  "dojosnow": ref('rooms/Hallo15_dojosnow.swf'),
-  "forts": ref('rooms/Hallo15_forts.swf'),
-  "rink": ref('rooms/Hallo15_rink.swf'),
-  "town": ref('rooms/RoomsTown-HalloweenParty2015.swf')
+  "beach": ref('rooms/Hallo15_beach.swf'), "beacon": ref('rooms/Hallo15_beacon.swf'), "book": ref('rooms/Hallo15_book.swf'), "cave": ref('rooms/Hallo15_cave.swf'),
+  "shop": ref('rooms/Hallo15_shop.swf'), "cloudforest": ref('rooms/Hallo15_cloudforest.swf'), "coffee": ref('rooms/Hallo15_coffee.swf'), "cove": ref('rooms/Hallo15_cove.swf'),
+  "dance": ref('rooms/Hallo15_dance.swf'), "dock": ref('rooms/Hallo15_dock.swf'), "dojo": ref('rooms/Hallo15_dojo.swf'), "dojoext": ref('rooms/Hallo15_dojoext.swf'),
+  "agentlobbymulti": ref('rooms/Hallo15_agentlobbymulti.swf'), "dojofire": ref('rooms/Hallo15_dojofire.swf'), "forest": ref('rooms/Hallo15_forest.swf'),
+  "party1": ref('rooms/Hallo15_party1.swf'), "party2": ref('rooms/Hallo15_party2.swf'), "berg": ref('rooms/Hallo15_berg.swf'), "light": ref('rooms/Hallo15_light.swf'),
+  "attic": ref('rooms/Hallo15_attic.swf'), "lounge": ref('rooms/Hallo15_lounge.swf'), "shack": ref('rooms/Hallo15_shack.swf'), "pet": ref('rooms/Hallo15_pet.swf'),
+  "pizza": ref('rooms/Hallo15_pizza.swf'), "plaza": ref('rooms/Hallo15_plaza.swf'), "stage": ref('rooms/Hallo15_mall.swf'), "hotellobby": ref('rooms/Hallo15_hotellobby.swf'),
+  "hotelroof": ref('rooms/Hallo15_hotelroof.swf'), "hotelspa": ref('rooms/Hallo15_hotelspa.swf'), "pufflepark": ref('rooms/Hallo15_park.swf'),
+  "pufflewild": ref('rooms/Hallo15_pufflewild.swf'), "eco": ref('rooms/Hallo15_school.swf'), "skatepark": ref('rooms/Hallo15_skatepark.swf'), "mtn": ref('rooms/Hallo15_mtn.swf'),
+  "lodge": ref('rooms/Hallo15_lodge.swf'), "village": ref('rooms/Hallo15_village.swf'), "dojosnow": ref('rooms/Hallo15_dojosnow.swf'), "forts": ref('rooms/Hallo15_forts.swf'),
+  "rink": ref('rooms/Hallo15_rink.swf'), "town": ref('rooms/RoomsTown-HalloweenParty2015.swf')
 };
 
 const HALLOWEEN_2015_MUSIC = {
-  "beach": 1054,
-  "beacon": 1053,
-  "book": 669,
-  "cave": 532,
-  "shop": 345,
-  "cloudforest": 1044,
-  "coffee": 1031,
-  "cove": 1035,
-  "dance": 1036,
-  "dock": 1037,
-  "dojo": 403,
-  "dojoext": 1045,
-  "agentlobbymulti": 922,
-  "dojofire": 1046,
-  "forest": 1038,
-  "party1": 838,
-  "party2": 1058,
-  "berg": 1043,
-  "light": 588,
-  "attic": 884,
-  "lounge": 1055,
-  "shack": 1041,
-  "pet": 659,
-  "pizza": 1033,
-  "plaza": 1052,
-  "stage": 1032,
-  "hotellobby": 1048,
-  "hotelroof": 1049,
-  "hotelspa": 1050,
-  "pufflepark": 1051,
-  "pufflewild": 1057,
-  "eco": 1040,
-  "skatepark": 1034,
-  "mtn": 1042,
-  "lodge": 1056,
-  "village": 1042,
-  "dojosnow": 1047,
-  "forts": 1039,
-  "rink": 1067,
-  "town": 1052
+  "beach":1054,"beacon":1053,"book":669,"cave":532,"shop":345,"cloudforest":1044,"coffee":1031,"cove":1035,"dance":1036,"dock":1037,"dojo":403,
+  "dojoext":1045,"agentlobbymulti":922,"dojofire":1046,"forest":1038,"party1":838,"party2":1058,"berg":1043,"light":588,"attic":884,"lounge":1055,
+  "shack":1041,"pet":659,"pizza":1033,"plaza":1052,"stage":1032,"hotellobby":1048,"hotelroof":1049,"hotelspa":1050,"pufflepark":1051,"pufflewild":1057,
+  "eco":1040,"skatepark":1034,"mtn":1042,"lodge":1056,"village":1042,"dojosnow":1047,"forts":1039,"rink":1067,"town":1052
 };
 
-const HALLOWEEN_2015_MUSIC_IDS = [345, 403, 532, 588, 659, 669, 838, 884, 922, 1031, 1032, 1033, 1034, 1035, 1036, 1037, 1038, 1039, 1040, 1041, 1042, 1043, 1044, 1045, 1046, 1047, 1048, 1049, 1050, 1051, 1052, 1053, 1054, 1055, 1056, 1057, 1058, 1067];
-
-const HALLOWEEN_2015_DIALOGUE_FILES = [
-  "dialogue_login",
-  "dialogue_AA_start",
-  "dialogue_AA_instruct",
-  "dialogue_AA_congrats",
-  "dialogue_Cad_start",
-  "dialogue_Cad_instruct",
-  "dialogue_Cad_congrats",
-  "dialogue_Dot_start",
-  "dialogue_Dot_instruct",
-  "dialogue_Dot_congrats",
-  "dialogue_PH_start",
-  "dialogue_PH_instruct",
-  "dialogue_PH_congrats",
-  "dialogue_RH_start",
-  "dialogue_RH_instruct",
-  "dialogue_RH_congrats",
-  "dialogue_Rook_start",
-  "dialogue_Rook_instruct",
-  "dialogue_Rook_congrats",
-  "dialogue_Rookie_bot",
-  "dialogue_Sen_start",
-  "dialogue_Sen_instruct",
-  "dialogue_Sen_congrats",
-  "dialogue_Gary_instruct",
-  "dialogue_Gary_instruct_2",
-  "dialogue_Gary_instruct_3",
-  "dialogue_Gary_lair",
-  "dialogue_Gary_congrats",
-  "dialogue_Gary_final",
-  "dialogue_Herbert_caged",
-  "dialogue_Herbert_escape",
-  "dialogue_Herbot",
-  "dialogue_Herbert_monologue",
-  "dialogue_Herbert_monologue_2"
-] as const;
-
-const dialogueGlobalChanges = Object.fromEntries(
-  HALLOWEEN_2015_DIALOGUE_FILES.map(name => [
-    `close_ups/${name}.swf`,
-    ref(`close_ups/Hallo15_${name}.swf`)
-  ])
-);
-
-const dialogueLocalChanges = Object.fromEntries(
-  HALLOWEEN_2015_DIALOGUE_FILES.map(name => [
-    `close_ups/${name}.swf`,
-    { en: ref(`close_ups/Hallo15_${name}.swf`) }
-  ])
-);
-
-const tileGlobalChanges = Object.fromEntries(
-  Array.from({ length: 9 }, (_, i) => [
-    `close_ups/tiles_minigame${i}.swf`,
-    ref(`close_ups/Close_upsTiles_minigame${i}-HalloweenParty2015.swf`)
-  ])
-);
-
-const tileLocalChanges = Object.fromEntries(
-  Array.from({ length: 9 }, (_, i) => [
-    `close_ups/tiles_minigame${i}.swf`,
-    { en: ref(`close_ups/Close_upsTiles_minigame${i}-HalloweenParty2015.swf`) }
-  ])
-);
-
-const musicFileChanges = Object.fromEntries(
-  HALLOWEEN_2015_MUSIC_IDS.map(id => [
-    `play/v2/content/global/music/${id}.swf`,
-    ref(`music/Music${id}.swf`)
-  ])
-);
+const HALLOWEEN_2015_MUSIC_IDS = [345,403,532,588,659,669,838,884,922,1031,1032,1033,1034,1035,1036,1037,1038,1039,1040,1041,1042,1043,1044,1045,1046,1047,1048,1049,1050,1051,1052,1053,1054,1055,1056,1057,1058,1067];
+const HALLOWEEN_2015_DIALOGUE_FILES = ["dialogue_login","dialogue_AA_start","dialogue_AA_instruct","dialogue_AA_congrats","dialogue_Cad_start","dialogue_Cad_instruct","dialogue_Cad_congrats","dialogue_Dot_start","dialogue_Dot_instruct","dialogue_Dot_congrats","dialogue_PH_start","dialogue_PH_instruct","dialogue_PH_congrats","dialogue_RH_start","dialogue_RH_instruct","dialogue_RH_congrats","dialogue_Rook_start","dialogue_Rook_instruct","dialogue_Rook_congrats","dialogue_Rookie_bot","dialogue_Sen_start","dialogue_Sen_instruct","dialogue_Sen_congrats","dialogue_Gary_instruct","dialogue_Gary_instruct_2","dialogue_Gary_instruct_3","dialogue_Gary_lair","dialogue_Gary_congrats","dialogue_Gary_final","dialogue_Herbert_caged","dialogue_Herbert_escape","dialogue_Herbot","dialogue_Herbert_monologue","dialogue_Herbert_monologue_2"] as const;
+const dialogueGlobalChanges = Object.fromEntries(HALLOWEEN_2015_DIALOGUE_FILES.map(name => [`close_ups/${name}.swf`, ref(`close_ups/Hallo15_${name}.swf`)]));
+const dialogueLocalChanges = Object.fromEntries(HALLOWEEN_2015_DIALOGUE_FILES.map(name => [`close_ups/${name}.swf`, { en: ref(`close_ups/Hallo15_${name}.swf`) }]));
+const tileGlobalChanges = Object.fromEntries(Array.from({length:9},(_,i)=>[`close_ups/tiles_minigame${i}.swf`,ref(`close_ups/Close_upsTiles_minigame${i}-HalloweenParty2015.swf`)]));
+const tileLocalChanges = Object.fromEntries(Array.from({length:9},(_,i)=>[`close_ups/tiles_minigame${i}.swf`,{en:ref(`close_ups/Close_upsTiles_minigame${i}-HalloweenParty2015.swf`)}]));
+const musicFileChanges = Object.fromEntries(HALLOWEEN_2015_MUSIC_IDS.map(id=>[`play/v2/content/global/music/${id}.swf`,ref(`music/Music${id}.swf`)]));
 
 export const UPDATES_2015: Update[] = [
+  { date:'2015-05-01', rooms:{ lake:'archives:RoomsLake-May2015.swf' } },
   {
-    date: '2015-05-01',
-    rooms: {
-      lake: 'archives:RoomsLake-May2015.swf'
-    }
-  },
-  {
-    date: '2015-10-21',
-    temp: {
-      party: {
-        partyName: 'Halloween Party 2015',
-        activeFeatures: '20150501',
-        gameStringChanges: HALLOWEEN_2015_DIALOGUE_STRINGS,
-        partyProgress: {
-          id: 'halloween-2015',
-          messageCount: 10,
-          communicatorMessageCount: 5,
-          taskCount: 10,
-          maxCoinUpdate: 10,
-          service: {
-            partyStartDate: '2015-10-21 00:00:00',
-            partyEndDate: '2015-11-05 00:00:00',
-            unlockDayIndex: 16,
-            numOfDaysInParty: 16
-          }
-        },
-        rooms: HALLOWEEN_2015_ROOMS,
-        music: HALLOWEEN_2015_MUSIC,
-        fileChanges: {
-          // The generic svanilla party runtime does not contain the 20150501
-          // selector/MayParty family used by Halloween 2015. Serve the byte-pinned
-          // late-2015 base runtime that does, so activefeatures can initialize the
-          // party class and subsequently load the preserved Features SWF.
-          'play/v2/content/global/content/party.swf': ref('content/party-base-2015.swf'),
-          // The October 2015 interaction files are the exact CPArchives pair.
-          // The later 2310 Halloween Classic recreation is retained only as
-          // provenance under media/default/party2015 and is never routed live.
-          'play/v2/client/QuestCommunicator.swf': ref('client/QuestCommunicator.swf'),
-          'play/v2/client/interface.swf': ref('client/ClientInterface-HalloweenParty2015.swf'),
-          'play/v2/content/global/content/interface.swf': ref('client/ClientInterface-HalloweenParty2015.swf'),
-          'play/v2/content/global/content/features.swf': ref('content/ContentFeatures-HalloweenParty2015.swf'),
-          'play/v2/content/global/content/party_icon.swf': ref('content/ContentParty_icon-HalloweenParty2015.swf'),
-          'play/v2/content/global/logo/logo.swf': ref('content/ContentLogo-HalloweenParty2015.swf'),
-          'play/v2/content/global/avatar/sprites/penguin_robot.swf': ref('avatar/PenguinRobot.swf'),
-          'play/v2/content/global/telescope/telescope.swf': ref('other/Telescope-HalloweenParty2015.swf'),
-          'play/v2/content/global/binoculars/binoculars.swf': ref('other/Binoculars-HalloweenParty2015.swf'),
-          'play/v2/content/global/rooms/mall.swf': ref('rooms/Hallo15_mall.swf'),
-          'play/v2/content/global/rooms/school.swf': ref('rooms/Hallo15_school.swf'),
-          'play/v2/content/global/rooms/park.swf': ref('rooms/Hallo15_park.swf'),
-          'play/v2/content/global/rooms/partysolo1.swf': ref('rooms/Hallo15_partysolo1.swf'),
-          'play/v2/content/global/membership/party1.swf': ref('membership/MembershipParty1-HalloweenParty2015.swf'),
-          'play/v2/content/global/membership/party2.swf': ref('membership/MembershipParty2-HalloweenParty2015.swf'),
-          ...musicFileChanges
-        },
-        globalChanges: {
-          'content/party_icon.swf': [ref('content/ContentParty_icon-HalloweenParty2015.swf'), 'party_icon', 'scavenger_hunt_icon'],
-          'close_ups/quest_interface.swf': [ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf'), 'w.p2015.may.partyinterface', 'w.app.generic.partyinterface', 'scavenger_hunt'],
-          // The archived interface resolves the first-login crumb through this
-          // literal route. Serve the exact 2015 dialogue SWF under that alias;
-          // do not substitute CPImagined's later halloLogin recreation.
-          'close_ups/halloLogin.swf': [ref('close_ups/Hallo15_dialogue_login.swf'), 'w.p2015.may.login'],
-          ...dialogueGlobalChanges,
-          ...tileGlobalChanges,
-          'close_ups/tiles_minigame8v2.swf': [ref('close_ups/Close_upsTiles_minigame8-HalloweenParty2015.swf'), 'halloHerbertGame'],
-          'close_ups/halloHerbertMonologue.swf': [ref('close_ups/Hallo15_dialogue_Herbert_monologue.swf'), 'halloHerbertMonologue'],
-          'close_ups/halloHerbertMonologue2.swf': [ref('close_ups/Hallo15_dialogue_Herbert_monologue_2.swf'), 'halloHerbertMonologue2'],
-          'close_ups/halloHerbot.swf': [ref('close_ups/Hallo15_dialogue_Herbot.swf'), 'halloHerbot'],
-          'close_ups/halloHerbertCage.swf': [ref('close_ups/Hallo15_dialogue_Herbert_caged.swf'), 'halloHerbertCage'],
-          'close_ups/halloGaryLair.swf': [ref('close_ups/Hallo15_dialogue_Gary_lair.swf'), 'halloGaryLair'],
-          'close_ups/halloHerbertGetaway.swf': [ref('close_ups/Hallo15_dialogue_Herbert_escape.swf'), 'halloHerbertGetaway'],
-          'close_ups/halloGaryFinal.swf': [ref('close_ups/Hallo15_dialogue_Gary_final.swf'), 'halloGaryFinal']
-        },
-        localChanges: {
-          'close_ups/quest_interface.swf': { en: ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf') },
-          'close_ups/halloLogin.swf': { en: ref('close_ups/Hallo15_dialogue_login.swf') },
-          ...dialogueLocalChanges,
-          ...tileLocalChanges,
-          'membership/party1.swf': { en: ref('membership/MembershipParty1-HalloweenParty2015.swf') },
-          'membership/party2.swf': { en: ref('membership/MembershipParty2-HalloweenParty2015.swf') }
-        }
+    date:'2015-10-21',
+    temp:{ party:{
+      partyName:'Halloween Party 2015',
+      // Halloween's Features SWF uses the late-2015 templated PartyJSON API; MayParty cannot parse it.
+      activeFeatures:'20151101',
+      gameStringChanges:HALLOWEEN_2015_DIALOGUE_STRINGS,
+      partyProgress:{ id:'halloween-2015', messageCount:10, communicatorMessageCount:5, taskCount:10, maxCoinUpdate:10,
+        service:{ partyStartDate:'2015-10-21 00:00:00', partyEndDate:'2015-11-05 00:00:00', unlockDayIndex:16, numOfDaysInParty:16 } },
+      rooms:HALLOWEEN_2015_ROOMS,
+      music:HALLOWEEN_2015_MUSIC,
+      fileChanges:{
+        'play/v2/content/global/content/party.swf':ref('content/party-runtime-2015.swf'),
+        // A 2012 update left its approximation shell persistent; restore the preserved late-AS3 shell for 2015.
+        'play/v2/client/shell.swf':'svanilla:media/play/v2/client/shell.swf',
+        'play/v2/client/QuestCommunicator.swf':ref('client/QuestCommunicator.swf'),
+        'play/v2/client/interface.swf':ref('client/ClientInterface-HalloweenParty2015.swf'),
+        'play/v2/content/global/content/interface.swf':ref('client/ClientInterface-HalloweenParty2015.swf'),
+        'play/v2/content/global/content/features.swf':ref('content/ContentFeatures-HalloweenParty2015.swf'),
+        'play/v2/content/global/content/party_icon.swf':ref('content/ContentParty_icon-HalloweenParty2015.swf'),
+        'play/v2/content/global/logo/logo.swf':ref('content/ContentLogo-HalloweenParty2015.swf'),
+        'play/v2/content/global/avatar/sprites/penguin_robot.swf':ref('avatar/PenguinRobot.swf'),
+        'play/v2/content/global/telescope/telescope.swf':ref('other/Telescope-HalloweenParty2015.swf'),
+        'play/v2/content/global/binoculars/binoculars.swf':ref('other/Binoculars-HalloweenParty2015.swf'),
+        'play/v2/content/global/rooms/mall.swf':ref('rooms/Hallo15_mall.swf'),
+        'play/v2/content/global/rooms/school.swf':ref('rooms/Hallo15_school.swf'),
+        'play/v2/content/global/rooms/park.swf':ref('rooms/Hallo15_park.swf'),
+        'play/v2/content/global/rooms/partysolo1.swf':ref('rooms/Hallo15_partysolo1.swf'),
+        'play/v2/content/global/membership/party1.swf':ref('membership/MembershipParty1-HalloweenParty2015.swf'),
+        'play/v2/content/global/membership/party2.swf':ref('membership/MembershipParty2-HalloweenParty2015.swf'),
+        ...musicFileChanges
+      },
+      globalChanges:{
+        'content/party_icon.swf':[ref('content/ContentParty_icon-HalloweenParty2015.swf'),'party_icon','scavenger_hunt_icon'],
+        'close_ups/quest_interface.swf':[ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf'),'w.p2015.may.partyinterface','w.app.generic.partyinterface','scavenger_hunt'],
+        'close_ups/halloLogin.swf':[ref('close_ups/Hallo15_dialogue_login.swf'),'w.p2015.may.login','w.app.loginprompt'],
+        ...dialogueGlobalChanges,...tileGlobalChanges,
+        'close_ups/tiles_minigame8v2.swf':[ref('close_ups/Close_upsTiles_minigame8-HalloweenParty2015.swf'),'halloHerbertGame'],
+        'close_ups/halloHerbertMonologue.swf':[ref('close_ups/Hallo15_dialogue_Herbert_monologue.swf'),'halloHerbertMonologue'],
+        'close_ups/halloHerbertMonologue2.swf':[ref('close_ups/Hallo15_dialogue_Herbert_monologue_2.swf'),'halloHerbertMonologue2'],
+        'close_ups/halloHerbot.swf':[ref('close_ups/Hallo15_dialogue_Herbot.swf'),'halloHerbot'],
+        'close_ups/halloHerbertCage.swf':[ref('close_ups/Hallo15_dialogue_Herbert_caged.swf'),'halloHerbertCage'],
+        'close_ups/halloGaryLair.swf':[ref('close_ups/Hallo15_dialogue_Gary_lair.swf'),'halloGaryLair'],
+        'close_ups/halloHerbertGetaway.swf':[ref('close_ups/Hallo15_dialogue_Herbert_escape.swf'),'halloHerbertGetaway'],
+        'close_ups/halloGaryFinal.swf':[ref('close_ups/Hallo15_dialogue_Gary_final.swf'),'halloGaryFinal']
+      },
+      localChanges:{
+        'close_ups/quest_interface.swf':{en:ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf')},
+        'close_ups/halloLogin.swf':{en:ref('close_ups/Hallo15_dialogue_login.swf')},
+        ...dialogueLocalChanges,...tileLocalChanges,
+        'membership/party1.swf':{en:ref('membership/MembershipParty1-HalloweenParty2015.swf')},
+        'membership/party2.swf':{en:ref('membership/MembershipParty2-HalloweenParty2015.swf')}
       }
-    }
+    }}
   },
-  {
-    // Temporary-event ends are exclusive, so Nov 5 keeps Nov 4 playable.
-    date: '2015-11-05',
-    end: ['party']
-  }
+  { date:'2015-11-05', end:['party'] }
 ];
