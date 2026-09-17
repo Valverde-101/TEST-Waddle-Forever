@@ -146,6 +146,7 @@ $targets = [ordered]@{
   'svanilla-party' = $current
   'party-base-2015' = $candidate
   'party-2310-full' = (Join-Path $partyRoot 'content\party.swf')
+  'selected-party-runtime-2015' = (Join-Path $partyRoot 'content\party-runtime-2015.swf')
   'client-interface-2015' = (Join-Path $partyRoot 'client\ClientInterface-HalloweenParty2015.swf')
   'features-2015' = (Join-Path $partyRoot 'content\ContentFeatures-HalloweenParty2015.swf')
   'party-icon-2015' = (Join-Path $partyRoot 'content\ContentParty_icon-HalloweenParty2015.swf')
@@ -216,6 +217,16 @@ foreach ($name in $reports.Keys) {
   $r = $reports[$name]
   $e = $r.evidence
   Write-Host ("WADDLE_PARTY2015_RUNTIME_COMPONENT name={0} bytes={1} scripts={2} selector={3} mayParty={4} featuresPath={5} configure={6} loadFeatures={7} showContent={8} currentParty={9} questCommunicator={10} questInterface={11} partyIcon={12} halloLogin={13}" -f $name,$r.bytes,$r.scripts,$e.selector20150501,$e.mayParty,$e.featuresPath,$e.configurePartyJson,$e.loadPartyFeatures,$e.showContent,$e.currentParty,$e.questCommunicator,$e.questInterface,$e.partyIcon,$e.halloLogin)
+  if ($name -eq 'selected-party-runtime-2015') {
+    $selected = Export-Scripts -FFDec $ffdec -Swf $targets[$name] -Name ($name + '-details') -WorkRoot $work
+    foreach ($line in @($selected.text -split "`r?`n")) {
+      if ($line -match '^// FILE:' -or $line -match '(?i)function (initPartyAvatars|sendTransformation|getQuestVOByIndex|createTransformationVOs|loadMiniGame|pickupItem|showRobotInstructionsPopup)|setAvatarTemplate|spritePath|SET_TRANSFORM|qtaskcomplete') {
+        $clean = [regex]::Replace($line.Trim(),'\s+',' ')
+        if ($clean.Length -gt 1000) { $clean = $clean.Substring(0,1000) }
+        Write-Host "WADDLE_PARTY2015_GAMEPLAY_SOURCEFILE component=$name text=$clean"
+      }
+    }
+  }
   $g = $r.gameplay
   Write-Host ("WADDLE_PARTY2015_GAMEPLAY_COMPONENT name={0} transformVOs={1} avatarTemplate={2} spritePath={3} initAvatars={4} setTransform={5} sendTransform={6} questVOs={7} collectedItem={8} pickupItem={9} robotInstructions={10} loadMiniGame={11} taskComplete={12}" -f $name,$g.transformationVOs,$g.avatarTemplateRegistration,$g.avatarSpritePath,$g.initPartyAvatars,$g.setTransformConstant,$g.sendTransformation,$g.questVOs,$g.collectedItem,$g.pickupItem,$g.robotInstructions,$g.loadMiniGame,$g.taskComplete)
   foreach ($snippet in $r.gameplaySnippets) { Write-Host "WADDLE_PARTY2015_GAMEPLAY_EVIDENCE component=$name text=$snippet" }
