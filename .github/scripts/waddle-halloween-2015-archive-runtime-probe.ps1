@@ -19,26 +19,23 @@ function Resolve-FFDec([string]$Explicit) {
   throw 'WADDLE_PARTY2015_ARCHIVE_RUNTIME=FAIL ffdec_missing'
 }
 
-function Resolve-ArchiveFileUrl([string]$FileName) {
-  $encoded = [Uri]::EscapeDataString('File:' + $FileName)
-  $apis = @(
-    "https://archives.clubpenguinwiki.info/api.php?action=query&format=json&prop=imageinfo&iiprop=url&titles=$encoded",
-    "https://toolbox.solero.me/cparchives/api.php?action=query&format=json&prop=imageinfo&iiprop=url&titles=$encoded"
+function Get-Md5Hex([string]$Value) {
+  $md5 = [Security.Cryptography.MD5]::Create()
+  try {
+    $bytes = [Text.Encoding]::UTF8.GetBytes($Value)
+    return (($md5.ComputeHash($bytes) | ForEach-Object { $_.ToString('x2') }) -join '')
+  } finally { $md5.Dispose() }
+}
+
+function Resolve-ArchiveFileUrls([string]$FileName) {
+  # MediaWiki stores uploads under the first 1/2 hex digits of md5(filename).
+  # The Solero mirror keeps that canonical layout under /static/images/archives/.
+  $md5 = Get-Md5Hex $FileName
+  $leaf = [Uri]::EscapeDataString($FileName).Replace('%2F','/')
+  return @(
+    "https://toolbox.solero.me/cparchives/static/images/archives/$($md5.Substring(0,1))/$($md5.Substring(0,2))/$leaf",
+    "https://archives.clubpenguinwiki.info/images/$($md5.Substring(0,1))/$($md5.Substring(0,2))/$leaf"
   )
-  foreach ($api in $apis) {
-    try {
-      $response = Invoke-RestMethod -Uri $api -Method Get -TimeoutSec 30 -Headers @{ 'User-Agent'='Waddle-Forever-Halloween2015-Probe/1.0' }
-      $pages = @($response.query.pages.PSObject.Properties.Value)
-      foreach ($page in $pages) {
-        if ($page.imageinfo -and $page.imageinfo.Count -gt 0 -and $page.imageinfo[0].url) {
-          return [string]$page.imageinfo[0].url
-        }
-      }
-    } catch {
-      Write-Host "WADDLE_PARTY2015_ARCHIVE_RUNTIME_API_WARN file=$FileName api=$api error=$($_.Exception.Message)"
-    }
-  }
-  return $null
 }
 
 function Test-Swf([string]$Path) {
@@ -89,28 +86,28 @@ $candidates = @(
 
 $reports = @()
 foreach ($fileName in $candidates) {
-  $url = Resolve-ArchiveFileUrl $fileName
-  if (-not $url) {
-    Write-Host "WADDLE_PARTY2015_ARCHIVE_RUNTIME_CANDIDATE file=$fileName status=url-not-found"
-    continue
-  }
   $safe = ($fileName -replace '[^A-Za-z0-9._-]','_')
   $target = Join-Path $work $safe
-  try {
-    Invoke-WebRequest -Uri $url -OutFile $target -UseBasicParsing -TimeoutSec 60 -Headers @{ 'User-Agent'='Waddle-Forever-Halloween2015-Probe/1.0' }
-  } catch {
-    Write-Host "WADDLE_PARTY2015_ARCHIVE_RUNTIME_CANDIDATE file=$fileName status=download-failed url=$url error=$($_.Exception.Message)"
-    continue
+  $resolvedUrl = $null
+  foreach ($url in (Resolve-ArchiveFileUrls $fileName)) {
+    try {
+      if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Force }
+      Invoke-WebRequest -Uri $url -OutFile $target -UseBasicParsing -TimeoutSec 60 -Headers @{ 'User-Agent'='Waddle-Forever-Halloween2015-Probe/1.0' }
+      if (Test-Swf $target) { $resolvedUrl = $url; break }
+      Write-Host "WADDLE_PARTY2015_ARCHIVE_RUNTIME_DOWNLOAD_WARN file=$fileName url=$url reason=not-swf"
+    } catch {
+      Write-Host "WADDLE_PARTY2015_ARCHIVE_RUNTIME_DOWNLOAD_WARN file=$fileName url=$url error=$($_.Exception.Message)"
+    }
   }
-  if (-not (Test-Swf $target)) {
-    Write-Host "WADDLE_PARTY2015_ARCHIVE_RUNTIME_CANDIDATE file=$fileName status=invalid-swf url=$url"
+  if (-not $resolvedUrl) {
+    Write-Host "WADDLE_PARTY2015_ARCHIVE_RUNTIME_CANDIDATE file=$fileName status=download-unavailable"
     continue
   }
   $export = Export-Scripts $ffdec $target $safe $work
   $text = $export.text
   $report = [ordered]@{
     file=$fileName
-    url=$url
+    url=$resolvedUrl
     bytes=[int64](Get-Item -LiteralPath $target).Length
     sha256=(Get-FileHash -LiteralPath $target -Algorithm SHA256).Hash.ToLowerInvariant()
     scripts=$export.files
@@ -135,12 +132,13 @@ $complete = @($reports | Where-Object {
   $_.getLengthOfQuestVOs -and $_.getQuestVOByIndex -and $_.getTransformationVOs -and $_.getPuffleAdoptionVOs -and
   -not $_.partyMapNote
 })
+$completeNames = @($complete | ForEach-Object { $_.file })
 
 $summary = [ordered]@{
-  schema='waddle-halloween2015-archive-runtime-probe/v1'
+  schema='waddle-halloween2015-archive-runtime-probe/v2'
   reports=$reports
-  completeCandidates=@($complete | ForEach-Object { $_.file })
+  completeCandidates=$completeNames
 }
 $summaryPath = Join-Path $work 'summary.json'
 $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryPath -Encoding UTF8
-Write-Host "WADDLE_PARTY2015_ARCHIVE_RUNTIME=PASS analyzed=$($reports.Count) complete=$($complete.Count) candidates=$($complete.file -join ',') summary=$summaryPath"
+Write-Host "WADDLE_PARTY2015_ARCHIVE_RUNTIME=PASS analyzed=$($reports.Count) complete=$($complete.Count) candidates=$($completeNames -join ',') summary=$summaryPath"
