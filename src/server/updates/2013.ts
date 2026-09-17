@@ -274,7 +274,7 @@ export const UPDATES_2013: Update[] = [
             "is_member": 1,
             "rank": 3,
             "description": "Find an item in a puffle treasure dig",
-            "rank_token": "medium"
+            "rank_token": "hard"
           }
         ]
       }
