@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: waddle-validated-source-sync-${{ github.event.pull_request.number || github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   wait-certification:
