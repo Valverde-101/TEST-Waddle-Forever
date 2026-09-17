@@ -110,6 +110,7 @@ $candidate = Join-Path $partyRoot 'content\party-base-2015.swf'
 $targets = [ordered]@{
   'svanilla-party' = $current
   'party-base-2015' = $candidate
+  'party-2310-full' = (Join-Path $partyRoot 'content\party.swf')
   'client-interface-2015' = (Join-Path $partyRoot 'client\ClientInterface-HalloweenParty2015.swf')
   'features-2015' = (Join-Path $partyRoot 'content\ContentFeatures-HalloweenParty2015.swf')
   'party-icon-2015' = (Join-Path $partyRoot 'content\ContentParty_icon-HalloweenParty2015.swf')
@@ -159,7 +160,7 @@ $interfaceCanLoadFeatures = [bool]($reports['client-interface-2015'].evidence.fe
 $questChainVisible = [bool]($reports['client-interface-2015'].evidence.questCommunicator -or $reports['quest-communicator'].evidence.questInterface -or $reports['client-interface-2015'].evidence.questInterface)
 
 $summary = [ordered]@{
-  schema='waddle-halloween2015-runtime-probe/v3'
+  schema='waddle-halloween2015-runtime-probe/v4'
   reports=$reports
   conclusions=[ordered]@{
     currentSupportsSelector=$currentSupportsSelector
