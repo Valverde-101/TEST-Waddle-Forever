@@ -8,8 +8,14 @@ on:
     paths:
       - '.github/manifests/halloween-2015-canonical.json'
       - '.github/scripts/waddle-halloween-2015-runtime-compat.ps1'
+      - '.github/scripts/waddle-halloween-2015-api-probe.ps1'
       - '.github/workflows/waddle-halloween-2015-runtime-probe.yml'
       - 'media/default/party2015/content/party-base-2015.swf'
+      - 'media/default/party2015/content/party.swf'
+      - 'media/default/party2015/content/ContentFeatures-HalloweenParty2015.swf'
+      - 'media/default/party2015/close_ups/Close_upsQuest_interface-HalloweenParty2015.swf'
+      - 'media/default/party2015/close_ups/Hallo15_dialogue_login.swf'
+      - 'media/default/party2015/client/QuestCommunicator.swf'
       - 'media/default/svanilla/media/play/v2/content/global/content/party.swf'
 
 permissions:
@@ -41,3 +47,6 @@ jobs:
       - name: Compare late-AS3 party runtimes with FFDec
         shell: powershell
         run: ./.github/scripts/waddle-halloween-2015-runtime-compat.ps1 -RepoRoot $env:GITHUB_WORKSPACE
+      - name: Derive exact Halloween 2015 runtime API contract
+        shell: powershell
+        run: ./.github/scripts/waddle-halloween-2015-api-probe.ps1 -RepoRoot $env:GITHUB_WORKSPACE
