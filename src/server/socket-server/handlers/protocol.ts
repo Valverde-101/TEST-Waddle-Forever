@@ -35,11 +35,17 @@ export type XtReadOnlyFallback = {
  * opaque string immediately after map.swf opens, followed directly by j#jr; the
  * client does not wait for or consume a server response. Treating it as telemetry
  * removes a false protocol error without fabricating map/gameplay state.
+ *
+ * p#bipa / p#bipc: late-AS3 puffle adoption/care BI packets. Preserved
+ * BridgeFilter code identifies them as telemetry events, while the gameplay
+ * mutation is handled by the p#pn adoption and puffle inventory/care packets.
  */
 const noResponseClientPackets = new Set<string>([
   's%j#crl',
   's%bi#ack',
-  's%nx#bimp'
+  's%nx#bimp',
+  's%p#bipa',
+  's%p#bipc'
 ]);
 
 /**
