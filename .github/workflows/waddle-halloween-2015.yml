@@ -55,7 +55,7 @@ env:
   GIT_CONFIG_VALUE_0: 'false'
 
 concurrency:
-  group: waddle-halloween-2015-${{ github.event.pull_request.number || 'manual' }}
+  group: waddle-halloween-2015-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 
 jobs:
