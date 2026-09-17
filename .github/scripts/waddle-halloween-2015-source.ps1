@@ -63,6 +63,8 @@ $partyContracts=@{
   interface="'play/v2/content/global/content/interface\.swf'\s*:\s*ref\('client/ClientInterface-HalloweenParty2015\.swf'\)";
   features="'play/v2/content/global/content/features\.swf'\s*:\s*ref\('content/ContentFeatures-HalloweenParty2015\.swf'\)";
   icon="'play/v2/content/global/content/party_icon\.swf'\s*:\s*ref\('content/ContentParty_icon-HalloweenParty2015\.swf'\)";
+  robotRoute="'play/v2/content/global/avatar/sprites/robot\.swf'\s*:\s*ref\('avatar/PenguinRobot\.swf'\)";
+  robotPath="'avatar/sprites/robot\.swf'\s*:\s*\[ref\('avatar/PenguinRobot\.swf'\)\s*,\s*'robot_tf'\]";
   quest="'close_ups/quest_interface\.swf'\s*:\s*\[ref\('close_ups/Close_upsQuest_interface-HalloweenParty2015\.swf'\).*?'w\.app\.generic\.partyinterface'";
   login="'close_ups/halloLogin\.swf'\s*:\s*\[ref\('close_ups/Hallo15_dialogue_login\.swf'\).*?'w\.app\.loginprompt'";
   end="date\s*:\s*'2015-11-05'[\s\S]*?end\s*:\s*\['party'\]"
@@ -77,6 +79,7 @@ Require-NotContains $party "ref('content/map.swf')" 'unproven_recreation_map'
 
 $fileGenerators=Read-Normalized $fileGeneratorsPath
 Require-Contains $fileGenerators 'const getRuntimePathsJson: FileGenerator' 'runtime_paths_generator'
+Require-Contains $fileGenerators 'Object.fromEntries(d.getGlobalPaths())' 'runtime_global_paths_merge'
 Require-Contains $fileGenerators 'const getRuntimeRoomsJson: FileGenerator' 'runtime_rooms_generator'
 Require-Contains $fileGenerators "version >= '2017-01-31' && version < '2017-03-30'" 'community_pin_historical_window'
 Require-Contains $fileGenerators "'play/en/web_service/game_configs/rooms.json': getRuntimeRoomsJson" 'runtime_rooms_registration'
@@ -139,4 +142,4 @@ foreach($entry in $canonicalAssets){
 $updates=Read-Normalized $updatesPath
 Require-Contains $updates 'import { UPDATES_2015 } from "./2015";' 'updates_2015_import'
 Require-Contains $updates '...UPDATES_2015' 'updates_2015_registration'
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=templated-late-2015 activefeatures=20151101 shell=svanilla features=party-json-parser transform=party-to-spts bitmap_interaction=instrumented historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=templated-late-2015 activefeatures=20151101 shell=svanilla features=party-json-parser transform=party-to-spts robot_tf=canonical bitmap_interaction=instrumented historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical"
