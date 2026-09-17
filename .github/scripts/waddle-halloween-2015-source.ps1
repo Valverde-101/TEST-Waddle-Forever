@@ -72,6 +72,7 @@ $xtHandlerPath = Join-Path $repo 'src/server/socket-server/xt-handler.ts'
 $protocolPath = Join-Path $repo 'src/server/socket-server/handlers/protocol.ts'
 $joinHandlersPath = Join-Path $repo 'src/server/socket-server/handlers/join.ts'
 $partyHandlersPath = Join-Path $repo 'src/server/socket-server/handlers/party.ts'
+$worldHandlersPath = Join-Path $repo 'src/server/socket-server/world-handlers.ts'
 $partyDataPath = Join-Path $repo 'src/server/game-data/party.ts'
 $timelinePath = Join-Path $repo 'src/client/views/timeline/timeline-static.ts'
 $htmlPath = Join-Path $repo 'src/client/views/timeline/timeline.html'
@@ -173,6 +174,7 @@ Require-Contains $joinHandlers 'if (data.getPartyProgress() !== null)' 'join_par
 Require-Contains $joinHandlers 'await sendModernPartyBootstrap(ctx);' 'join_party_bootstrap_call'
 
 $partyHandlers = Read-Normalized $partyHandlersPath
+$worldHandlers = Read-Normalized $worldHandlersPath
 Require-Contains $partyHandlers "await ctx.msg.send(ctx.penguin, 'activefeatures'" 'party_activefeatures_bootstrap'
 Require-Contains $partyHandlers "await ctx.msg.send(ctx.penguin, 'partycookie'" 'party_cookie_response_contract'
 Require-Contains $partyHandlers "await msg.send(penguin, 'partyservice'" 'party_service_response_contract'
@@ -180,7 +182,7 @@ Require-Contains $partyHandlers "action: 'modern-party-bootstrap'" 'party_full_b
 Require-Contains $partyHandlers "action: 'partycookie-partyservice'" 'party_cookie_fallback_trace'
 Require-Contains $partyHandlers 'export const handleModernBitmapInteraction' 'modern_bitmap_interaction_handler'
 Require-Contains $partyHandlers 'party-bitmap-interaction' 'modern_bitmap_interaction_trace'
-Require-Contains $joinHandlers "p.xt('s', 'nx#bimp', ['string'], handleModernBitmapInteraction)" 'modern_bitmap_interaction_registration'
+Require-Contains $worldHandlers "p.xt('s', 'nx#bimp', ['string'], handleModernBitmapInteraction)" 'modern_bitmap_interaction_registration'
 
 $partyData = Read-Normalized $partyDataPath
 Require-Contains $partyData 'export type PartyServiceConfig' 'party_service_type'
