@@ -21,7 +21,15 @@ const XT_ACTION_ALIASES = new Map<string, string>([
   // NovemberParty/TemplatedParty (late 2015) sends the numeric transform id
   // through party#transform. Waddle's player-transform handler already emits
   // the canonical spts response, so keep one implementation of avatar state.
-  ['s%party#transform', 's%pt#spts']
+  ['s%party#transform', 's%pt#spts'],
+  // The preserved Operation Crustacean templated runtime contains the generic
+  // transform code path but does not define CONSTANTS.SET_TRANSFORM in its own
+  // TemplatedPartyConstants class. Halloween 2015 reuses that late-2015 runtime
+  // because it is the only preserved one with PartyJSON/quest support, so the
+  // wire command becomes party#undefined while still carrying exactly the
+  // transform avatar id. Normalize that one-argument fallback to the same room
+  // avatar handler instead of leaving Robot transformation dead.
+  ['s%party#undefined', 's%pt#spts']
 ]);
 
 const canonicalizeXtAction = (action: string): string => XT_ACTION_ALIASES.get(action) ?? action;
