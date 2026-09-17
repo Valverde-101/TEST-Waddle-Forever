@@ -26,6 +26,7 @@ Match $updates "'play/v2/client/shell\.swf'\s*:\s*'svanilla:media/play/v2/client
 Match $updates "'play/v2/content/global/content/features\.swf'\s*:\s*ref\('content/ContentFeatures-HalloweenParty2015\.swf'\)" 'features_runtime_route'
 Match $updates "'close_ups/quest_interface\.swf'\s*:\s*\[ref\('close_ups/Close_upsQuest_interface-HalloweenParty2015\.swf'\).*?'w\.app\.generic\.partyinterface'" 'generic_quest_interface_crumb'
 Match $updates "'content/party_icon\.swf'\s*:\s*\[[^\]]*'party_icon'[^\]]*'scavenger_hunt_icon'" 'party_icon_crumbs'
+Match $updates "'avatar/sprites/robot\.swf'\s*:\s*\[ref\('avatar/PenguinRobot\.swf'\)\s*,\s*'robot_tf'\s*,\s*'w\.avatarSprite\.robot'\s*\]" 'robot_transform_tokens'
 Match $preservedPaths '"w\.p2015\.may\.login"\s*:\s*"close_ups/halloLogin\.swf"' 'preserved_hallo_login_crumb'
 Match $updates "'close_ups/halloLogin\.swf'\s*:\s*\[ref\('close_ups/Hallo15_dialogue_login\.swf'\).*?'w\.app\.loginprompt'" 'generic_login_prompt_alias'
 
