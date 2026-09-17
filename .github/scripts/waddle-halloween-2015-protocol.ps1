@@ -32,28 +32,66 @@ function Resolve-FFDec([string]$Explicit) {
   throw 'WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_missing'
 }
 
+function Stop-FFDecTree($Process) {
+  if ($null -eq $Process) { return }
+  try {
+    & taskkill.exe /PID $Process.Id /T /F 2>$null | Out-Null
+  } catch {
+    try { Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue } catch {}
+  }
+}
+
 function Export-Scripts([string]$FFDec,[string]$Swf,[string]$SafeName,[string]$WorkRoot) {
   $out = Join-Path $WorkRoot ($SafeName + '-scripts')
-  if (Test-Path -LiteralPath $out) { Remove-Item -LiteralPath $out -Recurse -Force }
-  New-Item -ItemType Directory -Force -Path $out | Out-Null
   $stdout = Join-Path $WorkRoot ($SafeName + '.stdout.txt')
   $stderr = Join-Path $WorkRoot ($SafeName + '.stderr.txt')
   $args = @('-cli','-onerror','ignore','-exportTimeout','60','-exportFileTimeout','20','-export','script',('"' + $out + '"'),('"' + $Swf + '"'))
-  $proc = Start-Process -FilePath $FFDec -ArgumentList $args -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru -WindowStyle Hidden
-  if (-not $proc.WaitForExit(90000)) {
-    try { $proc.Kill() } catch {}
-    throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_timeout swf=$Swf"
+  $maxAttempts = 2
+
+  for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+    if (Test-Path -LiteralPath $out) { Remove-Item -LiteralPath $out -Recurse -Force -ErrorAction SilentlyContinue }
+    foreach ($logPath in @($stdout,$stderr)) {
+      if (Test-Path -LiteralPath $logPath) { Remove-Item -LiteralPath $logPath -Force -ErrorAction SilentlyContinue }
+    }
+    New-Item -ItemType Directory -Force -Path $out | Out-Null
+
+    $proc = $null
+    try {
+      $proc = Start-Process -FilePath $FFDec -ArgumentList $args -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru -WindowStyle Hidden
+      if (-not $proc.WaitForExit(90000)) {
+        Stop-FFDecTree $proc
+        if ($attempt -lt $maxAttempts) {
+          Write-Host "WADDLE_PARTY2015_PROTOCOL_FFDEC=RETRY reason=timeout attempt=$attempt next=$($attempt + 1) swf=$Swf"
+          Start-Sleep -Seconds 2
+          continue
+        }
+        throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_timeout attempts=$maxAttempts swf=$Swf"
+      }
+
+      $proc.Refresh()
+      $exitText = [string]$proc.ExitCode
+      if (-not [string]::IsNullOrWhiteSpace($exitText) -and [int]$exitText -ne 0) {
+        if ($attempt -lt $maxAttempts) {
+          Write-Host "WADDLE_PARTY2015_PROTOCOL_FFDEC=RETRY reason=exit code=$exitText attempt=$attempt next=$($attempt + 1) swf=$Swf"
+          Start-Sleep -Seconds 2
+          continue
+        }
+        throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_exit=$exitText attempts=$maxAttempts swf=$Swf"
+      }
+
+      $files = @(Get-ChildItem -LiteralPath $out -File -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in @('.as','.txt') } | Sort-Object FullName)
+      $chunks = @()
+      foreach ($file in $files) {
+        $body = Get-Content -LiteralPath $file.FullName -Raw -ErrorAction SilentlyContinue
+        if (-not [string]::IsNullOrWhiteSpace($body)) { $chunks += $body }
+      }
+      return [pscustomobject]@{ files=$files.Count; text=($chunks -join "`n`n"); exit=$exitText; attempts=$attempt }
+    } finally {
+      if ($null -ne $proc -and -not $proc.HasExited) { Stop-FFDecTree $proc }
+    }
   }
-  $proc.Refresh()
-  $exitText = [string]$proc.ExitCode
-  if (-not [string]::IsNullOrWhiteSpace($exitText) -and [int]$exitText -ne 0) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_exit=$exitText swf=$Swf" }
-  $files = @(Get-ChildItem -LiteralPath $out -File -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in @('.as','.txt') } | Sort-Object FullName)
-  $chunks = @()
-  foreach ($file in $files) {
-    $body = Get-Content -LiteralPath $file.FullName -Raw -ErrorAction SilentlyContinue
-    if (-not [string]::IsNullOrWhiteSpace($body)) { $chunks += $body }
-  }
-  return [pscustomobject]@{ files=$files.Count; text=($chunks -join "`n`n"); exit=$exitText }
+
+  throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_retry_exhausted swf=$Swf"
 }
 
 function Add-Evidence(
@@ -132,8 +170,8 @@ foreach ($target in $targets) {
     $interactionText += "`n" + $text
   }
   Add-Evidence -Text $text -Pairs $pairs -Packets $packets -Localizations $localizations -Loaders $loaders
-  $reports += [pscustomobject]@{ role=[string]$target.role; file=[string]$target.path; bytes=[int64](Get-Item -LiteralPath $swf).Length; scriptFiles=[int]$evidence.files; ffdecExit=[string]$evidence.exit }
-  Write-Host "WADDLE_PARTY2015_PROTOCOL_FILE=PASS role=$($target.role) bytes=$((Get-Item -LiteralPath $swf).Length) script_files=$($evidence.files) ffdec_exit=$($evidence.exit)"
+  $reports += [pscustomobject]@{ role=[string]$target.role; file=[string]$target.path; bytes=[int64](Get-Item -LiteralPath $swf).Length; scriptFiles=[int]$evidence.files; ffdecExit=[string]$evidence.exit; ffdecAttempts=[int]$evidence.attempts }
+  Write-Host "WADDLE_PARTY2015_PROTOCOL_FILE=PASS role=$($target.role) bytes=$((Get-Item -LiteralPath $swf).Length) script_files=$($evidence.files) ffdec_exit=$($evidence.exit) ffdec_attempts=$($evidence.attempts)"
 }
 
 foreach ($target in $compatibilityTargets) {
@@ -148,8 +186,8 @@ foreach ($target in $compatibilityTargets) {
   $compatPackets = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
   $compatLocalizations = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
   Add-Evidence -Text $text -Pairs $compatPairs -Packets $compatPackets -Localizations $compatLocalizations -Loaders $compatibilityLoaders
-  $compatibilityReports += [pscustomobject]@{ role=[string]$target.role; file=[string]$target.path; bytes=[int64](Get-Item -LiteralPath $swf).Length; scriptFiles=[int]$evidence.files; ffdecExit=[string]$evidence.exit }
-  Write-Host "WADDLE_PARTY2015_PROTOCOL_COMPAT_FILE=ANALYZED role=$($target.role) bytes=$((Get-Item -LiteralPath $swf).Length) script_files=$($evidence.files) ffdec_exit=$($evidence.exit)"
+  $compatibilityReports += [pscustomobject]@{ role=[string]$target.role; file=[string]$target.path; bytes=[int64](Get-Item -LiteralPath $swf).Length; scriptFiles=[int]$evidence.files; ffdecExit=[string]$evidence.exit; ffdecAttempts=[int]$evidence.attempts }
+  Write-Host "WADDLE_PARTY2015_PROTOCOL_COMPAT_FILE=ANALYZED role=$($target.role) bytes=$((Get-Item -LiteralPath $swf).Length) script_files=$($evidence.files) ffdec_exit=$($evidence.exit) ffdec_attempts=$($evidence.attempts)"
 }
 
 if ($coreScripted -lt 4) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL interaction_core_scripted=$coreScripted expected_at_least=4" }
@@ -191,7 +229,7 @@ foreach ($alias in @(
 }
 
 $summary = [ordered]@{
-  schema='waddle-modern-party-protocol/v11'; party='Halloween Party 2015'; evidence='exact-cparchives-2015-with-selector-aware-runtime-and-rejected-2310-map';
+  schema='waddle-modern-party-protocol/v12'; party='Halloween Party 2015'; evidence='exact-cparchives-2015-with-selector-aware-runtime-and-rejected-2310-map';
   targetCount=$targets.Count; interactionCoreCount=$interactionCore.Count; interactionCoreScripted=$coreScripted;
   compatibilityTargetCount=$compatibilityTargets.Count; compatibilityScripted=$compatibilityScripted; compatibilityStatus='rejected';
   mayPartyNamespaceAliases=3; compatibilityLoaders=@($compatibilityLoaders | Sort-Object); dialogueCount=$dialogueCount;
@@ -202,4 +240,4 @@ $summaryPath = Join-Path $work 'summary.json'
 $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryPath -Encoding UTF8
 foreach ($pair in @($pairs | Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_PAIR=$pair" }
 foreach ($packet in @($packets | Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_PACKET=$packet" }
-Write-Host "WADDLE_PARTY2015_PROTOCOL=PASS runtime=exact-cparchives-2015 selector_runtime=20150501 mayparty_aliases=3 compatibility_map=rejected targets=$($targets.Count) core=$($interactionCore.Count) core_scripted=$coreScripted compatibility_scripted=$compatibilityScripted dialogues=34 tiles=9 scripted_targets=$scripted localization_tokens=$($localizations.Count) dynamic_loaders=$($loaders.Count) server_routes=5 summary=$summaryPath"
+Write-Host "WADDLE_PARTY2015_PROTOCOL=PASS runtime=exact-cparchives-2015 selector_runtime=20151101 mayparty_aliases=3 compatibility_map=rejected targets=$($targets.Count) core=$($interactionCore.Count) core_scripted=$coreScripted compatibility_scripted=$compatibilityScripted dialogues=34 tiles=9 scripted_targets=$scripted localization_tokens=$($localizations.Count) dynamic_loaders=$($loaders.Count) server_routes=5 ffdec_retry=true summary=$summaryPath"
