@@ -36,8 +36,8 @@ Require ($updates.Contains('unlockDayIndex: 16')) 'party_service_unlock_day'
 Require ($updates.Contains('numOfDaysInParty: 16')) 'party_service_days'
 
 $iconAsset = "P + 'content/ContentParty_icon-HalloweenParty2015.swf'"
-Require ($updates.Contains("'play/v2/client/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'")) 'client_interface_route'
-Require ($updates.Contains("'play/v2/content/global/content/interface.swf': P + 'client/ClientInterface-HalloweenParty2015.swf'")) 'content_interface_alias'
+Require ($updates.Contains("'play/v2/client/interface.swf': P + 'client/interface-runtime.swf'")) 'client_interface_route'
+Require ($updates.Contains("'play/v2/content/global/content/interface.swf': P + 'client/interface-runtime.swf'")) 'content_interface_alias'
 Require ($updates.Contains("'play/v2/content/global/content/party_icon.swf': $iconAsset")) 'party_icon_canonical_route'
 Require ($updates.Contains("'play/v2/content/global/content/party.swf': P + 'content/party.swf'")) 'preserved_party_runtime'
 Require ($updates.Contains("'play/v2/content/global/content/map.swf': P + 'content/map.swf'")) 'preserved_party_map'
