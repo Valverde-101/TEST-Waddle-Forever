@@ -37,7 +37,11 @@ const XT_ACTION_ALIASES = new Map<string, string>([
   // `(fair#fair, [0])`; some preserved server packs use fair#partycookie.
   ['s%fair#fair', 's%party#partycookie'],
   ['s%fair#partycookie', 's%party#partycookie'],
-  ['s%fair#msgviewed', 's%party#msgviewed']
+  ['s%fair#msgviewed', 's%party#msgviewed'],
+  // MayPartyConstants.SET_PLAYER_TRANSFORM = "ftransform". The preserved
+  // MayParty sends this with the same numeric avatar id consumed by the
+  // late-AS3 player-transform handler, whose canonical wire response is spts.
+  ['s%fair#ftransform', 's%pt#spts']
 ]);
 
 const canonicalizeXtAction = (action: string): string => XT_ACTION_ALIASES.get(action) ?? action;
