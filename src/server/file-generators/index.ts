@@ -30,12 +30,22 @@ import { getWorldAchievementsXml } from "./worldachievements.xml";
 
 export type FileGenerator = (d: GameData, s: SettingsManager) => Buffer | string;
 
+const LATE_AS3_FEATURES_ROUTE = 'play/v2/content/global/content/features.swf';
+const LATE_AS3_FEATURES_CRUMB = 'w.app.generic.features';
+
 /**
  * paths.json historically merged timeline `localChanges` but silently ignored
  * `globalChanges`. Late-AS3 party code resolves most party UI through
  * SHELL.getPath() against the global table, so an asset could be routable by URL
  * yet impossible for the client to discover. Merge the generated global paths at
  * the generator boundary so this works for every modern party, not just Halloween.
+ *
+ * Templated late-AS3 party runtimes additionally discover the PartyJSON feature
+ * payload through the hard-coded `w.app.generic.features` crumb. Some preserved
+ * party definitions mount Features as a direct runtime file rather than a crumb
+ * overlay, so synthesize the crumb whenever the selected timeline has a Features
+ * route. Without this, the party icon can load but quests/transformations never
+ * bootstrap because the runtime cannot find `features.swf`.
  */
 const getRuntimePathsJson: FileGenerator = (d) => {
   const paths = JSON.parse(getPathsJson(d)) as {
@@ -45,6 +55,9 @@ const getRuntimePathsJson: FileGenerator = (d) => {
 
   paths.global = {
     ...(paths.global ?? {}),
+    ...(d.lookupFile(LATE_AS3_FEATURES_ROUTE) !== undefined
+      ? { [LATE_AS3_FEATURES_CRUMB]: 'content/features.swf' }
+      : {}),
     ...Object.fromEntries(d.getGlobalPaths())
   };
 
