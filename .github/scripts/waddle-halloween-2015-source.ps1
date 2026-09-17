@@ -88,6 +88,7 @@ foreach ($contract in @(
   'numOfDaysInParty: 16',
   'rooms: HALLOWEEN_2015_ROOMS',
   'music: HALLOWEEN_2015_MUSIC',
+  "'play/v2/content/global/content/party.swf': 'svanilla:media/play/v2/content/global/content/party.swf'",
   "'play/v2/client/QuestCommunicator.swf': ref('client/QuestCommunicator.swf')",
   "'play/v2/client/interface.swf': ref('client/ClientInterface-HalloweenParty2015.swf')",
   "'play/v2/content/global/content/interface.swf': ref('client/ClientInterface-HalloweenParty2015.swf')",
@@ -109,12 +110,13 @@ foreach ($contract in @(
   Require-Contains $party $contract ("party_" + ($contract -replace '[^A-Za-z0-9]+','_').Trim('_'))
 }
 
-# Root rule: October 2015 uses the preserved CPArchives interaction family.
-# The later CPImagined 2310 recreation may stay in media as provenance, but it
-# must never replace the live party/map/config/interface stack for this date.
+# Root rule: October 2015 uses the preserved CPArchives interaction family on
+# top of Waddle's canonical late-AS3 generic party runtime. The later CPImagined
+# 2310 recreation may stay in media as provenance, but its replacement
+# party/map/config/interface stack must never become the live runtime.
 foreach ($stale in @(
   "'play/en/web_service/game_configs.bin'",
-  "'play/v2/content/global/content/party.swf'",
+  "'play/v2/content/global/content/party.swf': ref('content/party.swf')",
   "'play/v2/content/global/content/map.swf'",
   "'content/map.swf':",
   'ClientInterface-HalloweenClassic2015.swf',
@@ -132,6 +134,9 @@ $fileGenerators = Read-Normalized $fileGeneratorsPath
 Require-Contains $fileGenerators 'const getRuntimePathsJson: FileGenerator' 'runtime_paths_generator'
 Require-Contains $fileGenerators '...Object.fromEntries(d.getGlobalPaths())' 'global_paths_merge'
 Require-Contains $fileGenerators "'play/en/web_service/game_configs/paths.json': getRuntimePathsJson" 'runtime_paths_registration'
+Require-Contains $fileGenerators 'const getRuntimeRoomsJson: FileGenerator' 'runtime_rooms_generator'
+Require-Contains $fileGenerators "version >= '2017-01-31' && version < '2017-03-30'" 'community_pin_historical_window'
+Require-Contains $fileGenerators "'play/en/web_service/game_configs/rooms.json': getRuntimeRoomsJson" 'runtime_rooms_registration'
 Require-Contains $fileGenerators 'const getRuntimeGameStringsJson: FileGenerator' 'runtime_game_strings_generator'
 Require-Contains $fileGenerators "'play/en/web_service/game_configs/game_strings.json': getRuntimeGameStringsJson" 'runtime_game_strings_registration'
 
@@ -152,6 +157,8 @@ $protocol = Read-Normalized $protocolPath
 Require-Contains $protocol "action: 's%party#partycookie'" 'party_cookie_selector_compatibility'
 Require-Contains $protocol "exactArguments: ['0']" 'party_cookie_fixed_selector'
 Require-Contains $protocol "'s%nx#bimp'" 'map_impression_telemetry_ack'
+Require-Contains $protocol "action: 's%musictrack#broadcastingmusictracks'" 'soundstudio_broadcast_query'
+Require-Contains $protocol "responseArgs: [0, -1, '']" 'soundstudio_empty_playlist_response'
 
 $joinHandlers = Read-Normalized $joinHandlersPath
 Require-Contains $joinHandlers "import { sendModernPartyBootstrap } from './party';" 'join_party_bootstrap_import'
@@ -198,4 +205,4 @@ $updates = Read-Normalized $updatesPath
 Require-Contains $updates 'import { UPDATES_2015 } from "./2015";' 'updates_2015_import'
 Require-Contains $updates '...UPDATES_2015' 'updates_2015_registration'
 
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=exact-cparchives-2015 historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical party_map=base-runtime game_configs=base-runtime client_interface=historical-2015 quest_interface=historical-2015 hallo_login=historical-2015 dialogues=historical-2015 music=historical-2015 native_namespace=true activefeatures=20150501 partyservice=true mutation=false"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=exact-cparchives-2015 generic_party=svanilla temporal_room_metadata=true historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical party_map=base-runtime game_configs=base-runtime client_interface=historical-2015 quest_interface=historical-2015 hallo_login=historical-2015 dialogues=historical-2015 music=historical-2015 native_namespace=true activefeatures=20150501 partyservice=true mutation=false"
