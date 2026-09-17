@@ -234,11 +234,11 @@ export const UPDATES_2015: Update[] = [
         rooms: HALLOWEEN_2015_ROOMS,
         music: HALLOWEEN_2015_MUSIC,
         fileChanges: {
-          // Halloween 2012 left its event-specific party.swf in persistent
-          // timeline state. Reset to the canonical late-AS3 party runtime before
-          // loading the exact October 2015 interface/features so two party eras
-          // cannot execute together.
-          'play/v2/content/global/content/party.swf': 'svanilla:media/play/v2/content/global/content/party.swf',
+          // The generic svanilla party runtime does not contain the 20150501
+          // selector/MayParty family used by Halloween 2015. Serve the byte-pinned
+          // late-2015 base runtime that does, so activefeatures can initialize the
+          // party class and subsequently load the preserved Features SWF.
+          'play/v2/content/global/content/party.swf': ref('content/party-base-2015.swf'),
           // The October 2015 interaction files are the exact CPArchives pair.
           // The later 2310 Halloween Classic recreation is retained only as
           // provenance under media/default/party2015 and is never routed live.
