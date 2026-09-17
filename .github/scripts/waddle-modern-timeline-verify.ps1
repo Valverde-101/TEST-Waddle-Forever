@@ -63,9 +63,9 @@ $updateText = (Get-ChildItem -LiteralPath $updatesRoot -Filter '*.ts' -File | Fo
 }) -join "`n"
 foreach ($date in $RequiredDates) {
   if ($date -notmatch '^\d{4}-\d{2}-\d{2}$') { Fail "invalid_required_date=$date" }
-  if ($updateText -notmatch [regex]::Escape("date: '$date'")) { Fail "missing_required_date=$date" }
+  if ($updateText -notmatch ("date\s*:\s*'" + [regex]::Escape($date) + "'")) { Fail "missing_required_date=$date" }
 }
-if ($updateText -notmatch [regex]::Escape("partyName: 'Halloween Party 2015'")) { Fail 'halloween_party_name_missing' }
+if ($updateText -notmatch "partyName\s*:\s*'Halloween Party 2015'") { Fail 'halloween_party_name_missing' }
 
 $legacyAs3Footer = $timeline -match "updateVersion\('2016-01-01'\)"
 if ($legacyAs3Footer) { Fail 'legacy_as3_footer_present' }
