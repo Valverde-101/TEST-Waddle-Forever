@@ -311,6 +311,7 @@ export class GameData {
             // intersection until the 2012 PR is added
             this.state.puffleHandItems = false;
             this.addRouteMap(AS3_STATIC_FILES);
+            this.addRoute('play/v2/client/intro_to_cp.swf', 'svanilla:media/play/v2/client/world.swf');
             break;
           case 'as3':
             this.state.as3 = true;
