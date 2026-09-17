@@ -15,18 +15,25 @@ type XtParseResult =
   | { ok: false; reason: string };
 
 /**
- * Native late-2015 party SWFs use a party-specific XT extension while older
- * preserved clients use the generic `party` extension. Both speak the same
- * cookie/progress protocol. Canonicalize only this proven set of actions so the
- * handler registry and persistence remain generic without making unknown
- * `halloween#*` traffic implicitly valid.
+ * Canonicalize only protocol variants that are proven to share server semantics.
+ * Keep late-2015 party transform fallbacks here so templated runtimes update the
+ * same authoritative avatar state as the native pt#spts packet.
  */
 const XT_ACTION_ALIASES = new Map<string, string>([
   ['s%halloween#partycookie', 's%party#partycookie'],
   ['s%halloween#msgviewed', 's%party#msgviewed'],
   ['s%halloween#qcmsgviewed', 's%party#qcmsgviewed'],
   ['s%halloween#qtaskcomplete', 's%party#qtaskcomplete'],
-  ['s%halloween#qtupdate', 's%party#qtupdate']
+  ['s%halloween#qtupdate', 's%party#qtupdate'],
+  ['s%fair#fair', 's%party#partycookie'],
+  ['s%fair#partycookie', 's%party#partycookie'],
+  ['s%fair#msgviewed', 's%party#msgviewed'],
+  ['s%fair#ftransform', 's%pt#spts'],
+  ['s%party#transform', 's%pt#spts'],
+  // The preserved late-2015 templated runtime has the transform call path but
+  // lacks SET_TRANSFORM in its constants class, producing party#undefined with
+  // the numeric avatar id. This one-argument fallback is the same transform.
+  ['s%party#undefined', 's%pt#spts']
 ]);
 
 const canonicalizeXtAction = (action: string): string => XT_ACTION_ALIASES.get(action) ?? action;
@@ -36,7 +43,10 @@ const TRACE_PAYLOAD_ACTIONS = new Set<string>([
   's%party#qtaskcomplete',
   's%party#qtupdate',
   's%halloween#qtaskcomplete',
-  's%halloween#qtupdate'
+  's%halloween#qtupdate',
+  's%party#transform',
+  's%party#undefined',
+  's%pt#spts'
 ]);
 
 const sanitizeTracePayload = (value: string): string => value
@@ -281,7 +291,8 @@ export class XtHandler {
           ? `native late-AS3 party namespace mapped to ${action}`
           : emptyArrayFraming
             ? 'Airtower encoded an empty argument array as a trailing empty XT payload field'
-            : compatibility?.reason
+            : compatibility?.reason,
+        payloadPreview
       });
 
       try {
@@ -297,7 +308,8 @@ export class XtHandler {
             status: 'handler-complete',
             argCount: dispatchArgs.length,
             receivedArgCount: args.length,
-            compatibility: aliased || compatibility !== undefined || emptyArrayFraming
+            compatibility: aliased || compatibility !== undefined || emptyArrayFraming,
+            payloadPreview
           });
         }).catch(error => {
           publishWaddleLiveTrace({
@@ -309,7 +321,8 @@ export class XtHandler {
             direction: 'in',
             status: 'handler-threw',
             async: true,
-            error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+            error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+            payloadPreview
           });
           throw error;
         });
@@ -322,7 +335,8 @@ export class XtHandler {
           canonicalAction: aliased ? action : undefined,
           direction: 'in',
           status: 'handler-threw',
-          error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+          error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+          payloadPreview
         });
         throw error;
       }
