@@ -163,7 +163,9 @@ Require-Contains $xtHandler 'const canonicalizeXtAction' 'native_namespace_canon
 $protocol = Read-Normalized $protocolPath
 Require-Contains $protocol "action: 's%party#partycookie'" 'party_cookie_selector_compatibility'
 Require-Contains $protocol "exactArguments: ['0']" 'party_cookie_fixed_selector'
-Require-Contains $protocol "'s%nx#bimp'" 'map_impression_telemetry_ack'
+if ($protocol -match "(?s)noResponseClientPackets.*'s%nx#bimp'") {
+  throw 'WADDLE_PARTY2015_SOURCE=FAIL stale_contract=nx_bimp_silent_ack'
+}
 
 $joinHandlers = Read-Normalized $joinHandlersPath
 Require-Contains $joinHandlers "import { sendModernPartyBootstrap } from './party';" 'join_party_bootstrap_import'
@@ -176,6 +178,9 @@ Require-Contains $partyHandlers "await ctx.msg.send(ctx.penguin, 'partycookie'" 
 Require-Contains $partyHandlers "await msg.send(penguin, 'partyservice'" 'party_service_response_contract'
 Require-Contains $partyHandlers "action: 'modern-party-bootstrap'" 'party_full_bootstrap_trace'
 Require-Contains $partyHandlers "action: 'partycookie-partyservice'" 'party_cookie_fallback_trace'
+Require-Contains $partyHandlers 'export const handleModernBitmapInteraction' 'modern_bitmap_interaction_handler'
+Require-Contains $partyHandlers 'party-bitmap-interaction' 'modern_bitmap_interaction_trace'
+Require-Contains $joinHandlers "p.xt('s', 'nx#bimp', ['string'], handleModernBitmapInteraction)" 'modern_bitmap_interaction_registration'
 
 $partyData = Read-Normalized $partyDataPath
 Require-Contains $partyData 'export type PartyServiceConfig' 'party_service_type'
