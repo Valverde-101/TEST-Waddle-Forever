@@ -85,6 +85,9 @@ const compatibilityRules: XtCompatibilityRule[] = [
   }
 ];
 
+const IGLOO_LIKE_ALLOWED = '{"canLike":true,"periodicity":"ScheduleDaily","nextLike_msecs":0}';
+const IGLOO_LIKE_CONSUMED = '{"canLike":false,"periodicity":"ScheduleDaily","nextLike_msecs":0}';
+
 /**
  * Narrow vanilla read-only fallbacks proven against preserved server contracts.
  *
@@ -98,6 +101,16 @@ const compatibilityRules: XtCompatibilityRule[] = [
  * i#currencies is the late-AS3 currency-balance query. Preserved Houdini sends
  * `currencies` with pipe-delimited pairs such as `1|<gold nuggets>`. Waddle has
  * no persisted golden-nugget balance, so `1|0` is the truthful empty state.
+ *
+ * g#cli asks whether the current igloo/player-card like target can be liked.
+ * Waddle has no persisted igloo-like subsystem, so the offline-compatible answer
+ * is an allowed, zero-delay ScheduleDaily state.
+ *
+ * g#li submits a like. Preserved late-AS3 handlers do not return a separate `li`
+ * packet; they refresh client eligibility through `cli` and broadcast `lue` to
+ * other players. Waddle has no persisted like counter, so returning the consumed
+ * eligibility state prevents the player-card flow from becoming an unhandled XT
+ * error without inventing durable social state.
  *
  * musictrack#broadcastingmusictracks asks SoundStudio for the live shared-track
  * playlist. Solero/Houdini's vanilla contract returns (0, -1, "") when no shared
@@ -126,6 +139,18 @@ const readOnlyFallbacks: XtReadOnlyFallback[] = [
     responseAction: 'currencies',
     responseArgs: ['1|0'],
     reason: 'late-AS3 currency balance query; preserved server contract encodes golden nuggets as currency 1 and Waddle has no persisted nugget balance'
+  },
+  {
+    action: 's%g#cli',
+    responseAction: 'cli',
+    responseArgs: [1, 200, IGLOO_LIKE_ALLOWED],
+    reason: 'late-AS3 igloo/player-card like eligibility query; offline Waddle has no persisted like cooldown state'
+  },
+  {
+    action: 's%g#li',
+    responseAction: 'cli',
+    responseArgs: [1, 200, IGLOO_LIKE_CONSUMED],
+    reason: 'late-AS3 igloo/player-card like submit; offline Waddle has no persisted like counter, so only the client eligibility state is refreshed'
   },
   {
     action: 's%musictrack#broadcastingmusictracks',
