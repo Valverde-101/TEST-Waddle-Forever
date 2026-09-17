@@ -81,7 +81,7 @@ const HALLOWEEN_2015_SOLO_ROOM_ROUTE = 'play/v2/content/global/rooms/partysolo1.
  * snapshot predates the room metadata. Without the 891 entry the Mine Shack
  * hotspot can emit a join for a room the late-AS3 client cannot resolve/load.
  * Mount the room only while the exact timeline route is active so it cannot leak
- * into other dates.
+ * into other dates or parties.
  */
 const getRuntimeRoomsJson: FileGenerator = (d, s) => {
   const rooms = JSON.parse(getRoomsJson(d, s)) as Record<string, {
@@ -117,15 +117,15 @@ const getRuntimeRoomsJson: FileGenerator = (d, s) => {
       room_id: 891,
       room_key: 'partysolo1',
       name: 'partysolo1',
-      display_name: 'partysolo1',
+      display_name: 'Secret Lab',
       // The preserved Halloween SWF controls its own event audio. Do not import
       // the later recreation's 2055 soundtrack into the exact 2015 stack.
       music_id: 0,
       is_member: 0,
       path: 'partysolo1.swf',
       max_users: 800,
-      jump_enabled: false,
-      jump_disabled: true,
+      jump_enabled: true,
+      jump_disabled: false,
       required_item: null,
       short_name: 'partysolo1'
     };
@@ -141,6 +141,33 @@ const HALLOWEEN_2015_LOCALIZATION_COUNT = 38;
 const HALLOWEEN_2015_LOCALIZATION_FILE = 'halloween2015_dialogue_strings.json';
 const MODERN_CONFIG_BUNDLE_ROUTE = 'play/en/web_service/game_configs.bin';
 
+type RuntimeGameStringsJson = {
+  lang?: unknown[];
+  [key: string]: unknown;
+};
+
+const mergeRuntimeStringEntries = (
+  base: RuntimeGameStringsJson,
+  entries: Iterable<readonly [string, string]>
+): Map<string, string> => {
+  const merged = new Map<string, string>();
+
+  for (const entry of base.lang ?? []) {
+    if (Array.isArray(entry) && entry.length >= 2 && typeof entry[0] === 'string' && typeof entry[1] === 'string') {
+      merged.set(entry[0], entry[1]);
+    }
+  }
+
+  for (const [key, value] of entries) {
+    if (typeof key === 'string' && typeof value === 'string') {
+      merged.set(key, value);
+    }
+  }
+
+  base.lang = Array.from(merged.entries());
+  return merged;
+};
+
 /**
  * Waddle historically generated game_strings.json from its own timeline. Modern
  * parties can additionally ship an immutable game_configs.bin. Halloween 2015's
@@ -154,10 +181,8 @@ const MODERN_CONFIG_BUNDLE_ROUTE = 'play/en/web_service/game_configs.bin';
  * other dates or parties.
  */
 const getRuntimeGameStringsJson: FileGenerator = (d) => {
-  const base = JSON.parse(getGameStrings(d)) as {
-    lang?: unknown[];
-    [key: string]: unknown;
-  };
+  const base = JSON.parse(getGameStrings(d)) as RuntimeGameStringsJson;
+  const merged = mergeRuntimeStringEntries(base, d.getGameStrings());
   const configBundle = d.lookupFile(MODERN_CONFIG_BUNDLE_ROUTE);
 
   if (typeof configBundle !== 'string') {
@@ -182,13 +207,6 @@ const getRuntimeGameStringsJson: FileGenerator = (d) => {
   const entries = Object.entries(localization.strings);
   if (entries.length !== HALLOWEEN_2015_LOCALIZATION_COUNT) {
     throw new Error(`Halloween 2015 localization contract expected ${HALLOWEEN_2015_LOCALIZATION_COUNT} keys but found ${entries.length}: ${localizationPath}`);
-  }
-
-  const merged = new Map<string, string>();
-  for (const entry of base.lang ?? []) {
-    if (Array.isArray(entry) && entry.length >= 2 && typeof entry[0] === 'string' && typeof entry[1] === 'string') {
-      merged.set(entry[0], entry[1]);
-    }
   }
 
   for (const [key, value] of entries) {
