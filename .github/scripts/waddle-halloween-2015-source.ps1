@@ -88,7 +88,7 @@ foreach ($contract in @(
   'numOfDaysInParty: 16',
   'rooms: HALLOWEEN_2015_ROOMS',
   'music: HALLOWEEN_2015_MUSIC',
-  "'play/v2/content/global/content/party.swf': 'svanilla:media/play/v2/content/global/content/party.swf'",
+  "'play/v2/content/global/content/party.swf': ref('content/party-base-2015.swf')",
   "'play/v2/client/QuestCommunicator.swf': ref('client/QuestCommunicator.swf')",
   "'play/v2/client/interface.swf': ref('client/ClientInterface-HalloweenParty2015.swf')",
   "'play/v2/content/global/content/interface.swf': ref('client/ClientInterface-HalloweenParty2015.swf')",
@@ -110,13 +110,14 @@ foreach ($contract in @(
   Require-Contains $party $contract ("party_" + ($contract -replace '[^A-Za-z0-9]+','_').Trim('_'))
 }
 
-# Root rule: October 2015 uses the preserved CPArchives interaction family on
-# top of Waddle's canonical late-AS3 generic party runtime. The later CPImagined
-# 2310 recreation may stay in media as provenance, but its replacement
-# party/map/config/interface stack must never become the live runtime.
+# Root rule: October 2015 uses the exact CPArchives interaction family on top
+# of a byte-pinned late-2015 generic party runtime that understands selector
+# 20150501/MayParty. The later 2310 replacement runtime/map/interface stack and
+# Waddle's selector-incompatible svanilla party.swf must never become live here.
 foreach ($stale in @(
   "'play/en/web_service/game_configs.bin'",
   "'play/v2/content/global/content/party.swf': ref('content/party.swf')",
+  "'play/v2/content/global/content/party.swf': 'svanilla:media/play/v2/content/global/content/party.swf'",
   "'play/v2/content/global/content/map.swf'",
   "'content/map.swf':",
   'ClientInterface-HalloweenClassic2015.swf',
@@ -124,7 +125,7 @@ foreach ($stale in @(
   "'close_ups/ghostAdopt.swf'",
   "'close_ups/skipDialogue.swf'"
 )) {
-  Require-NotContains $party $stale ("mixed_2310_" + ($stale -replace '[^A-Za-z0-9]+','_').Trim('_'))
+  Require-NotContains $party $stale ("mixed_runtime_" + ($stale -replace '[^A-Za-z0-9]+','_').Trim('_'))
 }
 Require-NotContains $party "'play/v2/content/global/content/logo.swf'" 'legacy_wrong_logo_route'
 
@@ -143,6 +144,7 @@ Require-Contains $fileGenerators "'play/en/web_service/game_configs/game_strings
 $general = Read-Normalized $generalPath
 Require-Contains $general "const MODERN_PARTY_ICON_ROUTE = 'play/v2/content/global/content/party_icon.swf';" 'modern_party_icon_route'
 Require-Contains $general 'd.lookupFile(MODERN_PARTY_ICON_ROUTE) !== undefined' 'modern_party_icon_activation'
+Require-Regex $general '(?s)HALLOWEEN_2015_PARTY_ID.*?"isMapNoteActive"\s*:\s*false' 'halloween2015_map_note_disabled_without_asset'
 
 $dependencies = Read-Normalized $dependenciesPath
 Require-Regex $dependencies '(?s)const DEPENDENCIES_VANILLA = \{.*?"boot"\s*:\s*\[.*?"id"\s*:\s*"party"' 'modern_party_boot_dependency'
@@ -185,12 +187,11 @@ foreach ($required in @('client/ClientInterface-HalloweenParty2015.swf','close_u
   if (-not (Test-Swf $path)) { throw "WADDLE_PARTY2015_SOURCE=FAIL historical_runtime_invalid=$required" }
 }
 
-# Canonical supplements are retained for provenance/other compatibility work.
-# Validate anything already materialized byte-for-byte, but never treat those
-# files as proof that the October 2015 live runtime is coherent.
 $canonicalManifest = Get-Content -LiteralPath $canonicalManifestPath -Raw | ConvertFrom-Json
 if ($canonicalManifest.schema -ne 'waddle-canonical-assets/v1') { throw "WADDLE_PARTY2015_SOURCE=FAIL canonical_schema=$($canonicalManifest.schema)" }
 $canonicalAssets = @($canonicalManifest.assets)
+$canonicalTargets = @($canonicalAssets | ForEach-Object { [string]$_.target })
+if (-not ($canonicalTargets -contains 'content/party-base-2015.swf')) { throw 'WADDLE_PARTY2015_SOURCE=FAIL selector_aware_party_runtime_manifest_missing' }
 $presentCanonical = 0
 foreach ($entry in $canonicalAssets) {
   $path = Join-Path $partyRoot (([string]$entry.target).Replace('/','\'))
@@ -205,4 +206,4 @@ $updates = Read-Normalized $updatesPath
 Require-Contains $updates 'import { UPDATES_2015 } from "./2015";' 'updates_2015_import'
 Require-Contains $updates '...UPDATES_2015' 'updates_2015_registration'
 
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=exact-cparchives-2015 generic_party=svanilla temporal_room_metadata=true historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical party_map=base-runtime game_configs=base-runtime client_interface=historical-2015 quest_interface=historical-2015 hallo_login=historical-2015 dialogues=historical-2015 music=historical-2015 native_namespace=true activefeatures=20150501 partyservice=true mutation=false"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=selector-aware-2015 temporal_room_metadata=true historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical party_map=base-runtime map_note=false game_configs=base-runtime client_interface=historical-2015 quest_interface=historical-2015 hallo_login=historical-2015 dialogues=historical-2015 music=historical-2015 native_namespace=true activefeatures=20150501 partyservice=true mutation=false"
