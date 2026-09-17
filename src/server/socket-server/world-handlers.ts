@@ -9,7 +9,7 @@ import { handleCheckName } from "./handlers/create";
 import { handleLeaveGame, handleRoomRefresh, isGameGuard } from "./handlers/game";
 import { getIglooOld, handleAddFlooring, handleAddFurniture, handleAddIgloo, handleAddIglooLayout, handleAddIglooLocation, handleCloseIgloo, handleGetAllIglooLayouts, handleGetDj3kTracks, handleGetFurniture, handleGetFurnitureNew, handleGetIglooCpip, handleGetIglooItems, handleGetIglooLikes, handleGetIglooTypes, handleGetMusicTracks, handleGetOpenIgloos, handleOpenIgloo, handleUpdateIgloo, handleUpdateIglooLayout, handleUpdateIglooNew, handleUpdateIglooOld, handleUpdateIglooType, handleUpdateMusic } from "./handlers/igloo";
 import { handleBuyNinjaCards, handleGetFireLevel, handleGetNinjaCards, handleGetNinjaLevel, handleGetNinjaRanks, handleGetWaterLevel, handleJoinFromMatchmake, handleJoinMatchmaking, handleJoinSensei, handleLeaveMatchmake } from "./handlers/ninja";
-import { handleDonateCoins, handleGetBakeryState, handleGetCookieInventory, handlePartyCommunicatorViewed, handlePartyMessageViewed, handlePartyTaskComplete, handlePartyTaskUpdate, handleRetrievePartyCookie, handleRetrieveMedieval2012, handleSendEnterHopper, handleViewedMedieval2012 } from "./handlers/party";
+import { handleDonateCoins, handleGetBakeryState, handleGetCookieInventory, handleModernBitmapInteraction, handlePartyCommunicatorViewed, handlePartyMessageViewed, handlePartyTaskComplete, handlePartyTaskUpdate, handleRetrievePartyCookie, handleRetrieveMedieval2012, handleSendEnterHopper, handleViewedMedieval2012 } from "./handlers/party";
 import { handleAdoptPuffle, handleAdoptPuffleOld, handleEatPuffleItem, handleGetIglooPuffles, handleGetIglooPufflesOld, handleGetPuffleInventory, handlePuffleBackyardSwap, handlePuffleDigOnCommand, handlePuffleDigRandom, handlePuffleWalk, handleRevealGoldPuffle, isAfterPuffleCreatureGuard, isBeforePuffleCreatureGuard, sendModernPuffleCheck, sendPuffleCheck } from "./handlers/puffle";
 import { handlePuffleTrick } from "./handlers/puffle-trick";
 import { handleGetRainbowQuestData, handleSendRainbowQuestBonusCoins, handleSendRainbowQuestCollectCoins, handleSendRainbowQuestItemCollect, handleSendRainbowTaskComplete } from "./handlers/rainbow";
@@ -220,6 +220,7 @@ export const createWorldXtHandler = (): XtHandler => {
 
     p.xt('s', 'nx#gas', [], handleGetActionStatus, { xt: { once: true } }),
     p.xt('s', 'nx#mcs', ['number'], handleMapCategorySetting),
+    p.xt('s', 'nx#bimp', ['string'], handleModernBitmapInteraction),
     p.xt('s', 'nx#pcos', [], handlePlayercardOpenedSetting, { xt: { once: true } }),
     p.xt('s', 'nx#swave', [], handleSpecialWave, { xt: { once: true } }),
     p.xt('s', 'nx#sdance', [], handleSpecialDance, { xt: { once: true } }),
