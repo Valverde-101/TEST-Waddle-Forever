@@ -13,6 +13,13 @@
       "kind": "swf"
     },
     {
+      "target": "content/party-base-2015.swf",
+      "sourcePath": "parties/2310 2 halloween classic edition/hadnler stuff/global content/party.swf",
+      "bytes": 61387,
+      "gitBlobSha": "ab12a27ebb1776bc30cc14d8ef748413f093ea80",
+      "kind": "swf"
+    },
+    {
       "target": "content/map.swf",
       "sourcePath": "parties/2310 2 halloween classic edition/map.swf",
       "bytes": 243088,
