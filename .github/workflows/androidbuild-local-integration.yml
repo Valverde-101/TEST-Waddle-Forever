@@ -20,7 +20,7 @@ env:
 # historical cache because that cache is analysis state, not live runtime state.
 concurrency:
   group: waddle-certification-${{ github.event.pull_request.number || github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   certify:
