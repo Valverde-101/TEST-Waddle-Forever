@@ -51,6 +51,39 @@ const getRuntimePathsJson: FileGenerator = (d) => {
   return JSON.stringify(paths);
 };
 
+/**
+ * rooms.json contains a small amount of late-game static metadata that was
+ * originally captured from one particular 2017 snapshot. That metadata must not
+ * leak backwards through Waddle's historical timeline.
+ *
+ * Community Pin 7308 existed in the Coffee Shop only from 2017-01-31 through
+ * 2017-03-29 (the next pin period starts 2017-03-30). Outside that interval the
+ * room must not advertise the pin, otherwise older clients request
+ * content/room_pin/7308.swf while replaying unrelated years such as 2015.
+ *
+ * Keep the canonical room table unchanged and normalize only the generated view;
+ * this makes the fix date-driven and avoids hiding the symptom with a future SWF.
+ */
+const getRuntimeRoomsJson: FileGenerator = (d, s) => {
+  const rooms = JSON.parse(getRoomsJson(d, s)) as Record<string, {
+    pin_id?: number;
+    pin_x?: number;
+    pin_y?: number;
+    [key: string]: unknown;
+  }>;
+  const version = s.settings.version;
+  const communityPinActive = version >= '2017-01-31' && version < '2017-03-30';
+  const coffee = rooms['110'];
+
+  if (!communityPinActive && coffee?.pin_id === 7308) {
+    delete coffee.pin_id;
+    delete coffee.pin_x;
+    delete coffee.pin_y;
+  }
+
+  return JSON.stringify(rooms);
+};
+
 const HALLOWEEN_2015_LOCALIZATION_PREFIX = 'w.app.p2015.halloween.';
 const HALLOWEEN_2015_LOCALIZATION_COUNT = 38;
 const HALLOWEEN_2015_LOCALIZATION_FILE = 'halloween2015_dialogue_strings.json';
@@ -130,7 +163,7 @@ const GET_GENERATORS: Record<string, FileGenerator> = {
   'play/en/web_service/game_configs/games.json': getGamesJson,
   'en/web_service/games.json': getGamesJson,
   'play/en/web_service/game_configs/paper_items.json': getPaperItemsJson,
-  'play/en/web_service/game_configs/rooms.json': getRoomsJson,
+  'play/en/web_service/game_configs/rooms.json': getRuntimeRoomsJson,
   'setup.xml': getSetupXml,
   'play/v2/content/local/en/news/news_crumbs.swf': getNewsCrumbsSwf,
   'play/v2/content/local/en/login/startscreen.xml': getStartscreenXML,
