@@ -145,6 +145,7 @@ $candidate = Join-Path $partyRoot 'content\party-base-2015.swf'
 $targets = [ordered]@{
   'svanilla-party' = $current
   'party-base-2015' = $candidate
+  'party-runtime-live' = (Join-Path $partyRoot 'content\party-runtime-2015.swf')
   'party-2310-full' = (Join-Path $partyRoot 'content\party.swf')
   'selected-party-runtime-2015' = (Join-Path $partyRoot 'content\party-runtime-2015.swf')
   'client-interface-2015' = (Join-Path $partyRoot 'client\ClientInterface-HalloweenParty2015.swf')
