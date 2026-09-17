@@ -91,10 +91,6 @@ $interactionCore = @(
   @{ role='robot-avatar'; path='avatar\PenguinRobot.swf' }
 )
 
-# The byte-pinned 2310 map is provenance only. It is intentionally analyzed in
-# a separate evidence set so its incompatible loaders can never contaminate or
-# fail the exact CPArchives 2015 runtime evidence. CI must continue to prove why
-# this candidate remains rejected before anyone can route it live.
 $compatibilityTargets = @(
   @{ role='compat-map-2310'; path='content\map.swf' }
 )
@@ -176,20 +172,29 @@ Write-Host 'WADDLE_PARTY2015_COMPAT_MAP=REJECTED reason=requires_missing_close_u
 
 $worldHandlersPath = Join-Path $repo 'src\server\socket-server\world-handlers.ts'
 $partyHandlerPath = Join-Path $repo 'src\server\socket-server\handlers\party.ts'
+$xtHandlerPath = Join-Path $repo 'src\server\socket-server\xt-handler.ts'
 $worldHandlers = [IO.File]::ReadAllText($worldHandlersPath)
 $partyHandler = [IO.File]::ReadAllText($partyHandlerPath)
+$xtHandler = [IO.File]::ReadAllText($xtHandlerPath)
 foreach ($route in @('party#partycookie','party#msgviewed','party#qcmsgviewed','party#qtaskcomplete','party#qtupdate')) {
   if (-not $worldHandlers.Contains($route)) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL server_route_missing=$route" }
 }
 foreach ($token in @('getPartyServiceConfig','sendCurrentPartyCookie','partyservice','partycookie','activefeatures','qtupdate')) {
   if (-not $partyHandler.Contains($token)) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL party_handler_missing=$token" }
 }
+foreach ($alias in @(
+  "['s%fair#fair', 's%party#partycookie']",
+  "['s%fair#partycookie', 's%party#partycookie']",
+  "['s%fair#msgviewed', 's%party#msgviewed']"
+)) {
+  if (-not $xtHandler.Contains($alias)) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL mayparty_alias_missing=$alias" }
+}
 
 $summary = [ordered]@{
-  schema='waddle-modern-party-protocol/v10'; party='Halloween Party 2015'; evidence='exact-cparchives-2015-with-explicitly-rejected-2310-map';
+  schema='waddle-modern-party-protocol/v11'; party='Halloween Party 2015'; evidence='exact-cparchives-2015-with-selector-aware-runtime-and-rejected-2310-map';
   targetCount=$targets.Count; interactionCoreCount=$interactionCore.Count; interactionCoreScripted=$coreScripted;
   compatibilityTargetCount=$compatibilityTargets.Count; compatibilityScripted=$compatibilityScripted; compatibilityStatus='rejected';
-  compatibilityLoaders=@($compatibilityLoaders | Sort-Object); dialogueCount=$dialogueCount;
+  mayPartyNamespaceAliases=3; compatibilityLoaders=@($compatibilityLoaders | Sort-Object); dialogueCount=$dialogueCount;
   scriptedTargetCount=$scripted; pairs=@($pairs | Sort-Object); packetTokens=@($packets | Sort-Object);
   localizationTokens=@($localizations | Sort-Object); dynamicSwfLoaders=@($loaders | Sort-Object); files=$reports; compatibilityFiles=$compatibilityReports
 }
@@ -197,4 +202,4 @@ $summaryPath = Join-Path $work 'summary.json'
 $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryPath -Encoding UTF8
 foreach ($pair in @($pairs | Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_PAIR=$pair" }
 foreach ($packet in @($packets | Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_PACKET=$packet" }
-Write-Host "WADDLE_PARTY2015_PROTOCOL=PASS runtime=exact-cparchives-2015 compatibility_map=rejected targets=$($targets.Count) core=$($interactionCore.Count) core_scripted=$coreScripted compatibility_scripted=$compatibilityScripted dialogues=34 tiles=9 scripted_targets=$scripted localization_tokens=$($localizations.Count) dynamic_loaders=$($loaders.Count) server_routes=5 summary=$summaryPath"
+Write-Host "WADDLE_PARTY2015_PROTOCOL=PASS runtime=exact-cparchives-2015 selector_runtime=20150501 mayparty_aliases=3 compatibility_map=rejected targets=$($targets.Count) core=$($interactionCore.Count) core_scripted=$coreScripted compatibility_scripted=$compatibilityScripted dialogues=34 tiles=9 scripted_targets=$scripted localization_tokens=$($localizations.Count) dynamic_loaders=$($loaders.Count) server_routes=5 summary=$summaryPath"
