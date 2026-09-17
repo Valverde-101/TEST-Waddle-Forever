@@ -101,6 +101,7 @@ const sendCurrentPartyService: PenguinHandler<[]> = async ({ penguin, msg, data 
       unlockDayIndex: service.unlockDayIndex,
       numOfDaysInParty: service.numOfDaysInParty
     },
+    contestSettings: service.contestSettings ?? {},
     partyStartDate: service.partyStartDate,
     partyEndDate: service.partyEndDate
   }));
