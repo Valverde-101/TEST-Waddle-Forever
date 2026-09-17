@@ -187,8 +187,7 @@ export class XtHandler {
         direction: 'in',
         status: 'malformed-message',
         reason,
-        messageLength: message.length,
-        payloadPreview
+        messageLength: message.length
       });
       return;
     }
