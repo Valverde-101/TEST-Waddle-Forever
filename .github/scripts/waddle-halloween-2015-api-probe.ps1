@@ -47,6 +47,20 @@ function Unique-Matches([string]$Text,[string]$Pattern,[int]$Group=1) {
   return @($set | Sort-Object)
 }
 
+function Emit-Snippet([string]$Name,[string]$Text,[string]$Pattern) {
+  $lines=@($Text -split "`r?`n")
+  for($i=0;$i -lt $lines.Count;$i++) {
+    if($lines[$i] -match $Pattern) {
+      $start=[Math]::Max(0,$i-4);$end=[Math]::Min($lines.Count-1,$i+10)
+      $snippet=[regex]::Replace(($lines[$start..$end]-join ' '),'\s+',' ')
+      if($snippet.Length -gt 2200){$snippet=$snippet.Substring(0,2200)}
+      Write-Host "WADDLE_PARTY2015_API_EVIDENCE name=$Name text=$snippet"
+      return
+    }
+  }
+  Write-Host "WADDLE_PARTY2015_API_EVIDENCE name=$Name text=MISSING"
+}
+
 $repo = (Resolve-Path -LiteralPath $RepoRoot).Path
 $root = Join-Path $repo 'media\default\party2015'
 $ffdec = Resolve-FFDec $FFDecPath
@@ -94,12 +108,20 @@ foreach ($member in $loginCalls) { Write-Host "WADDLE_PARTY2015_API_LOGIN_CALL=$
 foreach ($packet in $loginPackets) { Write-Host "WADDLE_PARTY2015_API_LOGIN_PACKET=$packet" }
 foreach ($name in $communicatorNames) { Write-Host "WADDLE_PARTY2015_API_COMMUNICATOR_SYMBOL=$name" }
 
-$loginHasViewed = [bool]($login.text -match '(?i)sendMessageViewed|msgviewed|MESSAGE_VIEWED')
+# The live trace proves the login asset jumps to shack but emits no msgviewed.
+# Print its exact completion code so any server/client fix is evidence-based.
+Emit-Snippet 'login_sendMessageViewed' $login.text '(?i)sendMessageViewed|setMessageViewed|msgviewed'
+Emit-Snippet 'login_joinRoom' $login.text '(?i)sendJoinRoom|joinRoom|shack'
+Emit-Snippet 'login_closeContent' $login.text '(?i)closeContent|onRelease|close_btn|closeButton'
+Emit-Snippet 'mayparty_sendMessageViewed' $party.text '(?i)static function sendMessageViewed'
+Emit-Snippet 'mayparty_icon_visible' $party.text '(?i)partyIconVisible'
+
+$loginHasViewed = [bool]($login.text -match '(?i)sendMessageViewed|setMessageViewed|msgviewed|MESSAGE_VIEWED')
 $featuresCallsLoad = [bool]($features.text -match '(?i)loadPartyFeatures')
 if (-not $featuresCallsLoad) { throw 'WADDLE_PARTY2015_API_PROBE=FAIL features_missing_loadPartyFeatures_call' }
 
 $summary = [ordered]@{
-  schema='waddle-halloween2015-api-probe/v1'
+  schema='waddle-halloween2015-api-probe/v2'
   classChecks=$classChecks
   questMembers=@($currentPartyMembers | Sort-Object)
   featureCalls=$featureCalls
