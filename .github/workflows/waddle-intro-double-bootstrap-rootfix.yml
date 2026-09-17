@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: waddle-intro-double-bootstrap-rootfix
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   patch-regression-gate:
@@ -29,19 +29,19 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $path = Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-source.ps1'
           $text = [IO.File]::ReadAllText($path)
-          $declaration = "$partyPath=Join-Path $repo 'src/server/updates/2015.ts'"
-          $insertDeclaration = "$partyPath=Join-Path $repo 'src/server/updates/2015.ts'`r`n$gameDataPath=Join-Path $repo 'src/server/timelines/game-data.ts'"
-          $guard = "Require-NotContains $gameData \"this.addRoute('play/v2/client/intro_to_cp.swf', 'svanilla:media/play/v2/client/world.swf');\" 'intro_module_must_not_boot_world'"
-          if (-not $text.Contains("intro_module_must_not_boot_world")) {
+          $declaration = '$partyPath=Join-Path $repo ''src/server/updates/2015.ts'''
+          $insertDeclaration = '$partyPath=Join-Path $repo ''src/server/updates/2015.ts''' + "`r`n" + '$gameDataPath=Join-Path $repo ''src/server/timelines/game-data.ts'''
+          $guard = 'Require-NotContains $gameData "this.addRoute(''play/v2/client/intro_to_cp.swf'', ''svanilla:media/play/v2/client/world.swf'');" ''intro_module_must_not_boot_world'''
+          if (-not $text.Contains('intro_module_must_not_boot_world')) {
             if (-not $text.Contains($declaration)) { throw 'WADDLE_INTRO_REGRESSION=FAIL declaration_anchor_missing' }
             $text = $text.Replace($declaration, $insertDeclaration)
-            $anchor = "$party=Read-Normalized $partyPath"
+            $anchor = '$party=Read-Normalized $partyPath'
             if (-not $text.Contains($anchor)) { throw 'WADDLE_INTRO_REGRESSION=FAIL party_anchor_missing' }
-            $replacement = "$gameData=Read-Normalized $gameDataPath`r`n$guard`r`n`r`n$anchor"
+            $replacement = '$gameData=Read-Normalized $gameDataPath' + "`r`n" + $guard + "`r`n`r`n" + $anchor
             $text = $text.Replace($anchor, $replacement)
             [IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($false))
           }
-          if (-not $text.Contains("intro_module_must_not_boot_world")) { throw 'WADDLE_INTRO_REGRESSION=FAIL guard_missing' }
+          if (-not $text.Contains('intro_module_must_not_boot_world')) { throw 'WADDLE_INTRO_REGRESSION=FAIL guard_missing' }
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
