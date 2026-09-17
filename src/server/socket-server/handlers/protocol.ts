@@ -16,7 +16,7 @@ export type XtReadOnlyFallback = {
   responseAction: string;
   /** Static arguments used only when Waddle has no persisted subsystem state. */
   responseArgs: Array<string | number>;
-  /** Evidence/rationale for the compatibility response. */
+  /** Why accepting the variant is safe for the offline server. */
   reason: string;
 };
 
@@ -31,13 +31,21 @@ export type XtReadOnlyFallback = {
  * bi#ack: Airtower acknowledgement for selected server commands. The payload is
  * variable-length telemetry metadata (time=<epoch>, acknowledged command, ...).
  *
- * nx#bimp is intentionally not listed here. Modern party clients can use it for
- * bitmap-interaction payloads that advance quest/drop state, so it must be
- * dispatched through an explicit handler instead of being silently acknowledged.
+ * nx#bimp: late-AS3 map impression payload. It remains listed as an acknowledgement
+ * fallback for timelines that do not register a bitmap-interaction handler. When a
+ * modern party registers s%nx#bimp explicitly, XtHandler dispatches that callback
+ * before consulting this no-response set, so quest/drop interaction is preserved.
+ *
+ * p#bipa / p#bipc: late-AS3 puffle adoption/care BI packets. Preserved
+ * BridgeFilter code identifies them as telemetry events, while the gameplay
+ * mutation is handled by the p#pn adoption and puffle inventory/care packets.
  */
 const noResponseClientPackets = new Set<string>([
   's%j#crl',
-  's%bi#ack'
+  's%bi#ack',
+  's%nx#bimp',
+  's%p#bipa',
+  's%p#bipc'
 ]);
 
 /**
@@ -77,8 +85,11 @@ const compatibilityRules: XtCompatibilityRule[] = [
   }
 ];
 
+const IGLOO_LIKE_ALLOWED = '{"canLike":true,"periodicity":"ScheduleDaily","nextLike_msecs":0}';
+const IGLOO_LIKE_CONSUMED = '{"canLike":false,"periodicity":"ScheduleDaily","nextLike_msecs":0}';
+
 /**
- * Narrow vanilla read-only fallbacks proven against Solero/Houdini contracts.
+ * Narrow vanilla read-only fallbacks proven against preserved server contracts.
  *
  * p#getdigcooldown returns seconds remaining until another puffle treasure dig.
  * Waddle does not persist a treasure-dig cooldown, so zero is the truthful
@@ -86,6 +97,26 @@ const compatibilityRules: XtCompatibilityRule[] = [
  *
  * f#epfgm retrieves EPF communication messages. Waddle has no EPF COM-message
  * store, so the canonical empty response is unread=0 with no message payload.
+ *
+ * i#currencies is the late-AS3 currency-balance query. Preserved Houdini sends
+ * `currencies` with pipe-delimited pairs such as `1|<gold nuggets>`. Waddle has
+ * no persisted golden-nugget balance, so `1|0` is the truthful empty state.
+ *
+ * g#cli asks whether the current igloo/player-card like target can be liked.
+ * Waddle has no persisted igloo-like subsystem, so the offline-compatible answer
+ * is an allowed, zero-delay ScheduleDaily state.
+ *
+ * g#li submits a like. Preserved late-AS3 handlers do not return a separate `li`
+ * packet; they refresh client eligibility through `cli` and broadcast `lue` to
+ * other players. Waddle has no persisted like counter, so returning the consumed
+ * eligibility state prevents the player-card flow from becoming an unhandled XT
+ * error without inventing durable social state.
+ *
+ * musictrack#broadcastingmusictracks asks SoundStudio for the live shared-track
+ * playlist. Solero/Houdini's vanilla contract returns (0, -1, "") when no shared
+ * playlist exists. Waddle has no persisted SoundStudio broadcast queue, so that
+ * exact empty state is truthful and prevents room entry from becoming an
+ * unhandled protocol error.
  *
  * Keep these exact and response-bearing. They must not be converted into the
  * no-response acknowledgement set because the vanilla client waits for them.
@@ -102,6 +133,30 @@ const readOnlyFallbacks: XtReadOnlyFallback[] = [
     responseAction: 'epfgm',
     responseArgs: [0],
     reason: 'vanilla EPF COM-message query; offline Waddle has no COM-message store'
+  },
+  {
+    action: 's%i#currencies',
+    responseAction: 'currencies',
+    responseArgs: ['1|0'],
+    reason: 'late-AS3 currency balance query; preserved server contract encodes golden nuggets as currency 1 and Waddle has no persisted nugget balance'
+  },
+  {
+    action: 's%g#cli',
+    responseAction: 'cli',
+    responseArgs: [1, 200, IGLOO_LIKE_ALLOWED],
+    reason: 'late-AS3 igloo/player-card like eligibility query; offline Waddle has no persisted like cooldown state'
+  },
+  {
+    action: 's%g#li',
+    responseAction: 'cli',
+    responseArgs: [1, 200, IGLOO_LIKE_CONSUMED],
+    reason: 'late-AS3 igloo/player-card like submit; offline Waddle has no persisted like counter, so only the client eligibility state is refreshed'
+  },
+  {
+    action: 's%musictrack#broadcastingmusictracks',
+    responseAction: 'broadcastingmusictracks',
+    responseArgs: [0, -1, ''],
+    reason: 'vanilla SoundStudio broadcast query; offline Waddle has no shared live playlist, matching the canonical empty playlist response'
   }
 ];
 
