@@ -7,6 +7,8 @@ export type PartyServiceConfig = {
   unlockDayIndex: number;
   /** Total number of days exposed to the party runtime. */
   numOfDaysInParty: number;
+  /** Optional late-AS3 contest metadata. Empty object keeps templated runtimes safe. */
+  contestSettings?: Record<string, unknown>;
 };
 
 export type PartyProgressConfig = {
@@ -38,7 +40,8 @@ const ARCHIVED_PARTY_SERVICES: Readonly<Record<string, PartyServiceConfig>> = {
     partyStartDate: '2015-10-21 00:00:00',
     partyEndDate: '2015-11-05 00:00:00',
     unlockDayIndex: 16,
-    numOfDaysInParty: 16
+    numOfDaysInParty: 16,
+    contestSettings: {}
   }
 };
 
