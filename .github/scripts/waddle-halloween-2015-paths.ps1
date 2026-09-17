@@ -26,6 +26,10 @@ Require ($generators.Contains('const getRuntimePathsJson: FileGenerator')) 'runt
 Require ($generators.Contains('...Object.fromEntries(d.getGlobalPaths())')) 'runtime_global_paths_merge'
 Require ($generators.Contains("'play/en/web_service/game_configs/paths.json': getRuntimePathsJson")) 'runtime_paths_registration'
 
+# Reset the old persistent 2012 party boot module to Waddle's canonical late-AS3
+# generic runtime. This route is not the later 2310 recreation stored as provenance.
+Require ($updates.Contains("'play/v2/content/global/content/party.swf': 'svanilla:media/play/v2/content/global/content/party.swf'")) 'canonical_generic_party_runtime'
+
 Require ($updates.Contains("'close_ups/quest_interface.swf': [ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf'), 'w.p2015.may.partyinterface', 'w.app.generic.partyinterface', 'scavenger_hunt']")) 'historical_quest_interface_crumbs'
 Require ($updates.Contains("'close_ups/quest_interface.swf': { en: ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf') }")) 'historical_quest_interface_local'
 Require ($updates.Contains("'content/party_icon.swf': [ref('content/ContentParty_icon-HalloweenParty2015.swf'), 'party_icon', 'scavenger_hunt_icon']")) 'party_icon_crumbs'
@@ -58,8 +62,8 @@ Require ($updates.Contains('...dialogueLocalChanges')) 'dialogue_local_routes'
 Require ($updates.Contains('...tileGlobalChanges')) 'tile_global_routes'
 Require ($updates.Contains('...tileLocalChanges')) 'tile_local_routes'
 
-# Root regression guards. These paths belong to the later 2310 recreation. When
-# they were live they caused map.swf -> party_map_note.swf 404 and 2048.swf 404.
+# Root regression guards. Reject the actual later 2310 runtime replacements,
+# while allowing the canonical svanilla party route above.
 foreach ($stale in @(
   "'content/map.swf':",
   "'close_ups/ghostAdopt.swf'",
@@ -67,10 +71,10 @@ foreach ($stale in @(
   'ClientInterface-HalloweenClassic2015.swf',
   'Close_upsQuest_interface-HalloweenClassic2015.swf',
   "'play/en/web_service/game_configs.bin'",
-  "'play/v2/content/global/content/party.swf'",
+  "'play/v2/content/global/content/party.swf': ref('content/party.swf')",
   "'play/v2/content/global/content/map.swf'"
 )) {
   Require (-not $updates.Contains($stale)) ("no_2310_" + ($stale -replace '[^A-Za-z0-9]+','_').Trim('_'))
 }
 
-Write-Host "WADDLE_HALLOWEEN2015_PATHS=PASS runtime_paths=generated-from-selected-party quest_interface=exact-cparchives-2015 hallo_login=exact-cparchives-2015 dialogue_aliases=$($aliases.Count) map_note_dependency=false party_map=base-runtime cpimagined_paths=provenance-only mixed_2310=false"
+Write-Host "WADDLE_HALLOWEEN2015_PATHS=PASS runtime_paths=generated-from-selected-party generic_party=svanilla quest_interface=exact-cparchives-2015 hallo_login=exact-cparchives-2015 dialogue_aliases=$($aliases.Count) map_note_dependency=false party_map=base-runtime cpimagined_paths=provenance-only mixed_2310=false"
