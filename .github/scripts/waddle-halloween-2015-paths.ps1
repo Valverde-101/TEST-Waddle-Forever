@@ -41,7 +41,7 @@ function Get-PreservedPath([string]$Key,[bool]$Required = $true) {
 $contracts = @(
   @{ key='skipDialogue'; route='close_ups/skipDialogue.swf'; source="'close_ups/skipDialogue.swf': [P + 'close_ups/skipDialogue.swf', 'skipDialogue']" },
   @{ key='w.p2015.may.login'; route='close_ups/halloLogin.swf'; source="'close_ups/halloLogin.swf': [P + 'close_ups/halloLogin.swf', 'w.p2015.may.login']" },
-  @{ key='w.p2015.may.partyinterface'; route='close_ups/quest_interface.swf'; source="'close_ups/quest_interface.swf': [P + 'close_ups/Close_upsQuest_interface-HalloweenParty2015.swf', 'w.p2015.may.partyinterface'" },
+  @{ key='w.p2015.may.partyinterface'; route='close_ups/quest_interface.swf'; source="'close_ups/quest_interface.swf': [P + 'close_ups/quest_interface-runtime.swf', 'w.p2015.may.partyinterface'" },
   @{ key='w.p2015.may.partymap'; route='content/map.swf'; source="'content/map.swf': [P + 'content/map.swf', 'w.p2015.may.partymap']" },
   @{ key='ghostAdopt'; route='close_ups/ghostAdopt.swf'; source="'close_ups/ghostAdopt.swf': [P + 'close_ups/ghostAdopt.swf', 'ghostAdopt']" },
   @{ key='halloHerbertMonologue'; route='close_ups/halloHerbertMonologue.swf'; source="'close_ups/halloHerbertMonologue.swf': [P + 'close_ups/Hallo15_dialogue_Herbert_monologue.swf', 'halloHerbertMonologue']" },
