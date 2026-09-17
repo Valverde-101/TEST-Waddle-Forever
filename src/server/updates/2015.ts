@@ -110,6 +110,7 @@ export const UPDATES_2015: Update[] = [
         'play/v2/content/global/content/features.swf':ref('content/ContentFeatures-HalloweenParty2015.swf'),
         'play/v2/content/global/content/party_icon.swf':ref('content/ContentParty_icon-HalloweenParty2015.swf'),
         'play/v2/content/global/logo/logo.swf':ref('content/ContentLogo-HalloweenParty2015.swf'),
+        'play/v2/content/global/avatar/sprites/robot.swf':ref('avatar/PenguinRobot.swf'),
         'play/v2/content/global/avatar/sprites/penguin_robot.swf':ref('avatar/PenguinRobot.swf'),
         'play/v2/content/global/telescope/telescope.swf':ref('other/Telescope-HalloweenParty2015.swf'),
         'play/v2/content/global/binoculars/binoculars.swf':ref('other/Binoculars-HalloweenParty2015.swf'),
@@ -123,6 +124,7 @@ export const UPDATES_2015: Update[] = [
       },
       globalChanges:{
         'content/party_icon.swf':[ref('content/ContentParty_icon-HalloweenParty2015.swf'),'party_icon','scavenger_hunt_icon'],
+        'avatar/sprites/robot.swf':[ref('avatar/PenguinRobot.swf'),'robot_tf'],
         'close_ups/quest_interface.swf':[ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf'),'w.p2015.may.partyinterface','w.app.generic.partyinterface','scavenger_hunt'],
         'close_ups/halloLogin.swf':[ref('close_ups/Hallo15_dialogue_login.swf'),'w.p2015.may.login','w.app.loginprompt'],
         ...dialogueGlobalChanges,...tileGlobalChanges,
