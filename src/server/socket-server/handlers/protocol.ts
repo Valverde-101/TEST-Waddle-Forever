@@ -16,7 +16,7 @@ export type XtReadOnlyFallback = {
   responseAction: string;
   /** Static arguments used only when Waddle has no persisted subsystem state. */
   responseArgs: Array<string | number>;
-  /** Evidence/rationale for the compatibility response. */
+  /** Why accepting the variant is safe for the offline server. */
   reason: string;
 };
 
@@ -89,6 +89,10 @@ const compatibilityRules: XtCompatibilityRule[] = [
  * f#epfgm retrieves EPF communication messages. Waddle has no EPF COM-message
  * store, so the canonical empty response is unread=0 with no message payload.
  *
+ * i#currencies is the late-AS3 currency-balance query. Preserved Houdini sends
+ * `currencies` with pipe-delimited pairs such as `1|<gold nuggets>`. Waddle has
+ * no persisted golden-nugget balance, so `1|0` is the truthful empty state.
+ *
  * musictrack#broadcastingmusictracks asks SoundStudio for the live shared-track
  * playlist. Solero/Houdini's vanilla contract returns (0, -1, "") when no shared
  * playlist exists. Waddle has no persisted SoundStudio broadcast queue, so that
@@ -110,6 +114,12 @@ const readOnlyFallbacks: XtReadOnlyFallback[] = [
     responseAction: 'epfgm',
     responseArgs: [0],
     reason: 'vanilla EPF COM-message query; offline Waddle has no COM-message store'
+  },
+  {
+    action: 's%i#currencies',
+    responseAction: 'currencies',
+    responseArgs: ['1|0'],
+    reason: 'late-AS3 currency balance query; preserved server contract encodes golden nuggets as currency 1 and Waddle has no persisted nugget balance'
   },
   {
     action: 's%musictrack#broadcastingmusictracks',
