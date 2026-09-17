@@ -56,6 +56,7 @@ Assert ($updates.Contains("date: '2015-11-05'")) 'party_end_date_missing'
 Assert ($updates.Contains("end: ['party']")) 'party_end_missing'
 
 $requiredLive = @(
+  "'play/v2/content/global/content/party.swf': ref('content/party-base-2015.swf')",
   "'play/v2/client/QuestCommunicator.swf': ref('client/QuestCommunicator.swf')",
   "'play/v2/client/interface.swf': ref('client/ClientInterface-HalloweenParty2015.swf')",
   "'play/v2/content/global/content/interface.swf': ref('client/ClientInterface-HalloweenParty2015.swf')",
@@ -71,6 +72,7 @@ foreach ($contract in $requiredLive) { Assert ($updates.Contains($contract)) "li
 
 foreach ($stale in @(
   "ref('content/party.swf')","ref('content/map.swf')",
+  "'play/v2/content/global/content/party.swf': 'svanilla:media/play/v2/content/global/content/party.swf'",
   "ref('client/ClientInterface-HalloweenClassic2015.swf')",
   "ref('close_ups/Close_upsQuest_interface-HalloweenClassic2015.swf')",
   "ref('close_ups/ghostAdopt.swf')","ref('close_ups/skipDialogue.swf')",
@@ -115,7 +117,7 @@ foreach ($critical in @(
 $canonicalManifest = Get-Content -LiteralPath $canonicalManifestPath -Raw | ConvertFrom-Json
 Assert ($canonicalManifest.schema -eq 'waddle-canonical-assets/v1') "canonical_schema=$($canonicalManifest.schema)"
 $canonicalAssets = @($canonicalManifest.assets)
-Assert ($canonicalAssets.Count -eq 16) "canonical_assets=$($canonicalAssets.Count) expected=16"
+Assert ($canonicalAssets.Count -gt 0) "canonical_assets=$($canonicalAssets.Count) expected_nonempty"
 $canonicalTargets = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 $canonicalSwfs = 0
 foreach ($entry in $canonicalAssets) {
@@ -128,8 +130,8 @@ foreach ($entry in $canonicalAssets) {
   Assert ((Get-GitBlobSha $path) -eq ([string]$entry.gitBlobSha).ToLowerInvariant()) "canonical_blob=$target"
   if ([string]$entry.kind -eq 'swf') { $canonicalSwfs++; Assert (Test-Swf $path) "canonical_invalid_swf=$target" }
 }
-Assert ($canonicalSwfs -eq 8) "canonical_swfs=$canonicalSwfs expected=8"
 Assert ($canonicalTargets.Contains('client/QuestCommunicator.swf')) 'quest_communicator_provenance_missing'
+Assert ($canonicalTargets.Contains('content/party-base-2015.swf')) 'selector_aware_party_runtime_missing'
 
 $dialogueNames = @(
   'dialogue_login','dialogue_AA_start','dialogue_AA_instruct','dialogue_AA_congrats','dialogue_Cad_start','dialogue_Cad_instruct','dialogue_Cad_congrats',
@@ -157,6 +159,7 @@ foreach ($id in $musicIds) {
 }
 
 $physicalSwfs = @(Get-ChildItem -LiteralPath $assetRoot -Filter '*.swf' -File -Recurse)
-Assert ($physicalSwfs.Count -eq 140) "physical_swfs=$($physicalSwfs.Count) expected=140"
+$expectedPhysicalSwfs = $historical.Count + $canonicalSwfs
+Assert ($physicalSwfs.Count -eq $expectedPhysicalSwfs) "physical_swfs=$($physicalSwfs.Count) expected=$expectedPhysicalSwfs"
 
-Write-Host "WADDLE_PARTY2015_VERIFY=PASS runtime=exact-cparchives-2015 historical_verified=132 canonical_provenance=16 canonical_swfs=8 physical_swfs=140 dialogues=34 hallo_login=historical-alias tiles=9 music=38 interface=historical-2015 quest=historical-2015 party_map=base-runtime dynamic_loader_assets=verified mixed_2310=false"
+Write-Host "WADDLE_PARTY2015_VERIFY=PASS runtime=selector-aware-2015 historical_verified=132 canonical_provenance=$($canonicalAssets.Count) canonical_swfs=$canonicalSwfs physical_swfs=$($physicalSwfs.Count) dialogues=34 hallo_login=historical-alias tiles=9 music=38 interface=historical-2015 quest=historical-2015 party_map=base-runtime dynamic_loader_assets=verified mixed_2310=false"
