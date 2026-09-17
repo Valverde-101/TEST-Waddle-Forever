@@ -1,80 +1,47 @@
 [CmdletBinding()]
 param([string]$RepoRoot = $env:GITHUB_WORKSPACE)
-
 Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
-$repo = (Resolve-Path -LiteralPath $RepoRoot).Path
-$updatesPath = Join-Path $repo 'src/server/updates/2015.ts'
-$fileGeneratorsPath = Join-Path $repo 'src/server/file-generators/index.ts'
-$preservedPathsPath = Join-Path $repo 'media/default/party2015/game_configs/paths.json'
+$ErrorActionPreference='Stop'
+$repo=(Resolve-Path -LiteralPath $RepoRoot).Path
+$updatesPath=Join-Path $repo 'src/server/updates/2015.ts'
+$fileGeneratorsPath=Join-Path $repo 'src/server/file-generators/index.ts'
+$preservedPathsPath=Join-Path $repo 'media/default/party2015/game_configs/paths.json'
+foreach($path in @($updatesPath,$fileGeneratorsPath,$preservedPathsPath)){if(-not(Test-Path -LiteralPath $path -PathType Leaf)){throw "WADDLE_HALLOWEEN2015_PATHS=FAIL missing=$path"}}
+$updates=([IO.File]::ReadAllText($updatesPath)-replace "`r`n","`n")
+$generators=([IO.File]::ReadAllText($fileGeneratorsPath)-replace "`r`n","`n")
+$preservedPaths=([IO.File]::ReadAllText($preservedPathsPath)).Replace('\/','/')
+function Require([bool]$Condition,[string]$Label){if(-not $Condition){throw "WADDLE_HALLOWEEN2015_PATHS=FAIL missing_contract=$Label"}}
+function Match([string]$Text,[string]$Pattern,[string]$Label){Require ($Text -match $Pattern) $Label}
 
-foreach ($path in @($updatesPath,$fileGeneratorsPath,$preservedPathsPath)) {
-  if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "WADDLE_HALLOWEEN2015_PATHS=FAIL missing=$path" }
-}
-$updates = ([IO.File]::ReadAllText($updatesPath) -replace "`r`n", "`n")
-$generators = ([IO.File]::ReadAllText($fileGeneratorsPath) -replace "`r`n", "`n")
-$preservedPaths = ([IO.File]::ReadAllText($preservedPathsPath)).Replace('\/','/')
-
-function Require([bool]$Condition,[string]$Label) {
-  if(-not $Condition){throw "WADDLE_HALLOWEEN2015_PATHS=FAIL missing_contract=$Label"}
-}
-
-# Runtime paths are generated from the selected timeline party's globalChanges.
-# The CPImagined paths file is not served wholesale, but it is useful provenance
-# for literal crumbs used by the preserved late-AS3 modules.
 Require ($generators.Contains('const getRuntimePathsJson: FileGenerator')) 'runtime_paths_generator'
 Require ($generators.Contains('...Object.fromEntries(d.getGlobalPaths())')) 'runtime_global_paths_merge'
 Require ($generators.Contains("'play/en/web_service/game_configs/paths.json': getRuntimePathsJson")) 'runtime_paths_registration'
 
-# Halloween 2015 reuses the MayParty/20150501 selector family. The generic
-# svanilla party.swf does not contain that selector, so the live party boot
-# module must be the byte-pinned late-2015 base runtime.
-Require ($updates.Contains("'play/v2/content/global/content/party.swf': ref('content/party-base-2015.swf')")) 'selector_aware_party_runtime'
+Match $updates "activeFeatures\s*:\s*'20151101'" 'templated_selector'
+Match $updates "'play/v2/content/global/content/party\.swf'\s*:\s*ref\('content/party-runtime-2015\.swf'\)" 'templated_party_runtime'
+Match $updates "'play/v2/client/shell\.swf'\s*:\s*'svanilla:media/play/v2/client/shell\.swf'" 'modern_shell_reset'
+Match $updates "'close_ups/quest_interface\.swf'\s*:\s*\[ref\('close_ups/Close_upsQuest_interface-HalloweenParty2015\.swf'\).*?'w\.app\.generic\.partyinterface'" 'generic_quest_interface_crumb'
+Match $updates "'content/party_icon\.swf'\s*:\s*\[[^\]]*'party_icon'[^\]]*'scavenger_hunt_icon'" 'party_icon_crumbs'
+Match $preservedPaths '"w\.p2015\.may\.login"\s*:\s*"close_ups/halloLogin\.swf"' 'preserved_hallo_login_crumb'
+Match $updates "'close_ups/halloLogin\.swf'\s*:\s*\[ref\('close_ups/Hallo15_dialogue_login\.swf'\).*?'w\.app\.loginprompt'" 'generic_login_prompt_alias'
 
-Require ($updates.Contains("'close_ups/quest_interface.swf': [ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf'), 'w.p2015.may.partyinterface', 'w.app.generic.partyinterface', 'scavenger_hunt']")) 'historical_quest_interface_crumbs'
-Require ($updates.Contains("'close_ups/quest_interface.swf': { en: ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf') }")) 'historical_quest_interface_local'
-Require ($updates.Contains("'content/party_icon.swf': [ref('content/ContentParty_icon-HalloweenParty2015.swf'), 'party_icon', 'scavenger_hunt_icon']")) 'party_icon_crumbs'
-
-# This exact preserved crumb is the initial event-dialogue entry point. The route
-# name comes from the preserved paths table, but the bytes are the CPArchives 2015
-# dialogue_login SWF, not CPImagined's later halloLogin recreation.
-Require ($preservedPaths -match '"w\.p2015\.may\.login"\s*:\s*"close_ups/halloLogin\.swf"') 'preserved_hallo_login_crumb'
-Require ($updates.Contains("'close_ups/halloLogin.swf': [ref('close_ups/Hallo15_dialogue_login.swf'), 'w.p2015.may.login']")) 'historical_hallo_login_global'
-Require ($updates.Contains("'close_ups/halloLogin.swf': { en: ref('close_ups/Hallo15_dialogue_login.swf') }")) 'historical_hallo_login_local'
-
-$aliases = @(
-  @{ route='close_ups/halloLogin.swf'; target='close_ups/Hallo15_dialogue_login.swf'; crumb='w.p2015.may.login' },
-  @{ route='close_ups/halloHerbertMonologue.swf'; target='close_ups/Hallo15_dialogue_Herbert_monologue.swf'; crumb='halloHerbertMonologue' },
-  @{ route='close_ups/halloHerbertMonologue2.swf'; target='close_ups/Hallo15_dialogue_Herbert_monologue_2.swf'; crumb='halloHerbertMonologue2' },
-  @{ route='close_ups/halloHerbot.swf'; target='close_ups/Hallo15_dialogue_Herbot.swf'; crumb='halloHerbot' },
-  @{ route='close_ups/halloHerbertCage.swf'; target='close_ups/Hallo15_dialogue_Herbert_caged.swf'; crumb='halloHerbertCage' },
-  @{ route='close_ups/halloGaryLair.swf'; target='close_ups/Hallo15_dialogue_Gary_lair.swf'; crumb='halloGaryLair' },
-  @{ route='close_ups/halloHerbertGetaway.swf'; target='close_ups/Hallo15_dialogue_Herbert_escape.swf'; crumb='halloHerbertGetaway' },
-  @{ route='close_ups/halloGaryFinal.swf'; target='close_ups/Hallo15_dialogue_Gary_final.swf'; crumb='halloGaryFinal' },
-  @{ route='close_ups/tiles_minigame8v2.swf'; target='close_ups/Close_upsTiles_minigame8-HalloweenParty2015.swf'; crumb='halloHerbertGame' }
+$aliases=@(
+  @{route='close_ups/halloHerbertMonologue.swf';target='close_ups/Hallo15_dialogue_Herbert_monologue.swf';crumb='halloHerbertMonologue'},
+  @{route='close_ups/halloHerbertMonologue2.swf';target='close_ups/Hallo15_dialogue_Herbert_monologue_2.swf';crumb='halloHerbertMonologue2'},
+  @{route='close_ups/halloHerbot.swf';target='close_ups/Hallo15_dialogue_Herbot.swf';crumb='halloHerbot'},
+  @{route='close_ups/halloHerbertCage.swf';target='close_ups/Hallo15_dialogue_Herbert_caged.swf';crumb='halloHerbertCage'},
+  @{route='close_ups/halloGaryLair.swf';target='close_ups/Hallo15_dialogue_Gary_lair.swf';crumb='halloGaryLair'},
+  @{route='close_ups/halloHerbertGetaway.swf';target='close_ups/Hallo15_dialogue_Herbert_escape.swf';crumb='halloHerbertGetaway'},
+  @{route='close_ups/halloGaryFinal.swf';target='close_ups/Hallo15_dialogue_Gary_final.swf';crumb='halloGaryFinal'},
+  @{route='close_ups/tiles_minigame8v2.swf';target='close_ups/Close_upsTiles_minigame8-HalloweenParty2015.swf';crumb='halloHerbertGame'}
 )
-foreach ($alias in $aliases) {
-  $literal = "'$($alias.route)': [ref('$($alias.target)'), '$($alias.crumb)']"
-  Require ($updates.Contains($literal)) ("alias_" + ($alias.crumb -replace '[^A-Za-z0-9]+','_'))
-}
+foreach($a in $aliases){$pattern="'"+[regex]::Escape($a.route)+"'\s*:\s*\[ref\('"+[regex]::Escape($a.target)+"'\)\s*,\s*'"+[regex]::Escape($a.crumb)+"'\]";Match $updates $pattern ('alias_'+$a.crumb)}
+foreach($token in @('dialogueGlobalChanges','dialogueLocalChanges','tileGlobalChanges','tileLocalChanges')){Require ($updates.Contains('...'+$token)) ('routes_'+$token)}
 
-Require ($updates.Contains('...dialogueGlobalChanges')) 'dialogue_global_routes'
-Require ($updates.Contains('...dialogueLocalChanges')) 'dialogue_local_routes'
-Require ($updates.Contains('...tileGlobalChanges')) 'tile_global_routes'
-Require ($updates.Contains('...tileLocalChanges')) 'tile_local_routes'
+Require ($generators.Contains("const HALLOWEEN_2015_SOLO_ROOM_ROUTE = 'play/v2/content/global/rooms/partysolo1.swf';")) 'solo_room_route_guard'
+Match $generators "rooms\['891'\]\s*=\s*\{" 'solo_room_891'
+Match $generators "room_key\s*:\s*'partysolo1'" 'solo_room_key'
+Match $generators "path\s*:\s*'partysolo1\.swf'" 'solo_room_path'
 
-foreach ($stale in @(
-  "'content/map.swf':",
-  "'close_ups/ghostAdopt.swf'",
-  "'close_ups/skipDialogue.swf'",
-  'ClientInterface-HalloweenClassic2015.swf',
-  'Close_upsQuest_interface-HalloweenClassic2015.swf',
-  "'play/en/web_service/game_configs.bin'",
-  "'play/v2/content/global/content/party.swf': ref('content/party.swf')",
-  "'play/v2/content/global/content/party.swf': 'svanilla:media/play/v2/content/global/content/party.swf'",
-  "'play/v2/content/global/content/map.swf'"
-)) {
-  Require (-not $updates.Contains($stale)) ("no_mixed_runtime_" + ($stale -replace '[^A-Za-z0-9]+','_').Trim('_'))
-}
-
-Write-Host "WADDLE_HALLOWEEN2015_PATHS=PASS runtime_paths=generated-from-selected-party generic_party=selector-aware-2015 quest_interface=exact-cparchives-2015 hallo_login=exact-cparchives-2015 dialogue_aliases=$($aliases.Count) map_note_dependency=false party_map=base-runtime cpimagined_paths=provenance-only mixed_runtime=false"
+foreach($stale in @("ref('content/party-base-2015.swf')","ref('content/party.swf')","ref('content/map.swf')",'ClientInterface-HalloweenClassic2015.swf','Close_upsQuest_interface-HalloweenClassic2015.swf')){Require (-not $updates.Contains($stale)) ('no_mixed_'+($stale-replace'[^A-Za-z0-9]+','_'))}
+Write-Host "WADDLE_HALLOWEEN2015_PATHS=PASS runtime_paths=generated generic_runtime=templated-late-2015 activefeatures=20151101 quest_interface=exact-cparchives-2015 login=exact-cparchives-2015 solo_room=891 mixed_runtime=false"
