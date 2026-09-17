@@ -4,9 +4,12 @@ const MODERN_PARTY_ICON_ROUTE = 'play/v2/content/global/content/party_icon.swf';
 const HALLOWEEN_2015_PARTY_ID = 'halloween-2015';
 
 export function getGeneralJson(d: GameData): string {
-  // Halloween 2015 shipped with a concrete general.json contract. Do not derive
-  // these switches from generic hunt/fair state: the preserved client uses this
-  // exact combination to enable the party icon, quest UI and night presentation.
+  // Halloween 2015 uses the preserved 2015 icon/quest stack on top of Waddle's
+  // late-AS3 base map. The archived 2015 interaction family does not contain a
+  // compatible party_map_note asset; advertising one makes the base map request
+  // close_ups/party_map_note.swf and produces a deterministic 404. Keep the
+  // quest/icon switches enabled, but explicitly disable only that unsupported
+  // map-note surface until an authentic compatible 2015 map-note is preserved.
   if (d.getPartyProgress()?.id === HALLOWEEN_2015_PARTY_ID) {
     return JSON.stringify({
       "mascot_options": {
@@ -16,7 +19,7 @@ export function getGeneralJson(d: GameData): string {
         "fair_ticket_active": false,
         "hunt_active": true,
         "itemRewardID": 1388,
-        "isMapNoteActive": true,
+        "isMapNoteActive": false,
         "showPartyAnnouncement": false,
         "party_icon_active": true
       },
