@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  patch-root-cause:
+  patch-regression-gate:
     if: ${{ github.actor != 'github-actions[bot]' }}
     runs-on: windows-latest
     timeout-minutes: 10
@@ -23,35 +23,35 @@ jobs:
         with:
           ref: feat/halloween-party-2015
           fetch-depth: 0
-      - name: Remove stale intro-to-world bootstrap alias
+      - name: Add double-bootstrap regression contract
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          $path = Join-Path $env:GITHUB_WORKSPACE 'src\server\timelines\game-data.ts'
+          $path = Join-Path $env:GITHUB_WORKSPACE '.github\scripts\waddle-halloween-2015-source.ps1'
           $text = [IO.File]::ReadAllText($path)
-          $route = "            this.addRoute('play/v2/client/intro_to_cp.swf', 'svanilla:media/play/v2/client/world.swf');"
-          if (-not $text.Contains($route)) {
-            Write-Host 'WADDLE_INTRO_DOUBLE_BOOTSTRAP=ALREADY_FIXED'
-            exit 0
+          $declaration = "$partyPath=Join-Path $repo 'src/server/updates/2015.ts'"
+          $insertDeclaration = "$partyPath=Join-Path $repo 'src/server/updates/2015.ts'`r`n$gameDataPath=Join-Path $repo 'src/server/timelines/game-data.ts'"
+          $guard = "Require-NotContains $gameData \"this.addRoute('play/v2/client/intro_to_cp.swf', 'svanilla:media/play/v2/client/world.swf');\" 'intro_module_must_not_boot_world'"
+          if (-not $text.Contains("intro_module_must_not_boot_world")) {
+            if (-not $text.Contains($declaration)) { throw 'WADDLE_INTRO_REGRESSION=FAIL declaration_anchor_missing' }
+            $text = $text.Replace($declaration, $insertDeclaration)
+            $anchor = "$party=Read-Normalized $partyPath"
+            if (-not $text.Contains($anchor)) { throw 'WADDLE_INTRO_REGRESSION=FAIL party_anchor_missing' }
+            $replacement = "$gameData=Read-Normalized $gameDataPath`r`n$guard`r`n`r`n$anchor"
+            $text = $text.Replace($anchor, $replacement)
+            [IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($false))
           }
-          $text = $text.Replace("            // intersection until the 2012 PR is added`r`n", '')
-          $text = $text.Replace("            // intersection until the 2012 PR is added`n", '')
-          $text = $text.Replace($route + "`r`n", '')
-          $text = $text.Replace($route + "`n", '')
-          if ($text.Contains("intro_to_cp.swf', 'svanilla:media/play/v2/client/world.swf")) {
-            throw 'WADDLE_INTRO_DOUBLE_BOOTSTRAP=FAIL stale_alias_survived'
-          }
-          [IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($false))
+          if (-not $text.Contains("intro_module_must_not_boot_world")) { throw 'WADDLE_INTRO_REGRESSION=FAIL guard_missing' }
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add -- 'src/server/timelines/game-data.ts'
+          git add -- '.github/scripts/waddle-halloween-2015-source.ps1'
           if (@(git diff --cached --name-only).Count -eq 0) {
-            Write-Host 'WADDLE_INTRO_DOUBLE_BOOTSTRAP=NO_CHANGE'
+            Write-Host 'WADDLE_INTRO_REGRESSION=ALREADY_PRESENT'
             exit 0
           }
-          git commit -m 'fix(client): stop intro module from booting a second world'
-          if ($LASTEXITCODE -ne 0) { throw "WADDLE_INTRO_DOUBLE_BOOTSTRAP=FAIL commit_exit=$LASTEXITCODE" }
+          git commit -m 'test(client): reject intro-to-world recursive bootstrap'
+          if ($LASTEXITCODE -ne 0) { throw "WADDLE_INTRO_REGRESSION=FAIL commit_exit=$LASTEXITCODE" }
           git push origin HEAD:feat/halloween-party-2015
-          if ($LASTEXITCODE -ne 0) { throw "WADDLE_INTRO_DOUBLE_BOOTSTRAP=FAIL push_exit=$LASTEXITCODE" }
-          Write-Host 'WADDLE_INTRO_DOUBLE_BOOTSTRAP=PASS removed=intro_to_cp_to_world reason=prevents_second_internal_client'
+          if ($LASTEXITCODE -ne 0) { throw "WADDLE_INTRO_REGRESSION=FAIL push_exit=$LASTEXITCODE" }
+          Write-Host 'WADDLE_INTRO_REGRESSION=PASS contract=intro_module_must_not_boot_world'
