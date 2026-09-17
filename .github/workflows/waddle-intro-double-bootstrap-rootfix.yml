@@ -1,0 +1,57 @@
+name: Waddle Intro Double Bootstrap Rootfix
+
+on:
+  push:
+    branches:
+      - feat/halloween-party-2015
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: waddle-intro-double-bootstrap-rootfix
+  cancel-in-progress: false
+
+jobs:
+  patch-root-cause:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/halloween-party-2015
+          fetch-depth: 0
+      - name: Remove stale intro-to-world bootstrap alias
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $path = Join-Path $env:GITHUB_WORKSPACE 'src\server\timelines\game-data.ts'
+          $text = [IO.File]::ReadAllText($path)
+          $route = "            this.addRoute('play/v2/client/intro_to_cp.swf', 'svanilla:media/play/v2/client/world.swf');"
+          if (-not $text.Contains($route)) {
+            Write-Host 'WADDLE_INTRO_DOUBLE_BOOTSTRAP=ALREADY_FIXED'
+            exit 0
+          }
+          $text = $text.Replace("            // intersection until the 2012 PR is added`r`n", '')
+          $text = $text.Replace("            // intersection until the 2012 PR is added`n", '')
+          $text = $text.Replace($route + "`r`n", '')
+          $text = $text.Replace($route + "`n", '')
+          if ($text.Contains("intro_to_cp.swf', 'svanilla:media/play/v2/client/world.swf")) {
+            throw 'WADDLE_INTRO_DOUBLE_BOOTSTRAP=FAIL stale_alias_survived'
+          }
+          [IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($false))
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- 'src/server/timelines/game-data.ts'
+          if (@(git diff --cached --name-only).Count -eq 0) {
+            Write-Host 'WADDLE_INTRO_DOUBLE_BOOTSTRAP=NO_CHANGE'
+            exit 0
+          }
+          git commit -m 'fix(client): stop intro module from booting a second world'
+          if ($LASTEXITCODE -ne 0) { throw "WADDLE_INTRO_DOUBLE_BOOTSTRAP=FAIL commit_exit=$LASTEXITCODE" }
+          git push origin HEAD:feat/halloween-party-2015
+          if ($LASTEXITCODE -ne 0) { throw "WADDLE_INTRO_DOUBLE_BOOTSTRAP=FAIL push_exit=$LASTEXITCODE" }
+          Write-Host 'WADDLE_INTRO_DOUBLE_BOOTSTRAP=PASS removed=intro_to_cp_to_world reason=prevents_second_internal_client'
