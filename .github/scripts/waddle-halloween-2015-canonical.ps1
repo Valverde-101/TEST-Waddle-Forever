@@ -22,6 +22,10 @@ function Get-GitBlobSha([string]$Path) {
   }
 }
 
+function Get-Sha256([string]$Path) {
+  return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
 function Test-Swf([string]$Path) {
   if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
   $stream = [IO.File]::OpenRead($Path)
@@ -52,7 +56,15 @@ function Test-CanonicalAsset($Entry,[string]$Path) {
   if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
   $item = Get-Item -LiteralPath $Path
   if ([long]$item.Length -ne [long]$Entry.bytes) { return $false }
-  if ((Get-GitBlobSha $Path) -ne ([string]$Entry.gitBlobSha).ToLowerInvariant()) { return $false }
+
+  if ($Entry.PSObject.Properties.Name -contains 'sha256' -and -not [string]::IsNullOrWhiteSpace([string]$Entry.sha256)) {
+    if ((Get-Sha256 $Path) -ne ([string]$Entry.sha256).ToLowerInvariant()) { return $false }
+  } elseif ($Entry.PSObject.Properties.Name -contains 'gitBlobSha' -and -not [string]::IsNullOrWhiteSpace([string]$Entry.gitBlobSha)) {
+    if ((Get-GitBlobSha $Path) -ne ([string]$Entry.gitBlobSha).ToLowerInvariant()) { return $false }
+  } else {
+    return $false
+  }
+
   if ([string]$Entry.kind -eq 'swf' -and -not (Test-Swf $Path)) { return $false }
   if ([string]$Entry.kind -eq 'zip-config' -and -not (Test-ZipConfig $Path)) { return $false }
   return $true
@@ -62,11 +74,21 @@ function Escape-Path([string]$Path) {
   return (($Path -split '/') | ForEach-Object { [Uri]::EscapeDataString($_) }) -join '/'
 }
 
+function Get-CanonicalUrl($Entry,$Manifest) {
+  if ($Entry.PSObject.Properties.Name -contains 'sourceUrl' -and -not [string]::IsNullOrWhiteSpace([string]$Entry.sourceUrl)) {
+    $uri = [Uri]([string]$Entry.sourceUrl)
+    if ($uri.Scheme -ne 'https') { throw "WADDLE_HALLOWEEN2015_CANONICAL=FAIL insecure_source=$($Entry.sourceUrl)" }
+    return $uri.AbsoluteUri
+  }
+  if (-not ($Entry.PSObject.Properties.Name -contains 'sourcePath') -or [string]::IsNullOrWhiteSpace([string]$Entry.sourcePath)) {
+    throw "WADDLE_HALLOWEEN2015_CANONICAL=FAIL source_missing=$($Entry.target)"
+  }
+  $encodedPath = Escape-Path ([string]$Entry.sourcePath)
+  return "https://raw.githubusercontent.com/$($Manifest.sourceRepository)/$($Manifest.sourceCommit)/$encodedPath"
+}
+
 $repo = (Resolve-Path -LiteralPath $RepoRoot).Path
 if ([string]::IsNullOrWhiteSpace($ManifestPath)) {
-  # The hydrator belongs to the checked-out PR/workflow. The target RepoRoot may
-  # deliberately be the untouched canonical V: checkout, so never assume that
-  # checkout contains the same script/manifest revision.
   $ManifestPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'manifests/halloween-2015-canonical.json'
 }
 $manifestPathResolved = (Resolve-Path -LiteralPath $ManifestPath -ErrorAction SilentlyContinue).Path
@@ -93,7 +115,7 @@ if ($uniqueTargets.Count -ne $targets.Count) {
 $targetRoot = Join-Path $repo 'media/default/party2015'
 New-Item -ItemType Directory -Force -Path $targetRoot | Out-Null
 $headers = @{
-  'User-Agent' = 'Waddle-Forever-Halloween2015-Canonical/2.2'
+  'User-Agent' = 'Waddle-Forever-Halloween2015-Canonical/2.3'
   'Accept' = 'application/octet-stream,*/*'
 }
 $downloaded = 0
@@ -112,8 +134,7 @@ foreach ($entry in $assets) {
     continue
   }
 
-  $encodedPath = Escape-Path ([string]$entry.sourcePath)
-  $url = "https://raw.githubusercontent.com/$($manifest.sourceRepository)/$($manifest.sourceCommit)/$encodedPath"
+  $url = Get-CanonicalUrl $entry $manifest
   $tmp = $final + '.part'
   Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
   $ok = $false
@@ -122,8 +143,9 @@ foreach ($entry in $assets) {
       Invoke-WebRequest -UseBasicParsing -Uri $url -Headers $headers -OutFile $tmp -TimeoutSec 120
       if (-not (Test-CanonicalAsset $entry $tmp)) {
         $actualBytes = if (Test-Path -LiteralPath $tmp) { (Get-Item -LiteralPath $tmp).Length } else { 0 }
-        $actualSha = if (Test-Path -LiteralPath $tmp) { Get-GitBlobSha $tmp } else { '' }
-        throw "verification_mismatch expected_bytes=$($entry.bytes) actual_bytes=$actualBytes expected_blob=$($entry.gitBlobSha) actual_blob=$actualSha"
+        $actualSha256 = if (Test-Path -LiteralPath $tmp) { Get-Sha256 $tmp } else { '' }
+        $actualBlob = if (Test-Path -LiteralPath $tmp) { Get-GitBlobSha $tmp } else { '' }
+        throw "verification_mismatch expected_bytes=$($entry.bytes) actual_bytes=$actualBytes actual_sha256=$actualSha256 actual_blob=$actualBlob"
       }
       Move-Item -LiteralPath $tmp -Destination $final -Force
       $ok = $true
@@ -142,8 +164,6 @@ foreach ($entry in $assets) {
   $verified++
 }
 
-# Keep the Git-owned state deterministic. Download/reuse counters and timestamps
-# belong in CI output, not in a tracked file that would create a commit every run.
 $state = [ordered]@{
   schema = 'waddle-canonical-assets-state/v2'
   party = [string]$manifest.party
