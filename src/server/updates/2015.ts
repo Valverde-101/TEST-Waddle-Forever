@@ -124,7 +124,7 @@ export const UPDATES_2015: Update[] = [
       },
       globalChanges:{
         'content/party_icon.swf':[ref('content/ContentParty_icon-HalloweenParty2015.swf'),'party_icon','scavenger_hunt_icon'],
-        'avatar/sprites/robot.swf':[ref('avatar/PenguinRobot.swf'),'robot_tf'],
+        'avatar/sprites/robot.swf':[ref('avatar/PenguinRobot.swf'),'robot_tf','w.avatarSprite.robot'],
         'close_ups/quest_interface.swf':[ref('close_ups/Close_upsQuest_interface-HalloweenParty2015.swf'),'w.p2015.may.partyinterface','w.app.generic.partyinterface','scavenger_hunt'],
         'close_ups/halloLogin.swf':[ref('close_ups/Hallo15_dialogue_login.swf'),'w.p2015.may.login','w.app.loginprompt'],
         ...dialogueGlobalChanges,...tileGlobalChanges,
