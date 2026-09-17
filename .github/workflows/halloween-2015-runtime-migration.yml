@@ -1,0 +1,90 @@
+name: Halloween 2015 Runtime Migration
+
+on:
+  push:
+    branches: [feat/halloween-party-2015]
+    paths:
+      - '.github/workflows/halloween-2015-runtime-migration.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/halloween-party-2015
+          fetch-depth: 0
+      - name: Migrate runtime wiring
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          function Replace-Exact([string]$Path,[string]$Old,[string]$New) {
+            $text=[IO.File]::ReadAllText($Path)
+            if(-not $text.Contains($Old)){ throw "MIGRATION=FAIL missing_pattern path=$Path old=$Old" }
+            $text=$text.Replace($Old,$New)
+            [IO.File]::WriteAllText($Path,$text,(New-Object Text.UTF8Encoding($false)))
+          }
+
+          $u='src/server/updates/2015.ts'
+          Replace-Exact $u "activeFeatures: '20150501'" "activeFeatures: '20151101'"
+          Replace-Exact $u "'play/v2/content/global/content/party.swf': ref('content/party-base-2015.swf')," "'play/v2/content/global/content/party.swf': ref('content/party-runtime-2015.swf'),`r`n          // Undo the permanent 2012 Puffle Party shell override before booting a late-AS3 2015 party.`r`n          'play/v2/client/shell.swf': 'svanilla:media/play/v2/client/shell.swf',"
+          Replace-Exact $u "'close_ups/halloLogin.swf': [ref('close_ups/Hallo15_dialogue_login.swf'), 'w.p2015.may.login']" "'close_ups/halloLogin.swf': [ref('close_ups/Hallo15_dialogue_login.swf'), 'w.p2015.may.login', 'w.app.loginprompt']"
+
+          $wh='src/server/socket-server/world-handlers.ts'
+          Replace-Exact $wh "    r.xt('s', 'pt#spts', ['number'], handlePlayerTransform)," "    r.xt('s', 'pt#spts', ['number'], handlePlayerTransform),`r`n    // Late-2015 templated parties send the selected avatar through party#transform.`r`n    r.xt('s', 'party#transform', ['number'], handlePlayerTransform),"
+
+          foreach($validator in @(
+            '.github/scripts/waddle-halloween-2015-source.ps1',
+            '.github/scripts/waddle-halloween-2015-data.ps1',
+            '.github/scripts/waddle-halloween-2015-paths.ps1',
+            '.github/scripts/waddle-halloween-2015-verify.ps1',
+            '.github/scripts/waddle-halloween-2015-gameplay.ps1'
+          )) {
+            if(Test-Path -LiteralPath $validator){
+              $text=[IO.File]::ReadAllText($validator)
+              $text=$text.Replace("20150501","20151101").Replace("content/party-base-2015.swf","content/party-runtime-2015.swf")
+              $text=$text.Replace("[ref('close_ups/Hallo15_dialogue_login.swf'), 'w.p2015.may.login']","[ref('close_ups/Hallo15_dialogue_login.swf'), 'w.p2015.may.login', 'w.app.loginprompt']")
+              [IO.File]::WriteAllText($validator,$text,(New-Object Text.UTF8Encoding($false)))
+            }
+          }
+
+          $source='.github/scripts/waddle-halloween-2015-source.ps1'
+          $sourceText=[IO.File]::ReadAllText($source)
+          $old="  if ((Get-GitBlobSha `$path) -ne ([string]`$entry.gitBlobSha).ToLowerInvariant()) { throw \"WADDLE_PARTY2015_SOURCE=FAIL canonical_blob target=`$(`$entry.target)\" }"
+          if($sourceText.Contains($old)){
+            $new=@'
+  if ($entry.PSObject.Properties.Name -contains 'sha256' -and -not [string]::IsNullOrWhiteSpace([string]$entry.sha256)) {
+    $actualSha256=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($actualSha256 -ne ([string]$entry.sha256).ToLowerInvariant()) { throw "WADDLE_PARTY2015_SOURCE=FAIL canonical_sha256 target=$($entry.target)" }
+  } else {
+    if ((Get-GitBlobSha $path) -ne ([string]$entry.gitBlobSha).ToLowerInvariant()) { throw "WADDLE_PARTY2015_SOURCE=FAIL canonical_blob target=$($entry.target)" }
+  }
+'@
+            $sourceText=$sourceText.Replace($old,$new.TrimEnd())
+          } else { throw 'MIGRATION=FAIL source_verifier_pattern' }
+          [IO.File]::WriteAllText($source,$sourceText,(New-Object Text.UTF8Encoding($false)))
+
+          $verify='.github/scripts/waddle-halloween-2015-verify.ps1'
+          $verifyText=[IO.File]::ReadAllText($verify)
+          $oldVerify='  Assert ((Get-GitBlobSha $path) -eq ([string]$entry.gitBlobSha).ToLowerInvariant()) "canonical_blob=$target"'
+          if(-not $verifyText.Contains($oldVerify)){throw 'MIGRATION=FAIL verify_pattern'}
+          $newVerify=@'
+  if ($entry.PSObject.Properties.Name -contains 'sha256' -and -not [string]::IsNullOrWhiteSpace([string]$entry.sha256)) {
+    $actualSha256=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+    Assert ($actualSha256 -eq ([string]$entry.sha256).ToLowerInvariant()) "canonical_sha256=$target"
+  } else {
+    Assert ((Get-GitBlobSha $path) -eq ([string]$entry.gitBlobSha).ToLowerInvariant()) "canonical_blob=$target"
+  }
+'@
+          $verifyText=$verifyText.Replace($oldVerify,$newVerify.TrimEnd())
+          [IO.File]::WriteAllText($verify,$verifyText,(New-Object Text.UTF8Encoding($false)))
+
+          Remove-Item -LiteralPath '.github/workflows/halloween-2015-runtime-migration.yml' -Force
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'fix(party): boot Halloween 2015 on templated runtime'
+          git push origin HEAD:feat/halloween-party-2015
