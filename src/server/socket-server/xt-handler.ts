@@ -31,6 +31,26 @@ const XT_ACTION_ALIASES = new Map<string, string>([
 
 const canonicalizeXtAction = (action: string): string => XT_ACTION_ALIASES.get(action) ?? action;
 
+const TRACE_PAYLOAD_ACTIONS = new Set<string>([
+  's%nx#bimp',
+  's%party#qtaskcomplete',
+  's%party#qtupdate',
+  's%halloween#qtaskcomplete',
+  's%halloween#qtupdate'
+]);
+
+const sanitizeTracePayload = (value: string): string => value
+  .replace(/[A-Za-z0-9_-]{24,}/g, '[token]')
+  .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, '[email]');
+
+const getTracePayloadPreview = (action: string, args: string[]) => {
+  if (!TRACE_PAYLOAD_ACTIONS.has(action)) {
+    return undefined;
+  }
+  const joined = args.map(sanitizeTracePayload).join('|');
+  return joined.length > 512 ? `${joined.slice(0, 512)}...` : joined;
+};
+
 const parseXtMessage = (message: string): XtParseResult => {
   if (!message.startsWith('%xt%')) {
     return { ok: false, reason: 'missing-xt-prefix' };
@@ -167,7 +187,8 @@ export class XtHandler {
         direction: 'in',
         status: 'malformed-message',
         reason,
-        messageLength: message.length
+        messageLength: message.length,
+        payloadPreview
       });
       return;
     }
@@ -175,6 +196,7 @@ export class XtHandler {
     const { name: wireAction, args } = parsedMessage.value;
     const action = canonicalizeXtAction(wireAction);
     const aliased = action !== wireAction;
+    const payloadPreview = getTracePayloadPreview(wireAction, args) ?? getTracePayloadPreview(action, args);
 
     publishWaddleLiveTrace({
       category: 'XT',
@@ -184,7 +206,8 @@ export class XtHandler {
       canonicalAction: aliased ? action : undefined,
       direction: 'in',
       argCount: args.length,
-      messageLength: message.length
+      messageLength: message.length,
+      payloadPreview
     });
 
     if ('penguin' in context) {
@@ -206,7 +229,8 @@ export class XtHandler {
           direction: 'in',
           status: 'unhandled-context',
           argCount: args.length,
-          contextKeys: Object.keys(context)
+          contextKeys: Object.keys(context),
+          payloadPreview
         });
         return;
       }
@@ -231,7 +255,8 @@ export class XtHandler {
           canonicalAction: aliased ? action : undefined,
           direction: 'in',
           status: 'invalid-signature',
-          argCount: args.length
+          argCount: args.length,
+          payloadPreview
         });
         return;
       }
@@ -317,7 +342,8 @@ export class XtHandler {
             status: 'compatibility-response',
             argCount: args.length,
             responseAction: fallback.responseAction,
-            compatibilityReason: fallback.reason
+            compatibilityReason: fallback.reason,
+            payloadPreview
           });
           return;
         }
@@ -332,7 +358,8 @@ export class XtHandler {
           canonicalAction: aliased ? action : undefined,
           direction: 'in',
           status: 'protocol-acknowledged',
-          argCount: args.length
+          argCount: args.length,
+          payloadPreview
         });
       } else {
         logverbose(getRedString('unhandled XT: ' + wireAction));
@@ -344,7 +371,8 @@ export class XtHandler {
           canonicalAction: aliased ? action : undefined,
           direction: 'in',
           status: 'unhandled-action',
-          argCount: args.length
+          argCount: args.length,
+          payloadPreview
         });
       }
     }
