@@ -15,18 +15,29 @@ type XtParseResult =
   | { ok: false; reason: string };
 
 /**
- * Native late-2015 party SWFs use a party-specific XT extension while older
- * preserved clients use the generic `party` extension. Both speak the same
- * cookie/progress protocol. Canonicalize only this proven set of actions so the
- * handler registry and persistence remain generic without making unknown
- * `halloween#*` traffic implicitly valid.
+ * Native late-2015 party SWFs span three proven XT namespaces for the same
+ * cookie/progress state:
+ * - `party`: generic modern quest handlers;
+ * - `halloween`: event-specific preserved variants;
+ * - `fair`: the MayParty/20150501 bootstrap reused by Halloween 2015.
+ *
+ * Canonicalize only commands evidenced by the preserved clients. In particular,
+ * MayPartyCookieVO requests its first cookie as `fair#fair` with selector [0].
+ * Do not make arbitrary `fair#*` traffic valid: the unrelated Fair ticket/game
+ * command family remains outside this compatibility map.
  */
 const XT_ACTION_ALIASES = new Map<string, string>([
   ['s%halloween#partycookie', 's%party#partycookie'],
   ['s%halloween#msgviewed', 's%party#msgviewed'],
   ['s%halloween#qcmsgviewed', 's%party#qcmsgviewed'],
   ['s%halloween#qtaskcomplete', 's%party#qtaskcomplete'],
-  ['s%halloween#qtupdate', 's%party#qtupdate']
+  ['s%halloween#qtupdate', 's%party#qtupdate'],
+  // MayPartyCookieVO.PARTY_COOKIE_ID = 20150501 and
+  // MAY_COOKIE_HANDLER_NAME = "fair". Its static cookie request serializes
+  // `(fair#fair, [0])`; some preserved server packs use fair#partycookie.
+  ['s%fair#fair', 's%party#partycookie'],
+  ['s%fair#partycookie', 's%party#partycookie'],
+  ['s%fair#msgviewed', 's%party#msgviewed']
 ]);
 
 const canonicalizeXtAction = (action: string): string => XT_ACTION_ALIASES.get(action) ?? action;
@@ -218,8 +229,8 @@ export class XtHandler {
       const argsForParsing = emptyArrayFraming ? [] : args;
       const parsedArgs = parseArgs(argsForParsing, signature);
       // Compatibility is evaluated against the canonical action. This lets the
-      // native Halloween `partycookie [0]` reuse the verified late-AS3 selector
-      // rule without weakening signature checks for any other namespace.
+      // native Halloween/MayParty cookie selector [0] reuse the verified late-AS3
+      // rule without weakening signature checks for any unrelated namespace.
       const compatibility = parsedArgs === null ? getXtCompatibilityRule(action, args) : undefined;
       if (parsedArgs === null && compatibility === undefined) {
         logverbose(getRedString('incorrect type signature: ' + wireAction));
