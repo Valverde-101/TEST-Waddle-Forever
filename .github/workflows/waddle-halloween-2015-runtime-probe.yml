@@ -10,6 +10,7 @@ on:
       - '.github/scripts/waddle-halloween-2015-runtime-compat.ps1'
       - '.github/scripts/waddle-halloween-2015-api-probe.ps1'
       - '.github/scripts/waddle-halloween-2015-archive-runtime-probe.ps1'
+      - '.github/scripts/waddle-halloween-2015-operation-selector-probe.ps1'
       - '.github/workflows/waddle-halloween-2015-runtime-probe.yml'
       - 'media/default/party2015/content/party-base-2015.swf'
       - 'media/default/party2015/content/party.swf'
@@ -54,3 +55,6 @@ jobs:
       - name: Probe preserved late-2015 ClientParty runtimes
         shell: powershell
         run: ./.github/scripts/waddle-halloween-2015-archive-runtime-probe.ps1 -RepoRoot $env:GITHUB_WORKSPACE
+      - name: Probe Operation Crustacean selector/bootstrap
+        shell: powershell
+        run: ./.github/scripts/waddle-halloween-2015-operation-selector-probe.ps1 -RepoRoot $env:GITHUB_WORKSPACE
