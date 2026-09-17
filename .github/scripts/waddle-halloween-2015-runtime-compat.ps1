@@ -64,6 +64,14 @@ function Evidence([string]$Text) {
   }
 }
 
+function Get-SwfLoaders([string]$Text) {
+  $set = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+  foreach ($m in [regex]::Matches($Text,'(?i)(?:play/v2/)?(?:close_ups/|content/|music/|membership/)[A-Za-z0-9_./-]+\.swf')) {
+    [void]$set.Add($m.Value.Replace('\\','/'))
+  }
+  return @($set | Sort-Object)
+}
+
 $repo = (Resolve-Path -LiteralPath $RepoRoot).Path
 $ffdec = Resolve-FFDec $FFDecPath
 $current = Join-Path $repo 'media\default\svanilla\media\play\v2\content\global\content\party.swf'
@@ -76,16 +84,34 @@ $currentReport = Export-Scripts -FFDec $ffdec -Swf $current -Name 'svanilla-part
 $candidateReport = Export-Scripts -FFDec $ffdec -Swf $candidate -Name 'party-base-2015' -WorkRoot $work
 $currentEvidence = Evidence $currentReport.text
 $candidateEvidence = Evidence $candidateReport.text
+$currentLoaders = Get-SwfLoaders $currentReport.text
+$candidateLoaders = Get-SwfLoaders $candidateReport.text
 
 $currentSupportsSelector = [bool]($currentEvidence.selector20150501 -and $currentEvidence.mayParty)
 $candidateSupportsSelector = [bool]($candidateEvidence.selector20150501 -and $candidateEvidence.mayParty)
 $candidateSupportsFeatureBootstrap = [bool]($candidateEvidence.featuresPath -or $candidateEvidence.configurePartyJson -or $candidateEvidence.loadPartyFeatures)
 $candidatePreferred = [bool]($candidateSupportsSelector -and (-not $currentSupportsSelector -or $candidateSupportsFeatureBootstrap))
 
+if (-not $candidateSupportsSelector) {
+  throw 'WADDLE_PARTY2015_RUNTIME_PROBE=FAIL candidate_missing_20150501_mayparty_selector'
+}
+
+$forbiddenCandidateLoaders = @(
+  'content/party_map_note.swf','close_ups/party_map_note.swf',
+  'music/2048.swf','music/2049.swf','music/2050.swf','music/2051.swf','music/2052.swf','music/2053.swf'
+)
+$badCandidateLoaders = @()
+foreach ($bad in $forbiddenCandidateLoaders) {
+  if ($candidateLoaders -contains $bad -or $candidateLoaders -contains ('play/v2/content/global/' + $bad)) { $badCandidateLoaders += $bad }
+}
+if ($badCandidateLoaders.Count -gt 0) {
+  throw "WADDLE_PARTY2015_RUNTIME_PROBE=FAIL candidate_mixed_loader=$($badCandidateLoaders -join ',')"
+}
+
 $summary = [ordered]@{
-  schema='waddle-halloween2015-runtime-probe/v1'
-  current=[ordered]@{ bytes=$currentReport.bytes; scripts=$currentReport.scriptFiles; evidence=$currentEvidence; supportsSelector=$currentSupportsSelector }
-  candidate=[ordered]@{ bytes=$candidateReport.bytes; scripts=$candidateReport.scriptFiles; evidence=$candidateEvidence; supportsSelector=$candidateSupportsSelector; supportsFeatureBootstrap=$candidateSupportsFeatureBootstrap }
+  schema='waddle-halloween2015-runtime-probe/v2'
+  current=[ordered]@{ bytes=$currentReport.bytes; scripts=$currentReport.scriptFiles; evidence=$currentEvidence; supportsSelector=$currentSupportsSelector; loaders=$currentLoaders }
+  candidate=[ordered]@{ bytes=$candidateReport.bytes; scripts=$candidateReport.scriptFiles; evidence=$candidateEvidence; supportsSelector=$candidateSupportsSelector; supportsFeatureBootstrap=$candidateSupportsFeatureBootstrap; loaders=$candidateLoaders; forbiddenLoaders=$badCandidateLoaders }
   candidatePreferred=$candidatePreferred
 }
 $summaryPath = Join-Path $work 'summary.json'
@@ -93,4 +119,5 @@ $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryPath -Enco
 
 Write-Host ("WADDLE_PARTY2015_RUNTIME_CURRENT bytes={0} scripts={1} selector20150501={2} mayParty={3} activefeatures={4} featuresPath={5} configurePartyJson={6} loadPartyFeatures={7} partyService={8}" -f $currentReport.bytes,$currentReport.scriptFiles,$currentEvidence.selector20150501,$currentEvidence.mayParty,$currentEvidence.activeFeatures,$currentEvidence.featuresPath,$currentEvidence.configurePartyJson,$currentEvidence.loadPartyFeatures,$currentEvidence.partyService)
 Write-Host ("WADDLE_PARTY2015_RUNTIME_CANDIDATE bytes={0} scripts={1} selector20150501={2} mayParty={3} activefeatures={4} featuresPath={5} configurePartyJson={6} loadPartyFeatures={7} partyService={8}" -f $candidateReport.bytes,$candidateReport.scriptFiles,$candidateEvidence.selector20150501,$candidateEvidence.mayParty,$candidateEvidence.activeFeatures,$candidateEvidence.featuresPath,$candidateEvidence.configurePartyJson,$candidateEvidence.loadPartyFeatures,$candidateEvidence.partyService)
-Write-Host "WADDLE_PARTY2015_RUNTIME_PROBE=PASS current_selector=$currentSupportsSelector candidate_selector=$candidateSupportsSelector candidate_feature_bootstrap=$candidateSupportsFeatureBootstrap candidate_preferred=$candidatePreferred summary=$summaryPath"
+foreach ($loader in $candidateLoaders) { Write-Host "WADDLE_PARTY2015_RUNTIME_CANDIDATE_LOADER=$loader" }
+Write-Host "WADDLE_PARTY2015_RUNTIME_PROBE=PASS current_selector=$currentSupportsSelector candidate_selector=$candidateSupportsSelector candidate_feature_bootstrap=$candidateSupportsFeatureBootstrap candidate_preferred=$candidatePreferred forbidden_candidate_loaders=$($badCandidateLoaders.Count) summary=$summaryPath"
