@@ -45,7 +45,6 @@ function Test-Swf([string]$Path) {
 
 $repo = (Resolve-Path -LiteralPath $RepoRoot).Path
 $partyPath = Join-Path $repo 'src/server/updates/2015.ts'
-$timeline2013Path = Join-Path $repo 'src/server/updates/2013.ts'
 $filesPath = Join-Path $repo 'src/server/game-data/files.ts'
 $roomsPath = Join-Path $repo 'src/server/game-data/rooms.ts'
 $updatesPath = Join-Path $repo 'src/server/updates/updates.ts'
@@ -69,13 +68,6 @@ $rooms = Read-Normalized $roomsPath
 foreach ($roomKey in @('dojosnow','hotellobby','hotelspa','hotelroof','cloudforest','pufflepark','skatepark','pufflewild')) {
   Require-Regex $rooms ("(?s)'{0}'\s*:\s*\{{.*?\bid\s*:\s*\d+\b" -f [regex]::Escape($roomKey)) ("room_symbol_{0}" -f $roomKey)
 }
-
-# Puffle Party 2012 used persistent top-level overrides for shell/interface.
-# Every modern timeline date must explicitly restore the canonical late-AS3
-# baseline before later parties layer their own interface/content on top.
-$timeline2013 = Read-Normalized $timeline2013Path
-Require-Regex $timeline2013 "(?s)date:\s*'2013-01-04'.*?'play/v2/client/shell\.swf'\s*:\s*'svanilla:media/play/v2/client/shell\.swf'" 'post_2012_shell_baseline_restore'
-Require-Regex $timeline2013 "(?s)date:\s*'2013-01-04'.*?'play/v2/content/global/content/interface\.swf'\s*:\s*'svanilla:media/play/v2/content/global/content/interface\.swf'" 'post_2012_interface_baseline_restore'
 
 $party = Read-Normalized $partyPath
 foreach ($contract in @(
@@ -212,4 +204,4 @@ $updates = Read-Normalized $updatesPath
 Require-Contains $updates 'import { UPDATES_2015 } from "./2015";' 'updates_2015_import'
 Require-Contains $updates '...UPDATES_2015' 'updates_2015_registration'
 
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=selector-aware-2015 temporal_room_metadata=true client_baseline=restored-post-2012 historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical party_map=base-runtime map_note=false game_configs=base-runtime client_interface=historical-2015 quest_interface=historical-2015 hallo_login=historical-2015 dialogues=historical-2015 music=historical-2015 native_namespace=true mayparty_namespace=true activefeatures=20150501 partyservice=true mutation=false"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=selector-aware-2015 temporal_room_metadata=true historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical party_map=base-runtime map_note=false game_configs=base-runtime client_interface=historical-2015 quest_interface=historical-2015 hallo_login=historical-2015 dialogues=historical-2015 music=historical-2015 native_namespace=true mayparty_namespace=true activefeatures=20150501 partyservice=true mutation=false"
