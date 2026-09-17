@@ -76,6 +76,41 @@ function Evidence([string]$Text) {
   }
 }
 
+function GameplayEvidence([string]$Text) {
+  return [ordered]@{
+    transformationVOs = $Text -match '(?i)createTransformationVOs|getTransformationVOs'
+    avatarTemplateRegistration = $Text -match '(?i)setAvatarTemplate'
+    avatarSpritePath = $Text -match '(?i)spritePath'
+    initPartyAvatars = $Text -match '(?i)initPartyAvatars'
+    setTransformConstant = $Text -match '(?i)SET_TRANSFORM'
+    sendTransformation = $Text -match '(?i)sendTransformation'
+    questVOs = $Text -match '(?i)createQuestVOs|getQuestVOByIndex|getQuestVOByTaskIndex'
+    collectedItem = $Text -match '(?i)collectedItem'
+    pickupItem = $Text -match '(?i)pickupItem'
+    robotInstructions = $Text -match '(?i)showRobotInstructionsPopup'
+    loadMiniGame = $Text -match '(?i)loadMiniGame'
+    taskComplete = $Text -match '(?i)qtaskcomplete|TASK_COMMAND|setTaskComplete'
+  }
+}
+
+function Get-GameplaySnippets([string]$Text) {
+  $pattern = '(?i)setAvatarTemplate|spritePath|initPartyAvatars|createTransformationVOs|getTransformationVOs|SET_TRANSFORM|sendTransformation|createQuestVOs|getQuestVOByIndex|collectedItem|pickupItem|showRobotInstructionsPopup|loadMiniGame|qtaskcomplete|TASK_COMMAND|setTaskComplete'
+  $lines = @($Text -split "`r?`n")
+  $hits = New-Object System.Collections.Generic.List[string]
+  for ($i=0; $i -lt $lines.Count; $i++) {
+    if ($lines[$i] -match $pattern) {
+      $start = [Math]::Max(0,$i-1)
+      $end = [Math]::Min($lines.Count-1,$i+2)
+      $block = ($lines[$start..$end] -join ' ').Trim()
+      $block = [regex]::Replace($block,'\s+',' ')
+      if ($block.Length -gt 900) { $block = $block.Substring(0,900) }
+      if (-not $hits.Contains($block)) { [void]$hits.Add($block) }
+      if ($hits.Count -ge 60) { break }
+    }
+  }
+  return @($hits)
+}
+
 function Get-SwfLoaders([string]$Text) {
   $set = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
   foreach ($m in [regex]::Matches($Text,'(?i)(?:play/v2/)?(?:close_ups/|content/|music/|membership/|client/)[A-Za-z0-9_./-]+\.swf')) {
@@ -128,8 +163,10 @@ foreach ($entry in $targets.GetEnumerator()) {
     bytes=$report.bytes
     scripts=$report.scriptFiles
     evidence=(Evidence $report.text)
+    gameplay=(GameplayEvidence $report.text)
     loaders=(Get-SwfLoaders $report.text)
     snippets=(Get-BootstrapSnippets $report.text)
+    gameplaySnippets=(Get-GameplaySnippets $report.text)
   }
 }
 
@@ -179,6 +216,9 @@ foreach ($name in $reports.Keys) {
   $r = $reports[$name]
   $e = $r.evidence
   Write-Host ("WADDLE_PARTY2015_RUNTIME_COMPONENT name={0} bytes={1} scripts={2} selector={3} mayParty={4} featuresPath={5} configure={6} loadFeatures={7} showContent={8} currentParty={9} questCommunicator={10} questInterface={11} partyIcon={12} halloLogin={13}" -f $name,$r.bytes,$r.scripts,$e.selector20150501,$e.mayParty,$e.featuresPath,$e.configurePartyJson,$e.loadPartyFeatures,$e.showContent,$e.currentParty,$e.questCommunicator,$e.questInterface,$e.partyIcon,$e.halloLogin)
+  $g = $r.gameplay
+  Write-Host ("WADDLE_PARTY2015_GAMEPLAY_COMPONENT name={0} transformVOs={1} avatarTemplate={2} spritePath={3} initAvatars={4} setTransform={5} sendTransform={6} questVOs={7} collectedItem={8} pickupItem={9} robotInstructions={10} loadMiniGame={11} taskComplete={12}" -f $name,$g.transformationVOs,$g.avatarTemplateRegistration,$g.avatarSpritePath,$g.initPartyAvatars,$g.setTransformConstant,$g.sendTransformation,$g.questVOs,$g.collectedItem,$g.pickupItem,$g.robotInstructions,$g.loadMiniGame,$g.taskComplete)
+  foreach ($snippet in $r.gameplaySnippets) { Write-Host "WADDLE_PARTY2015_GAMEPLAY_EVIDENCE component=$name text=$snippet" }
   foreach ($loader in $r.loaders) { Write-Host "WADDLE_PARTY2015_RUNTIME_LOADER component=$name path=$loader" }
   $n = 0
   foreach ($snippet in $r.snippets) {
