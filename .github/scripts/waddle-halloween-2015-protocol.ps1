@@ -81,11 +81,18 @@ function Export-Scripts([string]$FFDec,[string]$Swf,[string]$SafeName,[string]$W
 
       $files = @(Get-ChildItem -LiteralPath $out -File -Recurse -ErrorAction SilentlyContinue | Where-Object { $_.Extension -in @('.as','.txt') } | Sort-Object FullName)
       $chunks = @()
+      $entries = @()
       foreach ($file in $files) {
         $body = Get-Content -LiteralPath $file.FullName -Raw -ErrorAction SilentlyContinue
-        if (-not [string]::IsNullOrWhiteSpace($body)) { $chunks += $body }
+        if (-not [string]::IsNullOrWhiteSpace($body)) {
+          $chunks += $body
+          $entries += [pscustomobject]@{
+            path = $file.FullName.Substring($out.Length).TrimStart('\')
+            text = [string]$body
+          }
+        }
       }
-      return [pscustomobject]@{ files=$files.Count; text=($chunks -join "`n`n"); exit=$exitText; attempts=$attempt }
+      return [pscustomobject]@{ files=$files.Count; text=($chunks -join "`n`n"); entries=$entries; exit=$exitText; attempts=$attempt }
     } finally {
       if ($null -ne $proc -and -not $proc.HasExited) { Stop-FFDecTree $proc }
     }
@@ -175,16 +182,21 @@ $requiredPartyMethods = New-Object 'System.Collections.Generic.HashSet[string]' 
 $requiredPartyConstants = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
 $soloRoomEvidence = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 
-function Add-PartyRuntimeContract([string]$Text,[string]$Role) {
-  foreach ($match in @([regex]::Matches($Text,'(?i)(?:_currentParty|BaseParty\.CURRENT_PARTY|CURRENT_PARTY)\.([A-Za-z_][A-Za-z0-9_]*)\s*\('))) {
-    [void]$requiredPartyMethods.Add([string]$match.Groups[1].Value)
-  }
-  foreach ($match in @([regex]::Matches($Text,'(?i)\.CONSTANTS\.([A-Z][A-Z0-9_]*)'))) {
-    [void]$requiredPartyConstants.Add(([string]$match.Groups[1].Value).ToUpperInvariant())
-  }
-  foreach ($line in @($Text -split '\r?\n' | Where-Object { $_ -match '(?i)partysolo1' } | ForEach-Object { ($_ -replace '\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 40)) {
-    $safeLine = if ($line.Length -gt 700) { $line.Substring(0,700) } else { $line }
-    [void]$soloRoomEvidence.Add("$Role::$safeLine")
+function Add-HalloweenRoomRuntimeContract($Evidence,[string]$Role) {
+  foreach ($entry in @($Evidence.entries)) {
+    $body = [string]$entry.text
+    if ($body -notmatch '(?i)class\s+com\.clubpenguin\.world\.rooms2015\.october\.') { continue }
+
+    foreach ($match in @([regex]::Matches($body,'(?i)(?:_currentParty|BaseParty\.CURRENT_PARTY|CURRENT_PARTY)\.([A-Za-z_][A-Za-z0-9_]*)\s*\('))) {
+      [void]$requiredPartyMethods.Add([string]$match.Groups[1].Value)
+    }
+    foreach ($match in @([regex]::Matches($body,'(?i)\.CONSTANTS\.([A-Z][A-Z0-9_]*)'))) {
+      [void]$requiredPartyConstants.Add(([string]$match.Groups[1].Value).ToUpperInvariant())
+    }
+    foreach ($line in @($body -split '\r?\n' | Where-Object { $_ -match '(?i)(partysolo1|party1_mc|enterCave|sendJoinRoom)' } | ForEach-Object { ($_ -replace '\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 80)) {
+      $safeLine = if ($line.Length -gt 700) { $line.Substring(0,700) } else { $line }
+      [void]$soloRoomEvidence.Add("$Role::$safeLine")
+    }
   }
 }
 
@@ -194,13 +206,13 @@ foreach ($target in $targets) {
   $safe = ([string]$target.role -replace '[^A-Za-z0-9_.-]','_')
   $evidence = Export-Scripts -FFDec $ffdec -Swf $swf -SafeName $safe -WorkRoot $work
   $text = [string]$evidence.text
-  Add-PartyRuntimeContract -Text $text -Role ([string]$target.role)
   if ($evidence.files -gt 0) { $scripted++ }
   if (@($interactionCore | Where-Object { $_.role -eq $target.role }).Count -gt 0) {
     if ($evidence.files -gt 0) { $coreScripted++ }
     $interactionText += "`n" + $text
   }
   if (@($robotQuestRooms | Where-Object { $_.role -eq $target.role }).Count -gt 0) {
+    Add-HalloweenRoomRuntimeContract -Evidence $evidence -Role ([string]$target.role)
     if ($evidence.files -gt 0) { $robotRoomScripted++ }
     $robotRoomText += "`n" + $text
     $candidateLines = @($text -split "`r?`n" | Where-Object { $_ -match '(?i)(MouseEvent|CLICK|showContent|dialogue|quest|robot|bot|tiles_minigame|item|inventory|qtaskcomplete|qtupdate|party)' } | ForEach-Object { ($_ -replace '\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 80)
@@ -240,7 +252,7 @@ foreach ($roomFile in @(Get-ChildItem -LiteralPath $roomDir -Filter '*.swf' -Fil
   $safe = 'room-scan-' + ([IO.Path]::GetFileNameWithoutExtension($roomFile.Name) -replace '[^A-Za-z0-9_.-]','_')
   $evidence = Export-Scripts -FFDec $ffdec -Swf $roomFile.FullName -SafeName $safe -WorkRoot $work
   $text = [string]$evidence.text
-  Add-PartyRuntimeContract -Text $text -Role $safe
+  Add-HalloweenRoomRuntimeContract -Evidence $evidence -Role $safe
   if ($text -notmatch '(?i)(pickupItem|itemCollectRelease|collectedItem|partysolo1|party7|sendJoinRoom|QUEST_TASK_ID)') { continue }
   $roomLines = @($text -split "`r?`n" | Where-Object { $_ -match '(?i)(class com\.clubpenguin\.world\.rooms2015\.october|QUEST_TASK_ID|pickupItem|itemCollectRelease|collectedItem|displayItemPickupInstructions|partysolo1|party7|sendJoinRoom|triggerFunction)' } | ForEach-Object { ($_ -replace '\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 220)
   foreach ($line in $roomLines) {
@@ -266,6 +278,18 @@ $runtimeConstants = New-Object 'System.Collections.Generic.HashSet[string]' ([St
 foreach ($match in @([regex]::Matches($liveRuntimeText,'(?i)\.CONSTANTS\.([A-Z][A-Z0-9_]*)'))) {
   [void]$runtimeConstants.Add(([string]$match.Groups[1].Value).ToUpperInvariant())
 }
+$robotRampageScareConstants = @('COFFEE_CUP','SPELLING_TEST','PINK_FLAMINGO','INSECTS','UGLY_SWEATER','BEARD_TRIMMER','UFO','CLOWN')
+foreach ($constant in $robotRampageScareConstants) {
+  if (-not $requiredPartyConstants.Contains($constant)) {
+    throw "WADDLE_PARTY2015_PROTOCOL=FAIL robot_rampage_contract_missing_constant=$constant"
+  }
+}
+foreach ($method in @('getQuestVOByIndex','showRobotInstructionsPopup','loadMiniGame','displayItemPickupInstructions')) {
+  if (-not $requiredPartyMethods.Contains($method)) {
+    throw "WADDLE_PARTY2015_PROTOCOL=FAIL robot_rampage_contract_missing_method=$method"
+  }
+}
+
 $missingMethods = @($requiredPartyMethods | Where-Object { -not $runtimeMethods.Contains($_) } | Sort-Object)
 if ($missingMethods.Count -gt 0) {
   throw "WADDLE_PARTY2015_PROTOCOL=FAIL live_runtime_missing_methods=$($missingMethods -join ',')"
