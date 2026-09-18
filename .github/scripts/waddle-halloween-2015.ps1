@@ -199,4 +199,15 @@ if (-not (Test-Path -LiteralPath $canonicalHydrator -PathType Leaf)) {
 }
 & $canonicalHydrator -RepoRoot $canonical
 
-Write-Host "WADDLE_PARTY2015_ASSETS=PASS required=132 total=$($manifestAssets.Count) downloaded=$downloaded reused=$reused canonical_supplements=11 root=$target source=$pageUsed"
+# The archived Operation Crustacean runtime is a compatible late-2015 donor,
+# but Halloween's Robot Rampage rooms call additional client-local APIs that
+# the donor does not define. Keep the donor byte-exact and deterministically
+# materialize the live compatibility runtime from it on the managed runner.
+$runtimePatch = Join-Path $canonical '.github/scripts/waddle-halloween-2015-runtime-patch.ps1'
+if (-not (Test-Path -LiteralPath $runtimePatch -PathType Leaf)) {
+  throw "WADDLE_PARTY2015_ASSETS=FAIL runtime_patch_missing=$runtimePatch"
+}
+& $runtimePatch -RepoRoot $canonical
+if ($LASTEXITCODE -ne 0) { throw "WADDLE_PARTY2015_ASSETS=FAIL runtime_patch_exit=$LASTEXITCODE" }
+
+Write-Host "WADDLE_PARTY2015_ASSETS=PASS required=132 total=$($manifestAssets.Count) downloaded=$downloaded reused=$reused canonical_supplements=18 generated_runtime=1 root=$target source=$pageUsed"
