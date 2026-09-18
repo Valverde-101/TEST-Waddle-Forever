@@ -88,13 +88,16 @@ function GameplayEvidence([string]$Text) {
     collectedItem = $Text -match '(?i)collectedItem'
     pickupItem = $Text -match '(?i)pickupItem'
     robotInstructions = $Text -match '(?i)showRobotInstructionsPopup'
+    itemPickupInstructions = $Text -match '(?i)displayItemPickupInstructions'
     loadMiniGame = $Text -match '(?i)loadMiniGame'
+    engineOverrides = $Text -match '(?i)activateEngineOverrides' -and $Text -match '(?i)deactivateEngineOverrides'
+    halloweenScareConstants = $Text -match '(?i)COFFEE_CUP' -and $Text -match '(?i)SPELLING_TEST' -and $Text -match '(?i)PINK_FLAMINGO' -and $Text -match '(?i)INSECTS' -and $Text -match '(?i)UGLY_SWEATER' -and $Text -match '(?i)BEARD_TRIMMER' -and $Text -match '(?i)UFO' -and $Text -match '(?i)CLOWN'
     taskComplete = $Text -match '(?i)qtaskcomplete|TASK_COMMAND|setTaskComplete'
   }
 }
 
 function Get-GameplaySnippets([string]$Text) {
-  $pattern = '(?i)setAvatarTemplate|spritePath|initPartyAvatars|createTransformationVOs|getTransformationVOs|SET_TRANSFORM|sendTransformation|createQuestVOs|getQuestVOByIndex|collectedItem|pickupItem|showRobotInstructionsPopup|loadMiniGame|qtaskcomplete|TASK_COMMAND|setTaskComplete'
+  $pattern = '(?i)setAvatarTemplate|spritePath|initPartyAvatars|createTransformationVOs|getTransformationVOs|SET_TRANSFORM|sendTransformation|createQuestVOs|getQuestVOByIndex|collectedItem|pickupItem|displayItemPickupInstructions|showRobotInstructionsPopup|loadMiniGame|activateEngineOverrides|deactivateEngineOverrides|COFFEE_CUP|SPELLING_TEST|PINK_FLAMINGO|INSECTS|UGLY_SWEATER|BEARD_TRIMMER|UFO|CLOWN|qtaskcomplete|TASK_COMMAND|setTaskComplete'
   $lines = @($Text -split "`r?`n")
   $hits = New-Object System.Collections.Generic.List[string]
   for ($i=0; $i -lt $lines.Count; $i++) {
@@ -146,6 +149,7 @@ $targets = [ordered]@{
   'svanilla-party' = $current
   'party-base-2015' = $candidate
   'party-runtime-live' = (Join-Path $partyRoot 'content\party-runtime-2015.swf')
+  'runtime-donor-operation-crustacean' = (Join-Path $partyRoot 'content\party-runtime-2015-base.swf')
   'party-2310-full' = (Join-Path $partyRoot 'content\party.swf')
   'selected-party-runtime-2015' = (Join-Path $partyRoot 'content\party-runtime-2015.swf')
   'client-interface-2015' = (Join-Path $partyRoot 'client\ClientInterface-HalloweenParty2015.swf')
@@ -198,6 +202,25 @@ $featureDefinesParty = [bool]($reports['features-2015'].evidence.baseParty -or $
 $interfaceCanLoadFeatures = [bool]($reports['client-interface-2015'].evidence.featuresPath -or $reports['client-interface-2015'].evidence.loadPartyFeatures -or $reports['client-interface-2015'].evidence.configurePartyJson)
 $questChainVisible = [bool]($reports['client-interface-2015'].evidence.questCommunicator -or $reports['quest-communicator'].evidence.questInterface -or $reports['client-interface-2015'].evidence.questInterface)
 
+$selectedGameplay = $reports['selected-party-runtime-2015'].gameplay
+$requiredGameplay = [ordered]@{
+  transformationVOs=$selectedGameplay.transformationVOs
+  avatarTemplateRegistration=$selectedGameplay.avatarTemplateRegistration
+  questVOs=$selectedGameplay.questVOs
+  collectedItem=$selectedGameplay.collectedItem
+  pickupItem=$selectedGameplay.pickupItem
+  itemPickupInstructions=$selectedGameplay.itemPickupInstructions
+  robotInstructions=$selectedGameplay.robotInstructions
+  loadMiniGame=$selectedGameplay.loadMiniGame
+  engineOverrides=$selectedGameplay.engineOverrides
+  halloweenScareConstants=$selectedGameplay.halloweenScareConstants
+  taskComplete=$selectedGameplay.taskComplete
+}
+$missingGameplay = @($requiredGameplay.GetEnumerator() | Where-Object { -not [bool]$_.Value } | ForEach-Object { $_.Key })
+if ($missingGameplay.Count -gt 0) {
+  throw "WADDLE_PARTY2015_RUNTIME_PROBE=FAIL selected_runtime_missing_gameplay=$($missingGameplay -join ',')"
+}
+
 $summary = [ordered]@{
   schema='waddle-halloween2015-runtime-probe/v4'
   reports=$reports
@@ -221,7 +244,7 @@ foreach ($name in $reports.Keys) {
   if ($name -eq 'selected-party-runtime-2015') {
     $selected = Export-Scripts -FFDec $ffdec -Swf $targets[$name] -Name ($name + '-details') -WorkRoot $work
     foreach ($line in @($selected.text -split "`r?`n")) {
-      if ($line -match '^// FILE:' -or $line -match '(?i)function (initPartyAvatars|sendTransformation|getQuestVOByIndex|createTransformationVOs|loadMiniGame|pickupItem|showRobotInstructionsPopup)|setAvatarTemplate|spritePath|SET_TRANSFORM|qtaskcomplete') {
+      if ($line -match '^// FILE:' -or $line -match '(?i)function (initPartyAvatars|sendTransformation|getQuestVOByIndex|createTransformationVOs|loadMiniGame|pickupItem|displayItemPickupInstructions|showRobotInstructionsPopup|activateEngineOverrides|deactivateEngineOverrides)|setAvatarTemplate|spritePath|SET_TRANSFORM|qtaskcomplete') {
         $clean = [regex]::Replace($line.Trim(),'\s+',' ')
         if ($clean.Length -gt 1000) { $clean = $clean.Substring(0,1000) }
         Write-Host "WADDLE_PARTY2015_GAMEPLAY_SOURCEFILE component=$name text=$clean"
