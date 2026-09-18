@@ -187,7 +187,7 @@ jobs:
           $canonicalManifest=Get-Content -LiteralPath (Join-Path $env:GITHUB_WORKSPACE '.github\manifests\halloween-2015-canonical.json') -Raw | ConvertFrom-Json
           $canonicalAssets=@($canonicalManifest.assets)
           $canonicalSwfs=@($canonicalAssets | Where-Object {[string]$_.kind -eq 'swf'})
-          $expectedSwfs=$historicalCount + $canonicalSwfs.Count
+          $expectedSwfs=$historicalCount + $canonicalSwfs.Count + 1 # generated live runtime alongside immutable donor
           $swfs=@(Get-ChildItem -LiteralPath $party -Filter '*.swf' -File -Recurse)
           if($swfs.Count -ne $expectedSwfs){throw "WADDLE_PARTY2015_GIT_OWNERSHIP=FAIL expected_swfs=$expectedSwfs actual=$($swfs.Count)"}
           $trackedSwfs=@(git ls-files -- 'media/default/party2015' | Where-Object {$_ -match '(?i)\.swf$'})
