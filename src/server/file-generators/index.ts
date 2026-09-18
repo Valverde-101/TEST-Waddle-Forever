@@ -64,6 +64,7 @@ const getRuntimePathsJson: FileGenerator = (d) => {
   return JSON.stringify(paths);
 };
 
+const HALLOWEEN_2015_SCHOOL_ROOM_ROUTE = 'play/v2/content/global/rooms/school.swf';
 const HALLOWEEN_2015_SOLO_ROOM_ROUTE = 'play/v2/content/global/rooms/partysolo1.swf';
 
 /**
@@ -76,12 +77,19 @@ const HALLOWEEN_2015_SOLO_ROOM_ROUTE = 'play/v2/content/global/rooms/partysolo1.
  * room must not advertise the pin, otherwise older clients request
  * content/room_pin/7308.swf while replaying unrelated years such as 2015.
  *
+ * Halloween 2015 reuses room id 122 as the School. Waddle's static room table
+ * calls that same id "eco" (Recycling Plant), but the preserved Halloween rooms
+ * literally call SHELL.sendJoinRoom("school", ...). If rooms.json still advertises
+ * room_key "eco", the client cannot resolve the Mine Shack/School doorway and no
+ * join packet is emitted. Restore the preserved 2015 room-key contract only while
+ * the exact school SWF route is active.
+ *
  * Halloween 2015 also introduces a private event room, partysolo1, with canonical
  * room id 891. Its SWF was already preserved and routed, but the base Waddle room
  * snapshot predates the room metadata. Without the 891 entry the Coffee Shop
  * secret-lair hotspot can emit a join for a room the late-AS3 client cannot resolve/load.
- * Mount the room only while the exact timeline route is active so it cannot leak
- * into other dates or parties.
+ * Mount both compatibility records only while their exact timeline routes are active
+ * so neither can leak into other dates or parties.
  */
 const getRuntimeRoomsJson: FileGenerator = (d, s) => {
   const rooms = JSON.parse(getRoomsJson(d, s)) as Record<string, {
@@ -110,6 +118,23 @@ const getRuntimeRoomsJson: FileGenerator = (d, s) => {
     delete coffee.pin_id;
     delete coffee.pin_x;
     delete coffee.pin_y;
+  }
+
+  if (d.lookupFile(HALLOWEEN_2015_SCHOOL_ROOM_ROUTE) !== undefined) {
+    rooms['122'] = {
+      room_id: 122,
+      room_key: 'school',
+      name: 'school',
+      display_name: 'school',
+      music_id: 2052,
+      is_member: 0,
+      path: 'school.swf',
+      max_users: 80,
+      jump_enabled: false,
+      jump_disabled: true,
+      required_item: null,
+      short_name: 'School'
+    };
   }
 
   if (d.lookupFile(HALLOWEEN_2015_SOLO_ROOM_ROUTE) !== undefined) {
