@@ -201,8 +201,8 @@ if (-not $registered) {
   & $script:Git -c "safe.directory=$previewRoot" -C $previewRoot checkout --detach $expected
   if ($LASTEXITCODE -ne 0) { throw "WADDLE_CERTIFIED_PREVIEW=FAIL worktree_checkout path=$previewRoot" }
   $global:LASTEXITCODE = 0
-  & $script:Git -c "safe.directory=$previewRoot" -C $previewRoot reset --hard $previewRef
-  if ($LASTEXITCODE -ne 0) { throw "WADDLE_CERTIFIED_PREVIEW=FAIL worktree_reset path=$previewRoot" }
+  & $script:Git -c "safe.directory=$previewRoot" -C $previewRoot reset --hard $expected
+  if ($LASTEXITCODE -ne 0) { throw "WADDLE_CERTIFIED_PREVIEW=FAIL worktree_reset path=$previewRoot expected=$expected" }
   $global:LASTEXITCODE = 0
   Write-Host "WADDLE_CERTIFIED_PREVIEW_WORKTREE=PASS mode=updated path=$previewRoot quarantined_tracked=$($dirtyPaths.Count) quarantined_collisions=$collisionCount"
 }
