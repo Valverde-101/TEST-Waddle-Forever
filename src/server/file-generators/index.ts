@@ -78,8 +78,8 @@ const HALLOWEEN_2015_SOLO_ROOM_ROUTE = 'play/v2/content/global/rooms/partysolo1.
  *
  * Halloween 2015 also introduces a private event room, partysolo1, with canonical
  * room id 891. Its SWF was already preserved and routed, but the base Waddle room
- * snapshot predates the room metadata. Without the 891 entry the Mine Shack
- * hotspot can emit a join for a room the late-AS3 client cannot resolve/load.
+ * snapshot predates the room metadata. Without the 891 entry the Coffee Shop
+ * secret-lair hotspot can emit a join for a room the late-AS3 client cannot resolve/load.
  * Mount the room only while the exact timeline route is active so it cannot leak
  * into other dates or parties.
  */

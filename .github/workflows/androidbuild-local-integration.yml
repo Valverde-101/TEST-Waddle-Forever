@@ -19,8 +19,10 @@ env:
 # read-only junctions to the canonical packages. SWF analysis alone reuses its
 # historical cache because that cache is analysis state, not live runtime state.
 concurrency:
+  # Only the newest PR/source SHA is useful for the interactive preview. Cancel
+  # obsolete certification runs so they cannot monopolize the physical runner.
   group: waddle-certification-live-repo-test-waddle-forever
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   certify:

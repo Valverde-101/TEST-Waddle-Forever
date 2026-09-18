@@ -117,9 +117,10 @@ if ([string]::IsNullOrWhiteSpace($TargetBranch)) {
 
 $canonicalBefore = Get-CanonicalSnapshot -Repo $source
 $safeTarget = [regex]::Replace($TargetBranch,'[^A-Za-z0-9._-]','_')
-$previewRoot = Join-Path $AndroidBuildRoot ("Previews\Waddle-Forever\$safeTarget")
+$safePreviewRelative = ([regex]::Replace($TargetBranch,'[^A-Za-z0-9._/-]','_')).Replace('/','\_')
+$previewRoot = Join-Path $AndroidBuildRoot ("Previews\Waddle-Forever\$safePreviewRelative")
 $stateRoot = Join-Path $AndroidBuildRoot 'Previews\State'
-$quarantineBase = Join-Path $AndroidBuildRoot ("Previews\Quarantine\$safeTarget")
+$quarantineBase = Join-Path $AndroidBuildRoot ("Previews\Quarantine\$safePreviewRelative")
 foreach ($dir in @((Split-Path -Parent $previewRoot),$stateRoot,$quarantineBase)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
 
 $previewRef = "refs/remotes/waddle-certified/$safeTarget"
