@@ -41,12 +41,12 @@ foreach($entry in $decorated.GetEnumerator()){
 $school=@($configRooms|Where-Object{[string]$_.room_key-ceq'school'});if($school.Count-ne1){throw "WADDLE_HALLOWEEN2015_ROOMS=FAIL school_preserved_matches=$($school.Count)"}
 if([int]$school[0].room_id-ne122){throw "WADDLE_HALLOWEEN2015_ROOMS=FAIL school_preserved_id=$($school[0].room_id) expected=122"}
 if([string]$school[0].path-cne'school.swf'){throw "WADDLE_HALLOWEEN2015_ROOMS=FAIL school_preserved_path=$($school[0].path)"}
-if($updates-notmatch"'play/v2/content/global/rooms/school.swf's*:s*ref('rooms/Hallo15_school.swf')"){throw 'WADDLE_HALLOWEEN2015_ROOMS=FAIL school_swf_route_missing'}
+if($updates-notmatch"'play/v2/content/global/rooms/school\.swf'\s*:\s*ref\('rooms/Hallo15_school\.swf'\)"){throw 'WADDLE_HALLOWEEN2015_ROOMS=FAIL school_swf_route_missing'}
 if($generators-notmatch"const HALLOWEEN_2015_SCHOOL_ROOM_ROUTE = 'play/v2/content/global/rooms/school.swf';"){throw 'WADDLE_HALLOWEEN2015_ROOMS=FAIL school_runtime_guard_missing'}
-if($generators-notmatch"rooms['122']s*=s*{"){throw 'WADDLE_HALLOWEEN2015_ROOMS=FAIL school_runtime_metadata_missing'}
-if($generators-notmatch"room_keys*:s*'school'"){throw 'WADDLE_HALLOWEEN2015_ROOMS=FAIL school_runtime_key_missing'}
-if($generators-notmatch"paths*:s*'school.swf'"){throw 'WADDLE_HALLOWEEN2015_ROOMS=FAIL school_runtime_path_missing'}
-if($generators-notmatch"d.lookupFile(HALLOWEEN_2015_SCHOOL_ROOM_ROUTE)s*!==s*undefined"){throw 'WADDLE_HALLOWEEN2015_ROOMS=FAIL school_temporal_guard_missing'}
+if($generators-notmatch"rooms\['122'\]\s*=\s*\{"){throw 'WADDLE_HALLOWEEN2015_ROOMS=FAIL school_runtime_metadata_missing'}
+if($generators-notmatch"room_key\s*:\s*'school'"){throw 'WADDLE_HALLOWEEN2015_ROOMS=FAIL school_runtime_key_missing'}
+if($generators-notmatch"path\s*:\s*'school\.swf'"){throw 'WADDLE_HALLOWEEN2015_ROOMS=FAIL school_runtime_path_missing'}
+if($generators-notmatch"d\.lookupFile\(HALLOWEEN_2015_SCHOOL_ROOM_ROUTE\)\s*!==\s*undefined"){throw 'WADDLE_HALLOWEEN2015_ROOMS=FAIL school_temporal_guard_missing'}
 
 # partysolo1 is a real Halloween-only room and must not be put into Waddle's
 # global static room list. The preserved config proves room_id=891; the runtime
