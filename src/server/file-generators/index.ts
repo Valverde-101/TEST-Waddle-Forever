@@ -126,7 +126,13 @@ const getRuntimeRoomsJson: FileGenerator = (d, s) => {
       room_key: 'school',
       name: 'school',
       display_name: 'school',
-      music_id: 2052,
+      // The archived CPImagined rooms snapshot points School at music 2052,
+      // but that track is not present in the preserved Halloween 2015 media and
+      // protocol evidence explicitly rejects the 2048-2053 recreation loaders.
+      // Keep room entry deterministic and silent instead of issuing a guaranteed
+      // 404 that can race the room transition. Restore audio only from verified
+      // 2015 evidence.
+      music_id: 0,
       is_member: 0,
       path: 'school.swf',
       max_users: 80,
