@@ -184,10 +184,24 @@ export const handlePartyCommunicatorViewed: PenguinHandler<[number]> = async (ct
 export const handlePartyTaskComplete: PenguinHandler<[number]> = async (ctx, taskIndex) => {
   const { penguin, prst, data } = ctx;
   const config = data.getPartyProgress();
-  if (config !== null && penguin.partyProgress.setTaskComplete(config, taskIndex)) {
+  const accepted = config !== null && penguin.partyProgress.setTaskComplete(config, taskIndex);
+
+  if (accepted) {
     prst(penguin);
     await sendCurrentPartyCookie(ctx);
   }
+
+  publishWaddleLiveTrace({
+    category: 'XT',
+    phase: 'handled',
+    source: 'party-progress',
+    action: 'party-task-complete',
+    direction: 'in',
+    status: accepted ? 'accepted' : 'rejected',
+    partyId: config?.id ?? '',
+    taskIndex,
+    taskCount: config?.taskCount ?? 0
+  });
 };
 
 /**
