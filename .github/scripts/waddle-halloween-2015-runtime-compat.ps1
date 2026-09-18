@@ -90,6 +90,9 @@ function GameplayEvidence([string]$Text) {
     robotInstructions = $Text -match '(?i)showRobotInstructionsPopup'
     itemPickupInstructions = $Text -match '(?i)displayItemPickupInstructions'
     loadMiniGame = $Text -match '(?i)loadMiniGame'
+    completionDialogues = $Text -match '(?i)dialogue_Gary_congrats' -and $Text -match '(?i)dialogue_Rook_congrats' -and $Text -match '(?i)getCompletionDialogue'
+    roomCompletionCallback = $Text -match '(?i)finishMiniGamePresentation' -and $Text -match '(?i)taskCompleteRoomUpdate'
+    herbotTaskMapping = $Text -match '(?i)getCompletedTaskIndex' -and $Text -match '(?i)PENULTIMATE_TASK_ID' -and $Text -match '(?i)HERBOT_DEFEATED_TASK_ID'
     engineOverrides = $Text -match '(?i)activateEngineOverrides' -and $Text -match '(?i)deactivateEngineOverrides'
     halloweenScareConstants = $Text -match '(?i)COFFEE_CUP' -and $Text -match '(?i)SPELLING_TEST' -and $Text -match '(?i)PINK_FLAMINGO' -and $Text -match '(?i)INSECTS' -and $Text -match '(?i)UGLY_SWEATER' -and $Text -match '(?i)BEARD_TRIMMER' -and $Text -match '(?i)UFO' -and $Text -match '(?i)CLOWN'
     taskComplete = $Text -match '(?i)qtaskcomplete|TASK_COMMAND|setTaskComplete'
@@ -97,7 +100,7 @@ function GameplayEvidence([string]$Text) {
 }
 
 function Get-GameplaySnippets([string]$Text) {
-  $pattern = '(?i)setAvatarTemplate|spritePath|initPartyAvatars|createTransformationVOs|getTransformationVOs|SET_TRANSFORM|sendTransformation|createQuestVOs|getQuestVOByIndex|collectedItem|pickupItem|displayItemPickupInstructions|showRobotInstructionsPopup|loadMiniGame|activateEngineOverrides|deactivateEngineOverrides|COFFEE_CUP|SPELLING_TEST|PINK_FLAMINGO|INSECTS|UGLY_SWEATER|BEARD_TRIMMER|UFO|CLOWN|qtaskcomplete|TASK_COMMAND|setTaskComplete'
+  $pattern = '(?i)setAvatarTemplate|spritePath|initPartyAvatars|createTransformationVOs|getTransformationVOs|SET_TRANSFORM|sendTransformation|createQuestVOs|getQuestVOByIndex|collectedItem|pickupItem|displayItemPickupInstructions|showRobotInstructionsPopup|loadMiniGame|getCompletionDialogue|getCompletedTaskIndex|finishMiniGamePresentation|taskCompleteRoomUpdate|dialogue_Gary_congrats|dialogue_Rook_congrats|PENULTIMATE_TASK_ID|HERBOT_DEFEATED_TASK_ID|activateEngineOverrides|deactivateEngineOverrides|COFFEE_CUP|SPELLING_TEST|PINK_FLAMINGO|INSECTS|UGLY_SWEATER|BEARD_TRIMMER|UFO|CLOWN|qtaskcomplete|TASK_COMMAND|setTaskComplete'
   $lines = @($Text -split "`r?`n")
   $hits = New-Object System.Collections.Generic.List[string]
   for ($i=0; $i -lt $lines.Count; $i++) {
@@ -212,6 +215,9 @@ $requiredGameplay = [ordered]@{
   itemPickupInstructions=$selectedGameplay.itemPickupInstructions
   robotInstructions=$selectedGameplay.robotInstructions
   loadMiniGame=$selectedGameplay.loadMiniGame
+  completionDialogues=$selectedGameplay.completionDialogues
+  roomCompletionCallback=$selectedGameplay.roomCompletionCallback
+  herbotTaskMapping=$selectedGameplay.herbotTaskMapping
   engineOverrides=$selectedGameplay.engineOverrides
   halloweenScareConstants=$selectedGameplay.halloweenScareConstants
   taskComplete=$selectedGameplay.taskComplete
@@ -244,7 +250,7 @@ foreach ($name in $reports.Keys) {
   if ($name -eq 'selected-party-runtime-2015') {
     $selected = Export-Scripts -FFDec $ffdec -Swf $targets[$name] -Name ($name + '-details') -WorkRoot $work
     foreach ($line in @($selected.text -split "`r?`n")) {
-      if ($line -match '^// FILE:' -or $line -match '(?i)function (initPartyAvatars|sendTransformation|getQuestVOByIndex|createTransformationVOs|loadMiniGame|pickupItem|displayItemPickupInstructions|showRobotInstructionsPopup|activateEngineOverrides|deactivateEngineOverrides)|setAvatarTemplate|spritePath|SET_TRANSFORM|qtaskcomplete') {
+      if ($line -match '^// FILE:' -or $line -match '(?i)function (initPartyAvatars|sendTransformation|getQuestVOByIndex|createTransformationVOs|loadMiniGame|getCompletionDialogue|getCompletedTaskIndex|finishMiniGamePresentation|gameCompleted|pickupItem|displayItemPickupInstructions|showRobotInstructionsPopup|activateEngineOverrides|deactivateEngineOverrides)|setAvatarTemplate|spritePath|SET_TRANSFORM|qtaskcomplete') {
         $clean = [regex]::Replace($line.Trim(),'\s+',' ')
         if ($clean.Length -gt 1000) { $clean = $clean.Substring(0,1000) }
         Write-Host "WADDLE_PARTY2015_GAMEPLAY_SOURCEFILE component=$name text=$clean"
