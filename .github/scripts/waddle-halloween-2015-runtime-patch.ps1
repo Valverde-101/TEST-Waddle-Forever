@@ -140,72 +140,117 @@ $partyPath = Find-NovemberParty $scriptsRoot
 $source = [IO.File]::ReadAllText($partyPath)
 if ($source.Contains($CompatMarker)) { throw 'WADDLE_PARTY2015_RUNTIME_PATCH=FAIL base_already_patched' }
 
-$varNeedle = 'static var CONSTANTS, _shell, _airtower, _interface, _engine, _party, _partycookieUpdateHandlerDelegate, _panelPositions, _puffleAdoptionVOs, _transformationVOs, _questTaskVOs, _avatarVOs;'
-if (-not $source.Contains($varNeedle)) { throw 'WADDLE_PARTY2015_RUNTIME_PATCH=FAIL static_var_anchor_missing' }
-$newVars = $varNeedle + [Environment]::NewLine +
-  '        static var WADDLE_HALLOWEEN_2015_COMPAT = "' + $CompatMarker + '";' + [Environment]::NewLine +
-  '        static var collectedItem = null;' + [Environment]::NewLine +
-  '        static var collectedItemTaskId = -1;'
-$source = $source.Replace($varNeedle,$newVars)
+$className = 'com.clubpenguin.world.rooms2015.automated.party.NovemberParty'
 
-$initNeedle = '_party = _global.getCurrentParty();'
-if (-not $source.Contains($initNeedle)) { throw 'WADDLE_PARTY2015_RUNTIME_PATCH=FAIL init_anchor_missing' }
-$source = $source.Replace($initNeedle,$initNeedle + [Environment]::NewLine + '            configureHalloweenRobotRampage();')
+$ctorPattern = '(?m)^(?<indent>\s*)function\s+NovemberParty\s*\(\s*\)\s*\{'
+$ctorMatch = [regex]::Match($source,$ctorPattern)
+if (-not $ctorMatch.Success) {
+  $preview = ($source -replace '\s+',' ')
+  if ($preview.Length -gt 1000) { $preview = $preview.Substring(0,1000) }
+  throw "WADDLE_PARTY2015_RUNTIME_PATCH=FAIL constructor_anchor_missing preview=$preview"
+}
+$declIndent = $ctorMatch.Groups['indent'].Value
+$compatDecls = @(
+  ($declIndent + 'static var WADDLE_HALLOWEEN_2015_COMPAT = "' + $CompatMarker + '";'),
+  ($declIndent + 'static var collectedItem = null;'),
+  ($declIndent + 'static var collectedItemTaskId = -1;')
+) -join [Environment]::NewLine
+$source = [regex]::Replace(
+  $source,
+  $ctorPattern,
+  [System.Text.RegularExpressions.MatchEvaluator]{
+    param($m)
+    return $compatDecls + [Environment]::NewLine + $m.Value
+  },
+  1
+)
 
-$insertNeedle = 'static function sendBI(action, context, msg) {'
-if (-not $source.Contains($insertNeedle)) { throw 'WADDLE_PARTY2015_RUNTIME_PATCH=FAIL method_anchor_missing' }
+$initPattern = '(?m)^(?<line>\s*(?:com\.clubpenguin\.world\.rooms2015\.automated\.party\.NovemberParty\.)?_party\s*=\s*_global\.getCurrentParty\(\);\s*)$'
+$initMatch = [regex]::Match($source,$initPattern)
+if (-not $initMatch.Success) {
+  throw 'WADDLE_PARTY2015_RUNTIME_PATCH=FAIL init_party_anchor_missing'
+}
+$initIndent = [regex]::Match($initMatch.Groups['line'].Value,'^\s*').Value
+$source = [regex]::Replace(
+  $source,
+  $initPattern,
+  [System.Text.RegularExpressions.MatchEvaluator]{
+    param($m)
+    return $m.Groups['line'].Value + [Environment]::NewLine + $initIndent + $className + '.configureHalloweenRobotRampage();'
+  },
+  1
+)
+
+$methodPattern = '(?m)^(?<indent>\s*)static\s+function\s+sendBI\s*\('
+$methodMatch = [regex]::Match($source,$methodPattern)
+if (-not $methodMatch.Success) {
+  throw 'WADDLE_PARTY2015_RUNTIME_PATCH=FAIL sendBI_anchor_missing'
+}
+$methodIndent = $methodMatch.Groups['indent'].Value
 $compatMethods = @'
-        static function configureHalloweenRobotRampage() {
-            if (CONSTANTS == undefined) {
-                return(undefined);
-            }
-            CONSTANTS.COFFEE_CUP = "h15_coffee_cup";
-            CONSTANTS.SPELLING_TEST = "h15_spelling_test";
-            CONSTANTS.PINK_FLAMINGO = "h15_pink_flamingo";
-            CONSTANTS.INSECTS = "h15_insects";
-            CONSTANTS.UGLY_SWEATER = "h15_ugly_sweater";
-            CONSTANTS.BEARD_TRIMMER = "h15_beard_trimmer";
-            CONSTANTS.UFO = "h15_ufo";
-            CONSTANTS.CLOWN = "h15_clown";
-        }
-        static function pickupItem(itemID, taskID) {
-            collectedItem = itemID;
-            collectedItemTaskId = Number(taskID);
-            sendBI("pickup_" + String(taskID), "halloween2015_quest_item", String(itemID));
-            return(collectedItem);
-        }
-        static function displayItemPickupInstructions() {
-            showRobotInstructionsPopup(collectedItemTaskId);
-        }
-        static function showRobotInstructionsPopup(taskID) {
-            var prompts = [
-                "w.app.p2015.halloween.dialogue_Gary_instruct",
-                "w.app.p2015.halloween.dialogue_AA_instruct",
-                "w.app.p2015.halloween.dialogue_RH_instruct",
-                "w.app.p2015.halloween.dialogue_Cad_instruct",
-                "w.app.p2015.halloween.dialogue_Dot_instruct",
-                "w.app.p2015.halloween.dialogue_Sen_instruct",
-                "w.app.p2015.halloween.dialogue_PH_instruct",
-                "w.app.p2015.halloween.dialogue_Rook_instruct"
-            ];
-            var index = Number(taskID);
-            if ((index >= 0) && (index < prompts.length)) {
-                _interface.showContent(prompts[index]);
-            } else {
-                _interface.showContent("w.app.generic.partyinterface");
-            }
-        }
-        static function loadMiniGame(taskIndex) {
-            _interface.showContent("w.app.p2015.halloween.tiles" + String(taskIndex));
-        }
-        static function activateEngineOverrides() {
-            return(true);
-        }
-        static function deactivateEngineOverrides() {
-            return(true);
-        }
+static function configureHalloweenRobotRampage()
+{
+   if(com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS == undefined)
+   {
+      return undefined;
+   }
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.COFFEE_CUP = "h15_coffee_cup";
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.SPELLING_TEST = "h15_spelling_test";
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.PINK_FLAMINGO = "h15_pink_flamingo";
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.INSECTS = "h15_insects";
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.UGLY_SWEATER = "h15_ugly_sweater";
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.BEARD_TRIMMER = "h15_beard_trimmer";
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.UFO = "h15_ufo";
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.CLOWN = "h15_clown";
+}
+static function pickupItem(itemID,taskID)
+{
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.collectedItem = itemID;
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.collectedItemTaskId = Number(taskID);
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.sendBI("pickup_" + String(taskID),"halloween2015_quest_item",String(itemID));
+   return itemID;
+}
+static function displayItemPickupInstructions()
+{
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.showRobotInstructionsPopup(com.clubpenguin.world.rooms2015.automated.party.NovemberParty.collectedItemTaskId);
+}
+static function showRobotInstructionsPopup(taskID)
+{
+   var prompts = ["w.app.p2015.halloween.dialogue_Gary_instruct","w.app.p2015.halloween.dialogue_AA_instruct","w.app.p2015.halloween.dialogue_RH_instruct","w.app.p2015.halloween.dialogue_Cad_instruct","w.app.p2015.halloween.dialogue_Dot_instruct","w.app.p2015.halloween.dialogue_Sen_instruct","w.app.p2015.halloween.dialogue_PH_instruct","w.app.p2015.halloween.dialogue_Rook_instruct"];
+   var index = Number(taskID);
+   if(index >= 0 && index < prompts.length)
+   {
+      com.clubpenguin.world.rooms2015.automated.party.NovemberParty._interface.showContent(prompts[index]);
+   }
+   else
+   {
+      com.clubpenguin.world.rooms2015.automated.party.NovemberParty._interface.showContent("w.app.generic.partyinterface");
+   }
+}
+static function loadMiniGame(taskIndex)
+{
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty._interface.showContent("w.app.p2015.halloween.tiles" + String(taskIndex));
+}
+static function activateEngineOverrides()
+{
+   return true;
+}
+static function deactivateEngineOverrides()
+{
+   return true;
+}
 '@
-$source = $source.Replace($insertNeedle,$compatMethods + [Environment]::NewLine + $insertNeedle)
+$compatMethods = (($compatMethods -split '\r?\n') | ForEach-Object { if ($_.Length -gt 0) { $methodIndent + $_ } else { $_ } }) -join [Environment]::NewLine
+$source = [regex]::Replace(
+  $source,
+  $methodPattern,
+  [System.Text.RegularExpressions.MatchEvaluator]{
+    param($m)
+    return $compatMethods + [Environment]::NewLine + $m.Value
+  },
+  1
+)
+
 [IO.File]::WriteAllText($partyPath,$source,(New-Object System.Text.UTF8Encoding($false)))
 
 $tmp = Join-Path $work 'party-runtime-2015.swf'
