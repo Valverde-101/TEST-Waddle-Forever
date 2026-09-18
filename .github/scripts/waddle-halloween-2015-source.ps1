@@ -35,6 +35,7 @@ $partyHandlersPath=Join-Path $repo 'src/server/socket-server/handlers/party.ts'
 $worldHandlersPath=Join-Path $repo 'src/server/socket-server/world-handlers.ts'
 $partyDataPath=Join-Path $repo 'src/server/game-data/party.ts'
 $canonicalManifestPath=Join-Path $repo '.github/manifests/halloween-2015-canonical.json'
+$runtimePatchPath=Join-Path $repo '.github/scripts/waddle-halloween-2015-runtime-patch.ps1'
 $partyRoot=Join-Path $repo 'media/default/party2015'
 $historicalManifestPath=Join-Path $partyRoot 'manifest.json'
 
@@ -124,9 +125,14 @@ if([int]$historicalManifest.requiredCount -ne 132){throw "WADDLE_PARTY2015_SOURC
 $canonicalManifest=Get-Content -LiteralPath $canonicalManifestPath -Raw|ConvertFrom-Json
 if($canonicalManifest.schema -ne 'waddle-canonical-assets/v1'){throw "WADDLE_PARTY2015_SOURCE=FAIL canonical_schema=$($canonicalManifest.schema)"}
 $canonicalAssets=@($canonicalManifest.assets); $canonicalTargets=@($canonicalAssets|ForEach-Object{[string]$_.target})
-if(-not($canonicalTargets -contains 'content/party-runtime-2015.swf')){throw 'WADDLE_PARTY2015_SOURCE=FAIL templated_runtime_manifest_missing'}
-$runtimeEntry=$canonicalAssets|Where-Object{$_.target -eq 'content/party-runtime-2015.swf'}|Select-Object -First 1
-if([long]$runtimeEntry.bytes -ne 39406 -or ([string]$runtimeEntry.sha256).ToLowerInvariant() -ne 'd30fcd85c2f4a6b9ef6d1b81aac3a6d2f592af5f68ae13bb9d1564cb5b115cf7'){throw 'WADDLE_PARTY2015_SOURCE=FAIL templated_runtime_identity'}
+if(-not($canonicalTargets -contains 'content/party-runtime-2015-base.swf')){throw 'WADDLE_PARTY2015_SOURCE=FAIL runtime_donor_manifest_missing'}
+$runtimeEntry=$canonicalAssets|Where-Object{$_.target -eq 'content/party-runtime-2015-base.swf'}|Select-Object -First 1
+if([long]$runtimeEntry.bytes -ne 39406 -or ([string]$runtimeEntry.sha256).ToLowerInvariant() -ne 'd30fcd85c2f4a6b9ef6d1b81aac3a6d2f592af5f68ae13bb9d1564cb5b115cf7'){throw 'WADDLE_PARTY2015_SOURCE=FAIL runtime_donor_identity'}
+if(-not(Test-Path -LiteralPath $runtimePatchPath -PathType Leaf)){throw 'WADDLE_PARTY2015_SOURCE=FAIL runtime_patch_missing'}
+$runtimePatch=Read-Normalized $runtimePatchPath
+foreach($contract in @('WADDLE_HALLOWEEN_2015_ROBOT_RAMPAGE_V1','static function pickupItem','static function showRobotInstructionsPopup','static function loadMiniGame','CONSTANTS.COFFEE_CUP','CONSTANTS.CLOWN')){
+  Require-Contains $runtimePatch $contract ('runtime_patch_'+($contract -replace '[^A-Za-z0-9]+','_').Trim('_'))
+}
 $presentCanonical=0
 foreach($entry in $canonicalAssets){
   $path=Join-Path $partyRoot (([string]$entry.target).Replace('/','\')); if(-not(Test-Path -LiteralPath $path -PathType Leaf)){continue}; $presentCanonical++
@@ -142,4 +148,4 @@ foreach($entry in $canonicalAssets){
 $updates=Read-Normalized $updatesPath
 Require-Contains $updates 'import { UPDATES_2015 } from "./2015";' 'updates_2015_import'
 Require-Contains $updates '...UPDATES_2015' 'updates_2015_registration'
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=templated-late-2015 activefeatures=20151101 shell=svanilla features=party-json-parser transform=party-to-spts robot_tf=canonical bitmap_interaction=instrumented historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=generated-halloween-compat donor=operation-crustacean-2015 activefeatures=20151101 shell=svanilla features=party-json-parser transform=party-to-spts robot_tf=canonical bitmap_interaction=instrumented historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical"
