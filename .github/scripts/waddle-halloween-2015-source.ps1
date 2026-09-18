@@ -176,4 +176,4 @@ foreach($entry in $canonicalAssets){
 $updates=Read-Normalized $updatesPath
 Require-Contains $updates 'import { UPDATES_2015 } from "./2015";' 'updates_2015_import'
 Require-Contains $updates '...UPDATES_2015' 'updates_2015_registration'
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=generated-halloween-compat donor=operation-crustacean-2015 activefeatures=20151101 shell=svanilla features=party-json-parser transform=party-to-spts robot_tf=canonical bitmap_interaction=instrumented historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=generated-halloween-compat donor=operation-crustacean-2015 activefeatures=20151101 shell=svanilla intro_real=svanilla notls_real=svanilla mall340=canonical quest_completed=10 features=party-json-parser transform=party-to-spts robot_tf=canonical bitmap_interaction=instrumented historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical"
