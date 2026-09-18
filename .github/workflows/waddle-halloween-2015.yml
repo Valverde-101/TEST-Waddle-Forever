@@ -92,10 +92,7 @@ jobs:
     needs: validate-pr-source
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     permissions:
-      # One-shot publication is scoped to the deterministic generated runtime
-      # below. Source/config drift remains fatal and this permission is removed
-      # immediately after the binary is materialized.
-      contents: write
+      contents: read
     runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
     timeout-minutes: 35
     steps:
@@ -166,41 +163,13 @@ jobs:
             if($tracked.Count -ne 1){throw "WADDLE_PARTY2015_PUBLISH=FAIL canonical_not_tracked=$gitPath"}
           }
 
-          # Materialize only the deterministic runtime produced by the V2 patch.
-          # No source/config/other party asset is allowed to ride along with this
-          # one-shot publication.
-          $runtimeGitPath='media/default/party2015/content/party-runtime-2015.swf'
-          $unexpected=@(git status --porcelain --untracked-files=all -- 'media/default/party2015' 'src/server/updates/2015.ts' 'src/server/updates/index.ts' 'src/server/timelines/game-data.ts' 'src/server/game-data/files.ts' 'src/server/game-data/rooms.ts' 'src/server/game-data/party.ts' 'src/server/game-logic/party-progress.ts' 'src/server/database/database.ts' 'src/server/socket-server/world/world-penguin.ts' 'src/server/socket-server/xt-handler.ts' 'src/server/socket-server/handlers/protocol.ts' 'src/server/socket-server/handlers/join.ts' 'src/server/socket-server/handlers/party.ts' 'src/server/socket-server/handlers/puffle.ts' 'src/server/socket-server/world-handlers.ts' 'src/server/file-generators/general.json.ts' 'src/server/file-generators/index.ts' 'src/client/views/timeline/timeline.ts' 'src/client/views/timeline/timeline-static.ts' 'src/client/views/timeline/timeline.html' | Where-Object {$_ -notmatch 'party-runtime-2015\.swf$'})
-          if($LASTEXITCODE -ne 0){throw "WADDLE_PARTY2015_PUBLISH=FAIL git_status_exit=$LASTEXITCODE"}
-          if($unexpected.Count -gt 0){
-            $unexpected | ForEach-Object { Write-Host "WADDLE_PARTY2015_UNEXPECTED_DRIFT=$_" }
-            throw "WADDLE_PARTY2015_PUBLISH=FAIL unexpected_generated_drift=$($unexpected.Count)"
-          }
-
-          git add -- $runtimeGitPath
-          if($LASTEXITCODE -ne 0){throw "WADDLE_PARTY2015_PUBLISH=FAIL runtime_git_add_exit=$LASTEXITCODE"}
-          $staged=@(git diff --cached --name-only)
-          if($staged.Count -gt 0){
-            if($staged.Count -ne 1 -or $staged[0] -ne $runtimeGitPath){throw "WADDLE_PARTY2015_PUBLISH=FAIL staged_scope=$($staged -join ',')"}
-            git config user.name 'github-actions[bot]'
-            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git commit -m 'fix(party): publish post-minigame completion runtime'
-            if($LASTEXITCODE -ne 0){throw "WADDLE_PARTY2015_PUBLISH=FAIL commit_exit=$LASTEXITCODE"}
-            $targetBranch='${{ github.event.pull_request.head.ref || github.ref_name }}'
-            git push origin "HEAD:$targetBranch"
-            if($LASTEXITCODE -ne 0){throw "WADDLE_PARTY2015_PUBLISH=FAIL push_exit=$LASTEXITCODE branch=$targetBranch"}
-            Write-Host "WADDLE_PARTY2015_RUNTIME_PUBLISHED=PASS changed=true branch=$targetBranch"
-          } else {
-            Write-Host 'WADDLE_PARTY2015_RUNTIME_PUBLISHED=PASS changed=false'
-          }
-
           $drift=@(git status --porcelain --untracked-files=all -- 'media/default/party2015' 'src/server/updates/2015.ts' 'src/server/updates/index.ts' 'src/server/timelines/game-data.ts' 'src/server/game-data/files.ts' 'src/server/game-data/rooms.ts' 'src/server/game-data/party.ts' 'src/server/game-logic/party-progress.ts' 'src/server/database/database.ts' 'src/server/socket-server/world/world-penguin.ts' 'src/server/socket-server/xt-handler.ts' 'src/server/socket-server/handlers/protocol.ts' 'src/server/socket-server/handlers/join.ts' 'src/server/socket-server/handlers/party.ts' 'src/server/socket-server/handlers/puffle.ts' 'src/server/socket-server/world-handlers.ts' 'src/server/file-generators/general.json.ts' 'src/server/file-generators/index.ts' 'src/client/views/timeline/timeline.ts' 'src/client/views/timeline/timeline-static.ts' 'src/client/views/timeline/timeline.html')
-          if($LASTEXITCODE -ne 0){throw "WADDLE_PARTY2015_PUBLISH=FAIL git_status_postpublish_exit=$LASTEXITCODE"}
+          if($LASTEXITCODE -ne 0){throw "WADDLE_PARTY2015_PUBLISH=FAIL git_status_exit=$LASTEXITCODE"}
           if($drift.Count -gt 0){
             $drift | ForEach-Object { Write-Host "WADDLE_PARTY2015_GENERATED_DRIFT=$_" }
             throw "WADDLE_PARTY2015_PUBLISH=FAIL deterministic_generated_drift=$($drift.Count)"
           }
-          Write-Host "WADDLE_PARTY2015_PUBLISH=PASS historical_swfs=$historicalCount canonical_assets=$($canonicalAssets.Count) canonical_swfs=$($canonicalSwfs.Count) total_swfs=$expectedSwfs runtime_autopublish=one-shot"
+          Write-Host "WADDLE_PARTY2015_PUBLISH=PASS historical_swfs=$historicalCount canonical_assets=$($canonicalAssets.Count) canonical_swfs=$($canonicalSwfs.Count) total_swfs=$expectedSwfs exact_sha_immutable=true"
       - name: Verify historical SWFs plus all canonical runtime/config supplements
         shell: powershell
         run: ./.github/scripts/waddle-halloween-2015-verify.ps1 -RepoRoot $env:GITHUB_WORKSPACE -CanonicalRoot $env:GITHUB_WORKSPACE
