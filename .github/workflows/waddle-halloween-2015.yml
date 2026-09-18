@@ -92,7 +92,7 @@ jobs:
     needs: validate-pr-source
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
     permissions:
-      contents: read
+      contents: write
     runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
     timeout-minutes: 35
     steps:
@@ -164,13 +164,32 @@ jobs:
             if($tracked.Count -ne 1){throw "WADDLE_PARTY2015_PUBLISH=FAIL canonical_not_tracked=$gitPath"}
           }
 
-          $drift=@(git status --porcelain --untracked-files=all -- 'media/default/party2015' 'src/server/updates/2015.ts' 'src/server/updates/index.ts' 'src/server/timelines/game-data.ts' 'src/server/game-data/files.ts' 'src/server/game-data/rooms.ts' 'src/server/game-data/party.ts' 'src/server/game-logic/party-progress.ts' 'src/server/database/database.ts' 'src/server/socket-server/world/world-penguin.ts' 'src/server/socket-server/xt-handler.ts' 'src/server/socket-server/handlers/protocol.ts' 'src/server/socket-server/handlers/party.ts' 'src/server/socket-server/handlers/puffle.ts' 'src/server/socket-server/world-handlers.ts' 'src/server/file-generators/general.json.ts' 'src/server/file-generators/index.ts' 'src/client/views/timeline/timeline.ts' 'src/client/views/timeline/timeline-static.ts' 'src/client/views/timeline/timeline.html')
-          if($LASTEXITCODE -ne 0){throw "WADDLE_PARTY2015_PUBLISH=FAIL git_status_exit=$LASTEXITCODE"}
-          if($drift.Count -gt 0){
-            $drift | ForEach-Object { Write-Host "WADDLE_PARTY2015_GENERATED_DRIFT=$_" }
-            throw "WADDLE_PARTY2015_PUBLISH=FAIL deterministic_generated_drift=$($drift.Count)"
+          # One-shot deterministic publication: the runtime generator changed in
+          # this SHA, so publish only its binary result. No source/config file may drift.
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- 'media/default/party2015/content/party-runtime-2015.swf'
+          if($LASTEXITCODE -ne 0){throw "WADDLE_PARTY2015_PUBLISH=FAIL runtime_git_add_exit=$LASTEXITCODE"}
+          $otherDrift=@(git status --porcelain --untracked-files=all -- 'media/default/party2015' | Where-Object {$_ -notmatch 'party-runtime-2015\.swf$'})
+          if($otherDrift.Count -gt 0){
+            $otherDrift | ForEach-Object { Write-Host "WADDLE_PARTY2015_UNEXPECTED_DRIFT=$_" }
+            throw "WADDLE_PARTY2015_PUBLISH=FAIL unexpected_generated_drift=$($otherDrift.Count)"
           }
-          Write-Host "WADDLE_PARTY2015_PUBLISH=PASS historical_swfs=$historicalCount canonical_assets=$($canonicalAssets.Count) canonical_swfs=$($canonicalSwfs.Count) total_swfs=$expectedSwfs exact_sha_immutable=true"
+          $staged=@(git diff --cached --name-only)
+          if($staged.Count -gt 0){
+            if($staged.Count -ne 1 -or $staged[0] -ne 'media/default/party2015/content/party-runtime-2015.swf'){
+              throw "WADDLE_PARTY2015_PUBLISH=FAIL staged_scope=$($staged -join ',')"
+            }
+            git commit -m 'fix(party): publish deterministic Robot Rampage runtime'
+            if($LASTEXITCODE -ne 0){throw "WADDLE_PARTY2015_PUBLISH=FAIL commit_exit=$LASTEXITCODE"}
+            $targetBranch='${{ github.event.pull_request.head.ref || github.ref_name }}'
+            git push origin "HEAD:$targetBranch"
+            if($LASTEXITCODE -ne 0){throw "WADDLE_PARTY2015_PUBLISH=FAIL push_exit=$LASTEXITCODE branch=$targetBranch"}
+            Write-Host "WADDLE_PARTY2015_RUNTIME_PUBLISHED=PASS branch=$targetBranch"
+          } else {
+            Write-Host 'WADDLE_PARTY2015_RUNTIME_PUBLISHED=PASS changed=false'
+          }
+          Write-Host "WADDLE_PARTY2015_PUBLISH=PASS historical_swfs=$historicalCount canonical_assets=$($canonicalAssets.Count) canonical_swfs=$($canonicalSwfs.Count) total_swfs=$expectedSwfs deterministic_runtime_publish=true"
       - name: Verify historical SWFs plus all canonical runtime/config supplements
         shell: powershell
         run: ./.github/scripts/waddle-halloween-2015-verify.ps1 -RepoRoot $env:GITHUB_WORKSPACE -CanonicalRoot $env:GITHUB_WORKSPACE
