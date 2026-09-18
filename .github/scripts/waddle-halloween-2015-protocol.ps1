@@ -268,6 +268,19 @@ foreach ($target in $targets) {
       Write-Host "WADDLE_PARTY2015_ROBOT_ROOM_CRITICAL role=$($target.role) line=$safeLine"
     }
   }
+  if ([string]$target.role -eq 'features-2015') {
+    $questMatches = @([regex]::Matches($text,'(?i)\\?"questTaskId\\?"\s*:\s*(\d+)'))
+    $questIds = New-Object 'System.Collections.Generic.HashSet[int]'
+    foreach ($match in $questMatches) {
+      $taskId = [int]$match.Groups[1].Value
+      [void]$questIds.Add($taskId)
+      $start = [Math]::Max(0,$match.Index - 180)
+      $length = [Math]::Min(1800,$text.Length - $start)
+      $window = [regex]::Replace($text.Substring($start,$length),'\s+',' ').Trim()
+      Write-Host "WADDLE_PARTY2015_FEATURE_QUEST task=$taskId text=$window"
+    }
+    Write-Host "WADDLE_PARTY2015_FEATURE_QUEST_SUMMARY count=$($questIds.Count) ids=$((@($questIds | Sort-Object) -join ','))"
+  }
   if ([string]$target.role -like 'tiles-*') {
     $tileLines = @($text -split "`r?`n" | Where-Object { $_ -match '(?i)(qtaskcomplete|sendTaskComplete|partyCookie|taskCompleteRoomUpdate|closeContent|CURRENT_PARTY|getCurrentParty|QUEST_TASK_ID|questTask|taskIndex|send\()' } | ForEach-Object { ($_ -replace '\\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 200)
     foreach ($line in $tileLines) {
