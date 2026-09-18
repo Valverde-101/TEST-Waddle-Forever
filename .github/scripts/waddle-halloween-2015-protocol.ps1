@@ -394,7 +394,98 @@ if ($scripted -lt 48) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL scripted_targets=$
 if ($interactionText -notmatch '(?i)(party|quest|halloween|robot|PARTY_ICON|showContent)') { throw 'WADDLE_PARTY2015_PROTOCOL=FAIL historical_interaction_core_has_no_party_evidence' }
 if ($robotRoomText -notmatch '(?i)(robot|bot|dialogue|quest|showContent|MouseEvent|CLICK|party)') { throw 'WADDLE_PARTY2015_PROTOCOL=FAIL robot_rooms_have_no_interaction_evidence' }
 if ($compatibilityText -notmatch '(?i)(map|room|joinRoom|showContent|party)') { throw 'WADDLE_PARTY2015_PROTOCOL=FAIL compatibility_map_has_no_map_evidence' }
-if ($localizations.Count -ne 38) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL localization_tokens=$($localizations.Count) expected=38" }
+# The Halloween namespace is shared by two different contracts:
+#   1) game-string localization keys (38, validated from the versioned contract), and
+#   2) content crumbs such as dialogue_Gary_congrats / tiles0 used by SHELL paths.
+# Static SWF evidence must not conflate those sets. Doing so made legitimate runtime
+# additions change the "localization" count and produced false protocol failures.
+$localizationContractPath = Join-Path $partyRoot 'game_configs\halloween2015_dialogue_strings.json'
+if (-not (Test-Path -LiteralPath $localizationContractPath -PathType Leaf)) {
+  throw "WADDLE_PARTY2015_PROTOCOL=FAIL localization_contract_missing=$localizationContractPath"
+}
+$localizationContract = Get-Content -LiteralPath $localizationContractPath -Raw | ConvertFrom-Json
+if ($null -eq $localizationContract.strings) {
+  throw 'WADDLE_PARTY2015_PROTOCOL=FAIL localization_contract_strings_missing'
+}
+$expectedLocalizationKeys = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+foreach ($property in @($localizationContract.strings.PSObject.Properties)) {
+  [void]$expectedLocalizationKeys.Add([string]$property.Name)
+}
+if ($expectedLocalizationKeys.Count -ne 38 -or [int]$localizationContract.totalKeys -ne 38) {
+  throw "WADDLE_PARTY2015_PROTOCOL=FAIL localization_contract_count=$($expectedLocalizationKeys.Count) declared=$($localizationContract.totalKeys) expected=38"
+}
+
+$observedLocalizationKeys = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+$contentCrumbTokens = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+foreach ($token in $localizations) {
+  if ($expectedLocalizationKeys.Contains($token)) {
+    [void]$observedLocalizationKeys.Add($token)
+    continue
+  }
+  if ($token -match '^w\.app\.p2015\.halloween\.(?:dialogue_[A-Za-z0-9_]+|tiles[0-8])
+
+foreach ($loader in @($loaders | Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_LOADER=$loader" }
+foreach ($badLoader in @('content/party_map_note.swf','close_ups/party_map_note.swf','music/2048.swf','music/2049.swf','music/2050.swf','music/2051.swf','music/2052.swf','music/2053.swf')) {
+  if ($loaders.Contains($badLoader)) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL live_runtime_mixed_loader=$badLoader" }
+}
+
+foreach ($loader in @($compatibilityLoaders | Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_COMPAT_LOADER=$loader" }
+if (-not $compatibilityLoaders.Contains('close_ups/party_map_note.swf')) {
+  throw 'WADDLE_PARTY2015_PROTOCOL=FAIL compat_map_rejection_evidence_changed expected=close_ups/party_map_note.swf'
+}
+Write-Host 'WADDLE_PARTY2015_COMPAT_MAP=REJECTED reason=requires_missing_close_ups_party_map_note source=2310_provenance_only routed_live=false'
+
+$worldHandlersPath = Join-Path $repo 'src\server\socket-server\world-handlers.ts'
+$partyHandlerPath = Join-Path $repo 'src\server\socket-server\handlers\party.ts'
+$xtHandlerPath = Join-Path $repo 'src\server\socket-server\xt-handler.ts'
+$worldHandlers = [IO.File]::ReadAllText($worldHandlersPath)
+$partyHandler = [IO.File]::ReadAllText($partyHandlerPath)
+$xtHandler = [IO.File]::ReadAllText($xtHandlerPath)
+foreach ($route in @('party#partycookie','party#msgviewed','party#qcmsgviewed','party#qtaskcomplete','party#qtupdate')) {
+  if (-not $worldHandlers.Contains($route)) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL server_route_missing=$route" }
+}
+foreach ($token in @('getPartyServiceConfig','sendCurrentPartyCookie','partyservice','partycookie','activefeatures','qtupdate')) {
+  if (-not $partyHandler.Contains($token)) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL party_handler_missing=$token" }
+}
+foreach ($alias in @(
+  "['s%fair#fair', 's%party#partycookie']",
+  "['s%fair#partycookie', 's%party#partycookie']",
+  "['s%fair#msgviewed', 's%party#msgviewed']"
+)) {
+  if (-not $xtHandler.Contains($alias)) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL mayparty_alias_missing=$alias" }
+}
+
+$summary = [ordered]@{
+  schema='waddle-modern-party-protocol/v13'; party='Halloween Party 2015'; evidence='exact-cparchives-2015-with-selector-aware-runtime-robot-room-interactions-and-rejected-2310-map';
+  targetCount=$targets.Count; interactionCoreCount=$interactionCore.Count; interactionCoreScripted=$coreScripted;
+  robotQuestRoomCount=$robotQuestRooms.Count; robotQuestRoomScripted=$robotRoomScripted;
+  compatibilityTargetCount=$compatibilityTargets.Count; compatibilityScripted=$compatibilityScripted; compatibilityStatus='rejected';
+  mayPartyNamespaceAliases=3; compatibilityLoaders=@($compatibilityLoaders | Sort-Object); dialogueCount=$dialogueCount;
+  scriptedTargetCount=$scripted; pairs=@($pairs | Sort-Object); packetTokens=@($packets | Sort-Object);
+  namespaceTokens=@($localizations | Sort-Object);
+  localizationTokens=@($observedLocalizationKeys | Sort-Object);
+  contentCrumbTokens=@($contentCrumbTokens | Sort-Object);
+  localizationContractCount=$expectedLocalizationKeys.Count;
+  dynamicSwfLoaders=@($loaders | Sort-Object);
+  requiredPartyMethods=@($requiredPartyMethods | Sort-Object); requiredPartyConstants=@($requiredPartyConstants | Sort-Object);
+  soloRoomEvidence=@($soloRoomEvidence | Sort-Object); files=$reports; compatibilityFiles=$compatibilityReports
+}
+$summaryPath = Join-Path $work 'summary.json'
+$summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryPath -Encoding UTF8
+foreach ($pair in @($pairs | Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_PAIR=$pair" }
+foreach ($packet in @($packets | Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_PACKET=$packet" }
+Write-Host "WADDLE_PARTY2015_PROTOCOL=PASS runtime=exact-cparchives-2015 selector_runtime=20151101 mayparty_aliases=3 compatibility_map=rejected targets=$($targets.Count) core=$($interactionCore.Count) core_scripted=$coreScripted robot_rooms=$($robotQuestRooms.Count) robot_room_scripted=$robotRoomScripted compatibility_scripted=$compatibilityScripted dialogues=34 tiles=9 scripted_targets=$scripted localization_contract=$($expectedLocalizationKeys.Count) localization_observed=$($observedLocalizationKeys.Count) content_crumbs=$($contentCrumbTokens.Count) namespace_tokens=$($localizations.Count) dynamic_loaders=$($loaders.Count) server_routes=5 ffdec_retry=true summary=$summaryPath") {
+    [void]$contentCrumbTokens.Add($token)
+    continue
+  }
+  throw "WADDLE_PARTY2015_PROTOCOL=FAIL unknown_halloween_namespace_token=$token"
+}
+if ($observedLocalizationKeys.Count -lt 1) {
+  throw 'WADDLE_PARTY2015_PROTOCOL=FAIL no_localization_evidence_in_preserved_swfs'
+}
+foreach ($token in @($observedLocalizationKeys | Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_LOCALIZATION=$token" }
+foreach ($token in @($contentCrumbTokens | Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_CONTENT_CRUMB=$token" }
+Write-Host "WADDLE_PARTY2015_LOCALIZATION_EVIDENCE=PASS contract=38 observed_static=$($observedLocalizationKeys.Count) content_crumbs=$($contentCrumbTokens.Count) namespace_tokens=$($localizations.Count)"
 
 foreach ($loader in @($loaders | Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_LOADER=$loader" }
 foreach ($badLoader in @('content/party_map_note.swf','close_ups/party_map_note.swf','music/2048.swf','music/2049.swf','music/2050.swf','music/2051.swf','music/2052.swf','music/2053.swf')) {
