@@ -35,7 +35,15 @@ Require (-not $updates.Contains("ref('content/party-base-2015.swf')")) 'obsolete
 Require (-not $updates.Contains("ref('content/party.swf')")) 'recreation_party_runtime_absent'
 Require (-not $updates.Contains("ref('content/map.swf')")) 'recreation_map_absent'
 
-# The Mine Shack's preserved hotspot targets the Halloween-only solo room 891.
+# The Mine Shack doorway targets the preserved 2015 School key at room 122.
+# Waddle's static room table calls the same id "eco", so the runtime metadata
+# must restore "school" while the Halloween room asset is active.
+Require ($generators.Contains("const HALLOWEEN_2015_SCHOOL_ROOM_ROUTE = 'play/v2/content/global/rooms/school.swf';")) 'school_room_route_guard'
+Match $generators "rooms\['122'\]\s*=\s*\{" 'school_room_122_mount'
+Match $generators "room_key\s*:\s*'school'" 'school_room_key'
+Match $generators "path\s*:\s*'school\.swf'" 'school_room_path'
+
+# The Coffee Shop's preserved Halloween hotspot targets the private solo room 891.
 Require ($generators.Contains("const HALLOWEEN_2015_SOLO_ROOM_ROUTE = 'play/v2/content/global/rooms/partysolo1.swf';")) 'solo_room_route_guard'
 Match $generators "rooms\['891'\]\s*=\s*\{" 'solo_room_891_mount'
 Match $generators "room_key\s*:\s*'partysolo1'" 'solo_room_key'
@@ -54,4 +62,4 @@ $runtime=$canonicalAssets|Where-Object{$_.target -eq 'content/party-runtime-2015
 Require ([long]$runtime.bytes -eq 39406) 'runtime_donor_bytes'
 Require (([string]$runtime.sha256).ToLowerInvariant() -eq 'd30fcd85c2f4a6b9ef6d1b81aac3a6d2f592af5f68ae13bb9d1564cb5b115cf7') 'runtime_donor_sha256'
 
-Write-Host "WADDLE_HALLOWEEN2015_DATA=PASS party=halloween-2015 runtime=generated-halloween-compat donor=operation-crustacean-2015 activefeatures=20151101 features=historical-cparchives icon=historical-cparchives solo_room=891 historical_swfs=132 canonical_provenance=$($canonicalAssets.Count)"
+Write-Host "WADDLE_HALLOWEEN2015_DATA=PASS party=halloween-2015 runtime=generated-halloween-compat donor=operation-crustacean-2015 activefeatures=20151101 features=historical-cparchives icon=historical-cparchives school_room=122:school solo_room=891 historical_swfs=132 canonical_provenance=$($canonicalAssets.Count)"
