@@ -9,7 +9,7 @@ $ErrorActionPreference = 'Stop'
 
 $ExpectedBaseBytes = 39406
 $ExpectedBaseSha256 = 'd30fcd85c2f4a6b9ef6d1b81aac3a6d2f592af5f68ae13bb9d1564cb5b115cf7'
-$CompatMarker = 'WADDLE_HALLOWEEN_2015_ROBOT_RAMPAGE_V1'
+$CompatMarker = 'WADDLE_HALLOWEEN_2015_ROBOT_RAMPAGE_V2'
 
 function Test-Swf([string]$Path) {
   if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $false }
@@ -99,8 +99,16 @@ function Test-PatchedRuntime([string]$FFDec,[string]$Swf,[string]$WorkRoot,[stri
     'static function displayItemPickupInstructions',
     'static function showRobotInstructionsPopup',
     'static function loadMiniGame',
+    'static function getCompletionDialogue',
+    'static function finishMiniGamePresentation',
     'static function gameCompleted',
     'activeMiniGameTaskIndex',
+    'PENULTIMATE_TASK_ID',
+    'HERBOT_DEFEATED_TASK_ID',
+    'pendingCompletionDialogue',
+    'taskCompleteRoomUpdate',
+    'w.app.p2015.halloween.dialogue_Gary_congrats',
+    'w.app.p2015.halloween.dialogue_Rook_congrats',
     'CONSTANTS.SET_TRANSFORM',
     'static function activateEngineOverrides',
     'static function deactivateEngineOverrides',
@@ -164,7 +172,10 @@ $compatDecls = @(
   ($declIndent + 'static var WADDLE_HALLOWEEN_2015_COMPAT = "' + $CompatMarker + '";'),
   ($declIndent + 'static var collectedItem = null;'),
   ($declIndent + 'static var collectedItemTaskId = -1;'),
-  ($declIndent + 'static var activeMiniGameTaskIndex = -1;')
+  ($declIndent + 'static var activeMiniGameTaskIndex = -1;'),
+  ($declIndent + 'static var PENULTIMATE_TASK_ID = 8;'),
+  ($declIndent + 'static var HERBOT_DEFEATED_TASK_ID = 9;'),
+  ($declIndent + 'static var pendingCompletionDialogue = null;')
 ) -join [Environment]::NewLine
 $source = [regex]::Replace(
   $source,
@@ -251,6 +262,30 @@ static function loadMiniGame(taskIndex)
    com.clubpenguin.world.rooms2015.automated.party.NovemberParty.activeMiniGameTaskIndex = Number(taskIndex);
    com.clubpenguin.world.rooms2015.automated.party.NovemberParty._interface.showContent("w.app.p2015.halloween.tiles" + String(taskIndex));
 }
+static function getCompletionDialogue(taskIndex)
+{
+   var prompts = ["w.app.p2015.halloween.dialogue_Gary_congrats","w.app.p2015.halloween.dialogue_AA_congrats","w.app.p2015.halloween.dialogue_RH_congrats","w.app.p2015.halloween.dialogue_Cad_congrats","w.app.p2015.halloween.dialogue_Dot_congrats","w.app.p2015.halloween.dialogue_Sen_congrats","w.app.p2015.halloween.dialogue_PH_congrats","w.app.p2015.halloween.dialogue_Rook_congrats"];
+   var index = Number(taskIndex);
+   if(index >= 0 && index < prompts.length)
+   {
+      return prompts[index];
+   }
+   return null;
+}
+static function finishMiniGamePresentation()
+{
+   var room = _global.getCurrentRoom();
+   if(room != undefined && room != null && room.taskCompleteRoomUpdate != undefined)
+   {
+      room.taskCompleteRoomUpdate();
+   }
+   var dialoguePath = com.clubpenguin.world.rooms2015.automated.party.NovemberParty.pendingCompletionDialogue;
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.pendingCompletionDialogue = null;
+   if(dialoguePath != undefined && dialoguePath != null && String(dialoguePath).length > 0)
+   {
+      com.clubpenguin.world.rooms2015.automated.party.NovemberParty._interface.showContent(dialoguePath);
+   }
+}
 static function gameCompleted(isWon)
 {
    var taskIndex = com.clubpenguin.world.rooms2015.automated.party.NovemberParty.activeMiniGameTaskIndex;
@@ -260,12 +295,26 @@ static function gameCompleted(isWon)
    }
    if(isWon && taskIndex != undefined)
    {
-      com.clubpenguin.world.rooms2015.automated.party.NovemberParty.partyCookie.sendTaskComplete(taskIndex);
+      var completedTaskIndex = Number(taskIndex);
+      if(completedTaskIndex == com.clubpenguin.world.rooms2015.automated.party.NovemberParty.PENULTIMATE_TASK_ID)
+      {
+         completedTaskIndex = com.clubpenguin.world.rooms2015.automated.party.NovemberParty.HERBOT_DEFEATED_TASK_ID;
+      }
+      com.clubpenguin.world.rooms2015.automated.party.NovemberParty.partyCookie.sendTaskComplete(completedTaskIndex);
+      com.clubpenguin.world.rooms2015.automated.party.NovemberParty.pendingCompletionDialogue = com.clubpenguin.world.rooms2015.automated.party.NovemberParty.getCompletionDialogue(taskIndex);
       com.clubpenguin.world.rooms2015.automated.party.NovemberParty.collectedItem = null;
       com.clubpenguin.world.rooms2015.automated.party.NovemberParty.collectedItemTaskId = -1;
    }
+   else
+   {
+      com.clubpenguin.world.rooms2015.automated.party.NovemberParty.pendingCompletionDialogue = null;
+   }
    com.clubpenguin.world.rooms2015.automated.party.NovemberParty.activeMiniGameTaskIndex = -1;
    com.clubpenguin.world.rooms2015.automated.party.NovemberParty._interface.closeContent();
+   if(isWon)
+   {
+      com.clubpenguin.world.rooms2015.automated.party.NovemberParty.finishMiniGamePresentation();
+   }
 }
 static function activateEngineOverrides()
 {
