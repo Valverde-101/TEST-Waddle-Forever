@@ -100,6 +100,8 @@ function Test-PatchedRuntime([string]$FFDec,[string]$Swf,[string]$WorkRoot,[stri
     'static function showRobotInstructionsPopup',
     'static function loadMiniGame',
     'static function gameCompleted',
+    'activeMiniGameTaskIndex',
+    'CONSTANTS.SET_TRANSFORM',
     'static function activateEngineOverrides',
     'static function deactivateEngineOverrides',
     'CONSTANTS.COFFEE_CUP',
@@ -154,7 +156,8 @@ $declIndent = $ctorMatch.Groups['indent'].Value
 $compatDecls = @(
   ($declIndent + 'static var WADDLE_HALLOWEEN_2015_COMPAT = "' + $CompatMarker + '";'),
   ($declIndent + 'static var collectedItem = null;'),
-  ($declIndent + 'static var collectedItemTaskId = -1;')
+  ($declIndent + 'static var collectedItemTaskId = -1;'),
+  ($declIndent + 'static var activeMiniGameTaskIndex = -1;')
 ) -join [Environment]::NewLine
 $source = [regex]::Replace(
   $source,
@@ -195,6 +198,7 @@ static function configureHalloweenRobotRampage()
    {
       return undefined;
    }
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.SET_TRANSFORM = "transform";
    com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.COFFEE_CUP = "h15_coffee_cup";
    com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.SPELLING_TEST = "h15_spelling_test";
    com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.PINK_FLAMINGO = "h15_pink_flamingo";
@@ -230,17 +234,23 @@ static function showRobotInstructionsPopup(taskID)
 }
 static function loadMiniGame(taskIndex)
 {
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.activeMiniGameTaskIndex = Number(taskIndex);
    com.clubpenguin.world.rooms2015.automated.party.NovemberParty._interface.showContent("w.app.p2015.halloween.tiles" + String(taskIndex));
 }
 static function gameCompleted(isWon)
 {
-   var taskIndex = com.clubpenguin.world.rooms2015.automated.party.NovemberParty.partyCookie.getNextAvailableTask();
+   var taskIndex = com.clubpenguin.world.rooms2015.automated.party.NovemberParty.activeMiniGameTaskIndex;
+   if(taskIndex == undefined || isNaN(taskIndex) || taskIndex < 0)
+   {
+      taskIndex = com.clubpenguin.world.rooms2015.automated.party.NovemberParty.partyCookie.getNextAvailableTask();
+   }
    if(isWon && taskIndex != undefined)
    {
       com.clubpenguin.world.rooms2015.automated.party.NovemberParty.partyCookie.sendTaskComplete(taskIndex);
       com.clubpenguin.world.rooms2015.automated.party.NovemberParty.collectedItem = null;
       com.clubpenguin.world.rooms2015.automated.party.NovemberParty.collectedItemTaskId = -1;
    }
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.activeMiniGameTaskIndex = -1;
    com.clubpenguin.world.rooms2015.automated.party.NovemberParty._interface.closeContent();
 }
 static function activateEngineOverrides()
