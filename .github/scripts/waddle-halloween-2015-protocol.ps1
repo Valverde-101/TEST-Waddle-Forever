@@ -194,9 +194,9 @@ $finaleRoomEvidence = New-Object 'System.Collections.Generic.HashSet[string]' ([
 function Write-FunctionWindow([string]$Text,[string]$Role,[string]$FunctionName) {
   $lines = @($Text -split "`r?`n")
   for ($i=0; $i -lt $lines.Count; $i++) {
-    if ($lines[$i] -notmatch ("(?i)^\\s*(?:static\\s+)?function\\s+" + [regex]::Escape($FunctionName) + "\\s*\\(")) { continue }
+    if ($lines[$i] -notmatch ("(?i)^\s*(?:static\s+)?function\s+" + [regex]::Escape($FunctionName) + "\s*\(")) { continue }
     $end = [Math]::Min($lines.Count - 1,$i + 45)
-    $window = [regex]::Replace(($lines[$i..$end] -join ' '),'\\s+',' ').Trim()
+    $window = [regex]::Replace(($lines[$i..$end] -join ' '),'\s+',' ').Trim()
     if ($window.Length -gt 3500) { $window = $window.Substring(0,3500) }
     Write-Host "WADDLE_PARTY2015_FUNCTION_WINDOW role=$Role function=$FunctionName text=$window"
     return
