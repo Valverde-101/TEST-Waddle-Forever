@@ -198,7 +198,7 @@ foreach ($target in $targets) {
     }
   }
   if ([string]$target.role -like 'tiles-*') {
-    $tileLines = @($text -split "`r?`n" | Where-Object { $_ -match '(?i)(qtaskcomplete|sendTaskComplete|partyCookie|taskCompleteRoomUpdate|closeContent|CURRENT_PARTY|getCurrentParty|QUEST_TASK_ID|questTask|taskIndex|send\\()' } | ForEach-Object { ($_ -replace '\\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 200)
+    $tileLines = @($text -split "`r?`n" | Where-Object { $_ -match '(?i)(qtaskcomplete|sendTaskComplete|partyCookie|taskCompleteRoomUpdate|closeContent|CURRENT_PARTY|getCurrentParty|QUEST_TASK_ID|questTask|taskIndex|send\()' } | ForEach-Object { ($_ -replace '\\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 200)
     foreach ($line in $tileLines) {
       $safeLine = if ($line.Length -gt 700) { $line.Substring(0,700) } else { $line }
       Write-Host "WADDLE_PARTY2015_TILE_CRITICAL role=$($target.role) line=$safeLine"
@@ -207,6 +207,28 @@ foreach ($target in $targets) {
   Add-Evidence -Text $text -Pairs $pairs -Packets $packets -Localizations $localizations -Loaders $loaders
   $reports += [pscustomobject]@{ role=[string]$target.role; file=[string]$target.path; bytes=[int64](Get-Item -LiteralPath $swf).Length; scriptFiles=[int]$evidence.files; ffdecExit=[string]$evidence.exit; ffdecAttempts=[int]$evidence.attempts }
   Write-Host "WADDLE_PARTY2015_PROTOCOL_FILE=PASS role=$($target.role) bytes=$((Get-Item -LiteralPath $swf).Length) script_files=$($evidence.files) ffdec_exit=$($evidence.exit) ffdec_attempts=$($evidence.attempts)"
+}
+
+
+# Scan every preserved Halloween room for the client-local pickup/portal contracts.
+# These calls never reach the server until the party runtime turns them into the
+# appropriate local state or room join, so this evidence is essential for root
+# cause analysis when an object is visible but clicking it appears to do nothing.
+$robotRoomPaths = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+foreach ($entry in $robotQuestRooms) { [void]$robotRoomPaths.Add(([string]$entry.path).Replace('/','\')) }
+$roomDir = Join-Path $partyRoot 'rooms'
+foreach ($roomFile in @(Get-ChildItem -LiteralPath $roomDir -Filter '*.swf' -File | Sort-Object Name)) {
+  $relativeRoomPath = ('rooms\' + $roomFile.Name)
+  if ($robotRoomPaths.Contains($relativeRoomPath)) { continue }
+  $safe = 'room-scan-' + ([IO.Path]::GetFileNameWithoutExtension($roomFile.Name) -replace '[^A-Za-z0-9_.-]','_')
+  $evidence = Export-Scripts -FFDec $ffdec -Swf $roomFile.FullName -SafeName $safe -WorkRoot $work
+  $text = [string]$evidence.text
+  if ($text -notmatch '(?i)(pickupItem|itemCollectRelease|collectedItem|partysolo1|party7|sendJoinRoom|QUEST_TASK_ID)') { continue }
+  $roomLines = @($text -split "`r?`n" | Where-Object { $_ -match '(?i)(class com\.clubpenguin\.world\.rooms2015\.october|QUEST_TASK_ID|pickupItem|itemCollectRelease|collectedItem|displayItemPickupInstructions|partysolo1|party7|sendJoinRoom|triggerFunction)' } | ForEach-Object { ($_ -replace '\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 220)
+  foreach ($line in $roomLines) {
+    $safeLine = if ($line.Length -gt 700) { $line.Substring(0,700) } else { $line }
+    Write-Host "WADDLE_PARTY2015_ROOM_INTERACTION role=$safe line=$safeLine"
+  }
 }
 
 foreach ($target in $compatibilityTargets) {
