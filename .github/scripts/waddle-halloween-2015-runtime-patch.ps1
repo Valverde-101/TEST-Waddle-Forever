@@ -167,10 +167,25 @@ $compatMethods = @'
             return(collectedItem);
         }
         static function displayItemPickupInstructions() {
-            _interface.showContent("w.app.generic.partyinterface");
+            showRobotInstructionsPopup(collectedItemTaskId);
         }
         static function showRobotInstructionsPopup(taskID) {
-            _interface.showContent("w.app.generic.partyinterface");
+            var prompts = [
+                "w.app.p2015.halloween.dialogue_Gary_instruct",
+                "w.app.p2015.halloween.dialogue_AA_instruct",
+                "w.app.p2015.halloween.dialogue_RH_instruct",
+                "w.app.p2015.halloween.dialogue_Cad_instruct",
+                "w.app.p2015.halloween.dialogue_Dot_instruct",
+                "w.app.p2015.halloween.dialogue_Sen_instruct",
+                "w.app.p2015.halloween.dialogue_PH_instruct",
+                "w.app.p2015.halloween.dialogue_Rook_instruct"
+            ];
+            var index = Number(taskID);
+            if ((index >= 0) && (index < prompts.length)) {
+                _interface.showContent(prompts[index]);
+            } else {
+                _interface.showContent("w.app.generic.partyinterface");
+            }
         }
         static function loadMiniGame(taskIndex) {
             _interface.showContent("w.app.p2015.halloween.tiles" + String(taskIndex));
