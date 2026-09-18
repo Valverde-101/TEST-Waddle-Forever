@@ -171,6 +171,22 @@ $compatibilityScripted = 0
 $interactionText = ''
 $robotRoomText = ''
 $compatibilityText = ''
+$requiredPartyMethods = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+$requiredPartyConstants = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+$soloRoomEvidence = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+
+function Add-PartyRuntimeContract([string]$Text,[string]$Role) {
+  foreach ($match in @([regex]::Matches($Text,'(?i)(?:_currentParty|BaseParty\.CURRENT_PARTY|CURRENT_PARTY)\.([A-Za-z_][A-Za-z0-9_]*)\s*\('))) {
+    [void]$requiredPartyMethods.Add([string]$match.Groups[1].Value)
+  }
+  foreach ($match in @([regex]::Matches($Text,'(?i)\.CONSTANTS\.([A-Z][A-Z0-9_]*)'))) {
+    [void]$requiredPartyConstants.Add(([string]$match.Groups[1].Value).ToUpperInvariant())
+  }
+  foreach ($line in @($Text -split '\r?\n' | Where-Object { $_ -match '(?i)partysolo1' } | ForEach-Object { ($_ -replace '\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 40)) {
+    $safeLine = if ($line.Length -gt 700) { $line.Substring(0,700) } else { $line }
+    [void]$soloRoomEvidence.Add("$Role::$safeLine")
+  }
+}
 
 foreach ($target in $targets) {
   $swf = Join-Path $partyRoot ([string]$target.path)
@@ -178,6 +194,7 @@ foreach ($target in $targets) {
   $safe = ([string]$target.role -replace '[^A-Za-z0-9_.-]','_')
   $evidence = Export-Scripts -FFDec $ffdec -Swf $swf -SafeName $safe -WorkRoot $work
   $text = [string]$evidence.text
+  Add-PartyRuntimeContract -Text $text -Role ([string]$target.role)
   if ($evidence.files -gt 0) { $scripted++ }
   if (@($interactionCore | Where-Object { $_.role -eq $target.role }).Count -gt 0) {
     if ($evidence.files -gt 0) { $coreScripted++ }
@@ -223,6 +240,7 @@ foreach ($roomFile in @(Get-ChildItem -LiteralPath $roomDir -Filter '*.swf' -Fil
   $safe = 'room-scan-' + ([IO.Path]::GetFileNameWithoutExtension($roomFile.Name) -replace '[^A-Za-z0-9_.-]','_')
   $evidence = Export-Scripts -FFDec $ffdec -Swf $roomFile.FullName -SafeName $safe -WorkRoot $work
   $text = [string]$evidence.text
+  Add-PartyRuntimeContract -Text $text -Role $safe
   if ($text -notmatch '(?i)(pickupItem|itemCollectRelease|collectedItem|partysolo1|party7|sendJoinRoom|QUEST_TASK_ID)') { continue }
   $roomLines = @($text -split "`r?`n" | Where-Object { $_ -match '(?i)(class com\.clubpenguin\.world\.rooms2015\.october|QUEST_TASK_ID|pickupItem|itemCollectRelease|collectedItem|displayItemPickupInstructions|partysolo1|party7|sendJoinRoom|triggerFunction)' } | ForEach-Object { ($_ -replace '\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 220)
   foreach ($line in $roomLines) {
@@ -230,6 +248,39 @@ foreach ($roomFile in @(Get-ChildItem -LiteralPath $roomDir -Filter '*.swf' -Fil
     Write-Host "WADDLE_PARTY2015_ROOM_INTERACTION role=$safe line=$safeLine"
   }
 }
+
+
+# Derive the complete direct CURRENT_PARTY API used by the preserved Halloween
+# client and prove the generated live runtime implements it. This prevents
+# visible-but-dead room objects from returning when a future donor/runtime is
+# swapped without matching the room contract.
+$liveRuntimePath = Join-Path $partyRoot 'content\party-runtime-2015.swf'
+if (-not (Test-Swf $liveRuntimePath)) { throw "WADDLE_PARTY2015_PROTOCOL=FAIL live_runtime_invalid=$liveRuntimePath" }
+$liveRuntimeEvidence = Export-Scripts -FFDec $ffdec -Swf $liveRuntimePath -SafeName 'live-runtime-contract' -WorkRoot $work
+$liveRuntimeText = [string]$liveRuntimeEvidence.text
+$runtimeMethods = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+foreach ($match in @([regex]::Matches($liveRuntimeText,'(?i)static\s+function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\('))) {
+  [void]$runtimeMethods.Add([string]$match.Groups[1].Value)
+}
+$runtimeConstants = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+foreach ($match in @([regex]::Matches($liveRuntimeText,'(?i)\.CONSTANTS\.([A-Z][A-Z0-9_]*)'))) {
+  [void]$runtimeConstants.Add(([string]$match.Groups[1].Value).ToUpperInvariant())
+}
+$missingMethods = @($requiredPartyMethods | Where-Object { -not $runtimeMethods.Contains($_) } | Sort-Object)
+if ($missingMethods.Count -gt 0) {
+  throw "WADDLE_PARTY2015_PROTOCOL=FAIL live_runtime_missing_methods=$($missingMethods -join ',')"
+}
+$missingConstants = @($requiredPartyConstants | Where-Object { -not $runtimeConstants.Contains($_) } | Sort-Object)
+if ($missingConstants.Count -gt 0) {
+  throw "WADDLE_PARTY2015_PROTOCOL=FAIL live_runtime_missing_constants=$($missingConstants -join ',')"
+}
+foreach ($method in @($requiredPartyMethods | Sort-Object)) { Write-Host "WADDLE_PARTY2015_RUNTIME_REQUIRED_METHOD=$method" }
+foreach ($constant in @($requiredPartyConstants | Sort-Object)) { Write-Host "WADDLE_PARTY2015_RUNTIME_REQUIRED_CONSTANT=$constant" }
+foreach ($evidenceLine in @($soloRoomEvidence | Sort-Object)) { Write-Host "WADDLE_PARTY2015_SOLO_ROOM_EVIDENCE=$evidenceLine" }
+if ($soloRoomEvidence.Count -lt 1) {
+  throw 'WADDLE_PARTY2015_PROTOCOL=FAIL partysolo1_entry_contract_not_found'
+}
+Write-Host "WADDLE_PARTY2015_RUNTIME_PARITY=PASS required_methods=$($requiredPartyMethods.Count) required_constants=$($requiredPartyConstants.Count) solo_room_evidence=$($soloRoomEvidence.Count)"
 
 foreach ($target in $compatibilityTargets) {
   $swf = Join-Path $partyRoot ([string]$target.path)
@@ -294,7 +345,9 @@ $summary = [ordered]@{
   compatibilityTargetCount=$compatibilityTargets.Count; compatibilityScripted=$compatibilityScripted; compatibilityStatus='rejected';
   mayPartyNamespaceAliases=3; compatibilityLoaders=@($compatibilityLoaders | Sort-Object); dialogueCount=$dialogueCount;
   scriptedTargetCount=$scripted; pairs=@($pairs | Sort-Object); packetTokens=@($packets | Sort-Object);
-  localizationTokens=@($localizations | Sort-Object); dynamicSwfLoaders=@($loaders | Sort-Object); files=$reports; compatibilityFiles=$compatibilityReports
+  localizationTokens=@($localizations | Sort-Object); dynamicSwfLoaders=@($loaders | Sort-Object);
+  requiredPartyMethods=@($requiredPartyMethods | Sort-Object); requiredPartyConstants=@($requiredPartyConstants | Sort-Object);
+  soloRoomEvidence=@($soloRoomEvidence | Sort-Object); files=$reports; compatibilityFiles=$compatibilityReports
 }
 $summaryPath = Join-Path $work 'summary.json'
 $summary | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $summaryPath -Encoding UTF8
