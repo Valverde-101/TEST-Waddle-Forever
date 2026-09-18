@@ -20,7 +20,7 @@
       "kind": "swf"
     },
     {
-      "target": "content/party-runtime-2015.swf",
+      "target": "content/party-runtime-2015-base.swf",
       "sourceUrl": "https://toolbox.solero.me/cparchives/static/images/archives/a/ae/ClientParty-OperationCrustacean.swf",
       "bytes": 39406,
       "sha256": "d30fcd85c2f4a6b9ef6d1b81aac3a6d2f592af5f68ae13bb9d1564cb5b115cf7",
