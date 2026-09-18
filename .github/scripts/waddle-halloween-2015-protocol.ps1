@@ -191,6 +191,18 @@ foreach ($target in $targets) {
       $safeLine = if ($line.Length -gt 420) { $line.Substring(0,420) } else { $line }
       Write-Host "WADDLE_PARTY2015_ROBOT_ROOM_EVIDENCE role=$($target.role) line=$safeLine"
     }
+    $criticalRoomLines = @($text -split "`r?`n" | Where-Object { $_ -match '(?i)(class com\\.clubpenguin\\.world\\.rooms2015\\.october|partysolo1|party1|party7|sendJoinRoom|triggerFunction|QUEST_TASK_ID|pickupItem|collectedItem|showRobotInstructionsPopup|displayItemPickupInstructions|loadMiniGame|taskCompleteRoomUpdate)' } | ForEach-Object { ($_ -replace '\\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 160)
+    foreach ($line in $criticalRoomLines) {
+      $safeLine = if ($line.Length -gt 700) { $line.Substring(0,700) } else { $line }
+      Write-Host "WADDLE_PARTY2015_ROBOT_ROOM_CRITICAL role=$($target.role) line=$safeLine"
+    }
+  }
+  if ([string]$target.role -like 'tiles-*') {
+    $tileLines = @($text -split "`r?`n" | Where-Object { $_ -match '(?i)(qtaskcomplete|sendTaskComplete|partyCookie|taskCompleteRoomUpdate|closeContent|CURRENT_PARTY|getCurrentParty|QUEST_TASK_ID|questTask|taskIndex|send\\()' } | ForEach-Object { ($_ -replace '\\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 200)
+    foreach ($line in $tileLines) {
+      $safeLine = if ($line.Length -gt 700) { $line.Substring(0,700) } else { $line }
+      Write-Host "WADDLE_PARTY2015_TILE_CRITICAL role=$($target.role) line=$safeLine"
+    }
   }
   Add-Evidence -Text $text -Pairs $pairs -Packets $packets -Localizations $localizations -Loaders $loaders
   $reports += [pscustomobject]@{ role=[string]$target.role; file=[string]$target.path; bytes=[int64](Get-Item -LiteralPath $swf).Length; scriptFiles=[int]$evidence.files; ffdecExit=[string]$evidence.exit; ffdecAttempts=[int]$evidence.attempts }
