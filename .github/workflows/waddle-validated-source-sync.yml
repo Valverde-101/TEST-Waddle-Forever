@@ -11,8 +11,10 @@ permissions:
   actions: read
 
 concurrency:
-  group: waddle-validated-source-sync-${{ github.event.pull_request.head.sha || github.sha }}
-  cancel-in-progress: false
+  # A newer commit supersedes an older preview activation for the same PR/branch.
+  # Exact-SHA certification is still enforced inside the job.
+  group: waddle-validated-source-sync-${{ github.event.pull_request.number || github.ref_name }}
+  cancel-in-progress: true
 
 jobs:
   wait-certification:
@@ -129,8 +131,14 @@ jobs:
           & $git -c "safe.directory=$repo" -C $repo fetch --force --no-tags 'https://github.com/${{ github.repository }}.git' $refspec
           if($LASTEXITCODE -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL materialize_fetch branch=$env:WADDLE_TARGET_BRANCH"}
           $global:LASTEXITCODE=0
-          $actual=(& $git -c "safe.directory=$repo" -C $repo rev-parse $ref | Out-String).Trim().ToLowerInvariant()
-          if($LASTEXITCODE -ne 0 -or $actual -ne $sha){throw "VALIDATED_SOURCE_SYNC=FAIL materialize_sha expected=$sha actual=$actual"}
+          $branchHead=(& $git -c "safe.directory=$repo" -C $repo rev-parse $ref | Out-String).Trim().ToLowerInvariant()
+          if($LASTEXITCODE -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL materialize_branch_head branch=$env:WADDLE_TARGET_BRANCH"}
+          $global:LASTEXITCODE=0
+          & $git -c "safe.directory=$repo" -C $repo cat-file -e "$sha^{commit}"
+          if($LASTEXITCODE -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL certified_sha_not_fetched sha=$sha branch_head=$branchHead"}
+          $global:LASTEXITCODE=0
+          & $git -c "safe.directory=$repo" -C $repo merge-base --is-ancestor $sha $ref
+          if($LASTEXITCODE -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL certified_sha_not_on_target_branch sha=$sha branch_head=$branchHead"}
           $global:LASTEXITCODE=0
           $dir=Join-Path $env:ANDROIDBUILD_ROOT 'Certification\Waddle-Preview'
           New-Item -ItemType Directory -Force -Path $dir | Out-Null
