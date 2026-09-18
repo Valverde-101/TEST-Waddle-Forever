@@ -144,7 +144,7 @@ $initNeedle = '_party = _global.getCurrentParty();'
 if (-not $source.Contains($initNeedle)) { throw 'WADDLE_PARTY2015_RUNTIME_PATCH=FAIL init_anchor_missing' }
 $source = $source.Replace($initNeedle,$initNeedle + [Environment]::NewLine + '            configureHalloweenRobotRampage();')
 
-$insertNeedle = '        static function sendBI(action, context, msg) {'
+$insertNeedle = 'static function sendBI(action, context, msg) {'
 if (-not $source.Contains($insertNeedle)) { throw 'WADDLE_PARTY2015_RUNTIME_PATCH=FAIL method_anchor_missing' }
 $compatMethods = @'
         static function configureHalloweenRobotRampage() {
