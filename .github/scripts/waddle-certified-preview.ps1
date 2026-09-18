@@ -127,9 +127,14 @@ $refspec = "+refs/heads/{0}:{1}" -f $TargetBranch,$previewRef
 & $script:Git -c "safe.directory=$source" -C $source fetch --force --no-tags "https://github.com/$Repository.git" $refspec
 if ($LASTEXITCODE -ne 0) { throw "WADDLE_CERTIFIED_PREVIEW=FAIL target_fetch branch=$TargetBranch" }
 $global:LASTEXITCODE = 0
-$targetSha = (Get-GitText -Repo $source -Arguments @('rev-parse',$previewRef)).text.ToLowerInvariant()
-if ($targetSha -ne $expected) {
-  throw "WADDLE_CERTIFIED_PREVIEW=FAIL target_sha expected=$expected actual=$targetSha"
+$branchHead = (Get-GitText -Repo $source -Arguments @('rev-parse',$previewRef)).text.ToLowerInvariant()
+$expectedObject = Get-GitText -Repo $source -Arguments @('cat-file','-e',("$expected^{commit}")) -AllowFailure
+if ($expectedObject.code -ne 0) {
+  throw "WADDLE_CERTIFIED_PREVIEW=FAIL certified_sha_not_fetched expected=$expected branch_head=$branchHead"
+}
+$ancestor = Get-GitText -Repo $source -Arguments @('merge-base','--is-ancestor',$expected,$previewRef) -AllowFailure
+if ($ancestor.code -ne 0) {
+  throw "WADDLE_CERTIFIED_PREVIEW=FAIL certified_sha_not_on_target_branch expected=$expected branch_head=$branchHead"
 }
 
 $registered = $false
@@ -153,7 +158,7 @@ if (Test-Path -LiteralPath $previewRoot) {
 if (-not $registered) {
   & $script:Git -c "safe.directory=$source" -C $source worktree prune
   $global:LASTEXITCODE = 0
-  & $script:Git -c "safe.directory=$source" -C $source worktree add --detach $previewRoot $previewRef
+  & $script:Git -c "safe.directory=$source" -C $source worktree add --detach $previewRoot $expected
   if ($LASTEXITCODE -ne 0) { throw "WADDLE_CERTIFIED_PREVIEW=FAIL worktree_add path=$previewRoot" }
   $global:LASTEXITCODE = 0
   Write-Host "WADDLE_CERTIFIED_PREVIEW_WORKTREE=PASS mode=created path=$previewRoot"
@@ -180,7 +185,7 @@ if (-not $registered) {
   $collisionCount = 0
   foreach ($path in $untracked) {
     if ([string]::IsNullOrWhiteSpace($path)) { continue }
-    $probe = Get-GitText -Repo $source -Arguments @('rev-parse',"$previewRef`:$path") -AllowFailure
+    $probe = Get-GitText -Repo $source -Arguments @('rev-parse',"$expected`:$path") -AllowFailure
     if ($probe.code -ne 0 -or [string]::IsNullOrWhiteSpace($probe.text)) { continue }
     $from = Join-Path $previewRoot ($path -replace '/','\')
     if (-not (Test-Path -LiteralPath $from -PathType Leaf)) { continue }
@@ -193,7 +198,7 @@ if (-not $registered) {
   & $script:Git -c "safe.directory=$previewRoot" -C $previewRoot reset --hard HEAD
   if ($LASTEXITCODE -ne 0) { throw "WADDLE_CERTIFIED_PREVIEW=FAIL worktree_clean_before_checkout path=$previewRoot" }
   $global:LASTEXITCODE = 0
-  & $script:Git -c "safe.directory=$previewRoot" -C $previewRoot checkout --detach $previewRef
+  & $script:Git -c "safe.directory=$previewRoot" -C $previewRoot checkout --detach $expected
   if ($LASTEXITCODE -ne 0) { throw "WADDLE_CERTIFIED_PREVIEW=FAIL worktree_checkout path=$previewRoot" }
   $global:LASTEXITCODE = 0
   & $script:Git -c "safe.directory=$previewRoot" -C $previewRoot reset --hard $previewRef
