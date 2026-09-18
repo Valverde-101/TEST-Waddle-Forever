@@ -36,6 +36,8 @@ Assert ($generators.Contains("const HALLOWEEN_2015_SCHOOL_ROOM_ROUTE = 'play/v2/
 Match $generators "rooms\['122'\]\s*=\s*\{" 'school_room_122_missing'
 Match $generators "room_key\s*:\s*'school'" 'school_room_key_missing'
 Match $generators "path\s*:\s*'school\.swf'" 'school_room_path_missing'
+Match $generators "rooms\['122'\]\s*=\s*\{[\s\S]*?music_id\s*:\s*0" 'school_room_music_not_silent'
+Assert (-not [regex]::IsMatch($generators,"rooms\['122'\]\s*=\s*\{[\s\S]*?music_id\s*:\s*2052")) 'school_room_unpreserved_music_2052'
 Assert ($generators.Contains("const HALLOWEEN_2015_SOLO_ROOM_ROUTE = 'play/v2/content/global/rooms/partysolo1.swf';")) 'solo_room_guard_missing'
 Match $generators "rooms\['891'\]\s*=\s*\{" 'solo_room_891_missing'
 Match $generators "room_key\s*:\s*'partysolo1'" 'solo_room_key_missing'
