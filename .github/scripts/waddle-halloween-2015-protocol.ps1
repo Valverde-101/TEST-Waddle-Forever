@@ -191,6 +191,19 @@ $coffeeSecretEntryEvidence = New-Object 'System.Collections.Generic.HashSet[stri
 $schoolDoorEvidence = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 $finaleRoomEvidence = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 
+function Write-FunctionWindow([string]$Text,[string]$Role,[string]$FunctionName) {
+  $lines = @($Text -split "`r?`n")
+  for ($i=0; $i -lt $lines.Count; $i++) {
+    if ($lines[$i] -notmatch ("(?i)^\\s*(?:static\\s+)?function\\s+" + [regex]::Escape($FunctionName) + "\\s*\\(")) { continue }
+    $end = [Math]::Min($lines.Count - 1,$i + 45)
+    $window = [regex]::Replace(($lines[$i..$end] -join ' '),'\\s+',' ').Trim()
+    if ($window.Length -gt 3500) { $window = $window.Substring(0,3500) }
+    Write-Host "WADDLE_PARTY2015_FUNCTION_WINDOW role=$Role function=$FunctionName text=$window"
+    return
+  }
+  Write-Host "WADDLE_PARTY2015_FUNCTION_WINDOW role=$Role function=$FunctionName text=MISSING"
+}
+
 function Add-HalloweenRoomRuntimeContract($Evidence,[string]$Role) {
   foreach ($entry in @($Evidence.entries)) {
     $body = [string]$entry.text
@@ -241,6 +254,7 @@ foreach ($target in $targets) {
   }
   if (@($robotQuestRooms | Where-Object { $_.role -eq $target.role }).Count -gt 0) {
     Add-HalloweenRoomRuntimeContract -Evidence $evidence -Role ([string]$target.role)
+    Write-FunctionWindow -Text $text -Role ([string]$target.role) -FunctionName 'taskCompleteRoomUpdate'
     if ($evidence.files -gt 0) { $robotRoomScripted++ }
     $robotRoomText += "`n" + $text
     $candidateLines = @($text -split "`r?`n" | Where-Object { $_ -match '(?i)(MouseEvent|CLICK|showContent|dialogue|quest|robot|bot|tiles_minigame|item|inventory|qtaskcomplete|qtupdate|party)' } | ForEach-Object { ($_ -replace '\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 80)
@@ -292,6 +306,11 @@ foreach ($roomFile in @(Get-ChildItem -LiteralPath $roomDir -Filter '*.swf' -Fil
   $evidence = Export-Scripts -FFDec $ffdec -Swf $roomFile.FullName -SafeName $safe -WorkRoot $work
   $text = [string]$evidence.text
   Add-HalloweenRoomRuntimeContract -Evidence $evidence -Role $safe
+  if ($safe -eq 'room-scan-Hallo15_partysolo1') {
+    Write-FunctionWindow -Text $text -Role $safe -FunctionName 'taskCompleteRoomUpdate'
+    Write-FunctionWindow -Text $text -Role $safe -FunctionName 'showClassDialog6'
+    Write-FunctionWindow -Text $text -Role $safe -FunctionName 'showClassDialog7'
+  }
   if ($text -notmatch '(?i)(pickupItem|itemCollectRelease|collectedItem|partysolo1|party7|sendJoinRoom|QUEST_TASK_ID)') { continue }
   $roomLines = @($text -split "`r?`n" | Where-Object { $_ -match '(?i)(class com\.clubpenguin\.world\.rooms2015\.october|QUEST_TASK_ID|PENULTIMATE_TASK_ID|HERBOT_DEFEATED_TASK_ID|pickupItem|itemCollectRelease|collectedItem|displayItemPickupInstructions|partysolo1|party1_mc|party7|enterCave|sendTaskComplete|hasPlayerCompletedTask|halloHerbertGame|taskCompleteRoomUpdate|showClassDialog6|showClassDialog7|HERBERT_GETAWAY|GARY_FINAL|sendJoinRoom|triggerFunction)' } | ForEach-Object { ($_ -replace '\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 220)
   foreach ($line in $roomLines) {
