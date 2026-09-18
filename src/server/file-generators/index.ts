@@ -64,6 +64,7 @@ const getRuntimePathsJson: FileGenerator = (d) => {
   return JSON.stringify(paths);
 };
 
+const HALLOWEEN_2015_MALL_ROOM_ROUTE = 'play/v2/content/global/rooms/mall.swf';
 const HALLOWEEN_2015_SCHOOL_ROOM_ROUTE = 'play/v2/content/global/rooms/school.swf';
 const HALLOWEEN_2015_SOLO_ROOM_ROUTE = 'play/v2/content/global/rooms/partysolo1.swf';
 
@@ -76,6 +77,11 @@ const HALLOWEEN_2015_SOLO_ROOM_ROUTE = 'play/v2/content/global/rooms/partysolo1.
  * 2017-03-29 (the next pin period starts 2017-03-30). Outside that interval the
  * room must not advertise the pin, otherwise older clients request
  * content/room_pin/7308.swf while replaying unrelated years such as 2015.
+ *
+ * Halloween 2015 uses room id 340 as the Mall. Waddle's static room table
+ * still calls that id "stage", while the preserved 2015 room metadata and room
+ * class use "mall". Restore that identity only while the exact Mall SWF is active
+ * so map and room-key lookups cannot disagree.
  *
  * Halloween 2015 reuses room id 122 as the School. Waddle's static room table
  * calls that same id "eco" (Recycling Plant), but the preserved Halloween rooms
@@ -118,6 +124,23 @@ const getRuntimeRoomsJson: FileGenerator = (d, s) => {
     delete coffee.pin_id;
     delete coffee.pin_x;
     delete coffee.pin_y;
+  }
+
+  if (d.lookupFile(HALLOWEEN_2015_MALL_ROOM_ROUTE) !== undefined) {
+    rooms['340'] = {
+      room_id: 340,
+      room_key: 'mall',
+      name: 'The Mall',
+      display_name: 'The Mall',
+      music_id: 1032,
+      is_member: 0,
+      path: 'mall.swf',
+      max_users: 80,
+      jump_enabled: false,
+      jump_disabled: true,
+      required_item: null,
+      short_name: 'Mall'
+    };
   }
 
   if (d.lookupFile(HALLOWEEN_2015_SCHOOL_ROOM_ROUTE) !== undefined) {

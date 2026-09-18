@@ -303,6 +303,14 @@ foreach ($roomFile in @(Get-ChildItem -LiteralPath $roomDir -Filter '*.swf' -Fil
   $evidence = Export-Scripts -FFDec $ffdec -Swf $roomFile.FullName -SafeName $safe -WorkRoot $work
   $text = [string]$evidence.text
   Add-HalloweenRoomRuntimeContract -Evidence $evidence -Role $safe
+  if ($safe -eq 'room-scan-Hallo15_mall') {
+    $mallTriggerLines = @($text -split '\r?\n' | Where-Object { $_ -match '(?i)(triggers_mc|triggerFunction|sendJoinRoom|showCatalogue|function exit|Delegate\.create)' } | ForEach-Object { ($_ -replace '\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 240)
+    if ($mallTriggerLines.Count -lt 1) { throw 'WADDLE_PARTY2015_PROTOCOL=FAIL mall_trigger_contract_missing' }
+    foreach ($line in $mallTriggerLines) {
+      $safeLine = if ($line.Length -gt 900) { $line.Substring(0,900) } else { $line }
+      Write-Host "WADDLE_PARTY2015_MALL_TRIGGER=$safeLine"
+    }
+  }
   if ($text -notmatch '(?i)(pickupItem|itemCollectRelease|collectedItem|partysolo1|party7|sendJoinRoom|QUEST_TASK_ID)') { continue }
   $roomLines = @($text -split "`r?`n" | Where-Object { $_ -match '(?i)(class com\.clubpenguin\.world\.rooms2015\.october|QUEST_TASK_ID|PENULTIMATE_TASK_ID|HERBOT_DEFEATED_TASK_ID|pickupItem|itemCollectRelease|collectedItem|displayItemPickupInstructions|partysolo1|party1_mc|party7|enterCave|sendTaskComplete|hasPlayerCompletedTask|halloHerbertGame|taskCompleteRoomUpdate|showClassDialog6|showClassDialog7|HERBERT_GETAWAY|GARY_FINAL|sendJoinRoom|triggerFunction)' } | ForEach-Object { ($_ -replace '\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 220)
   foreach ($line in $roomLines) {

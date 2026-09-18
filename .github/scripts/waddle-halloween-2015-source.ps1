@@ -83,12 +83,17 @@ $partyContracts=@{
   features="'play/v2/content/global/content/features\.swf'\s*:\s*ref\('content/ContentFeatures-HalloweenParty2015\.swf'\)";
   icon="'play/v2/content/global/content/party_icon\.swf'\s*:\s*ref\('content/ContentParty_icon-HalloweenParty2015\.swf'\)";
   robotRoute="'play/v2/content/global/avatar/sprites/robot\.swf'\s*:\s*ref\('avatar/PenguinRobot\.swf'\)";
+  notlsRoute="'play/v2/content/global/rooms/NOTLS-ALL-EN\.swf'\s*:\s*'svanilla:media/play/v2/content/global/rooms/NOTLS-ALL-EN\.swf'";
   robotPath="'avatar/sprites/robot\.swf'\s*:\s*\[ref\('avatar/PenguinRobot\.swf'\)\s*,\s*'robot_tf'\s*,\s*'w\.avatarSprite\.robot'\s*\]";
   quest="'close_ups/quest_interface\.swf'\s*:\s*\[ref\('close_ups/Close_upsQuest_interface-HalloweenParty2015\.swf'\).*?'w\.app\.generic\.partyinterface'";
   login="'close_ups/halloLogin\.swf'\s*:\s*\[ref\('close_ups/Hallo15_dialogue_login\.swf'\).*?'w\.app\.loginprompt'";
   end="date\s*:\s*'2015-11-05'[\s\S]*?end\s*:\s*\['party'\]"
 }
 foreach($entry in $partyContracts.GetEnumerator()){Require-Regex $party $entry.Value ("party_"+$entry.Key)}
+foreach($taskIndex in 0..9){
+  $completedPattern = 'w\.app\.generic\.questui\.description\.task' + $taskIndex + '\.completed"\s*:\s*"[^"]+"'
+  Require-Regex $party $completedPattern ("quest_completed_string_"+$taskIndex)
+}
 foreach($needle in @('gameStringChanges:HALLOWEEN_2015_DIALOGUE_STRINGS','rooms:HALLOWEEN_2015_ROOMS','music:HALLOWEEN_2015_MUSIC','...dialogueGlobalChanges','...dialogueLocalChanges','...tileGlobalChanges','...tileLocalChanges','...musicFileChanges')){
   Require-Regex $party ([regex]::Escape($needle).Replace('\:', '\s*:\s*')) ('party_'+($needle -replace '[^A-Za-z0-9]+','_').Trim('_'))
 }
@@ -100,6 +105,8 @@ $fileGenerators=Read-Normalized $fileGeneratorsPath
 Require-Contains $fileGenerators 'const getRuntimePathsJson: FileGenerator' 'runtime_paths_generator'
 Require-Contains $fileGenerators 'Object.fromEntries(d.getGlobalPaths())' 'runtime_global_paths_merge'
 Require-Contains $fileGenerators 'const getRuntimeRoomsJson: FileGenerator' 'runtime_rooms_generator'
+Require-Contains $fileGenerators "const HALLOWEEN_2015_MALL_ROOM_ROUTE = 'play/v2/content/global/rooms/mall.swf';" 'halloween_mall_room_guard'
+Require-Regex $fileGenerators "rooms\['340'\]\s*=\s*\{[\s\S]*?room_key\s*:\s*'mall'[\s\S]*?path\s*:\s*'mall\.swf'" 'halloween_mall_runtime_identity'
 Require-Contains $fileGenerators "const HALLOWEEN_2015_SCHOOL_ROOM_ROUTE = 'play/v2/content/global/rooms/school.swf';" 'halloween_school_room_guard'
 Require-Regex $fileGenerators "rooms\['122'\]\s*=\s*\{[\s\S]*?room_key\s*:\s*'school'" 'halloween_school_runtime_identity'
 Require-Contains $fileGenerators "version >= '2017-01-31' && version < '2017-03-30'" 'community_pin_historical_window'

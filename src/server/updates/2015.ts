@@ -55,7 +55,19 @@ const HALLOWEEN_2015_DIALOGUE_STRINGS: Record<string, string> = {
   "w.app.generic.questui.description.task6": "Use the beard trimmer on Sensei Bot.",
   "w.app.generic.questui.description.task7": "Show PH Bot a toy UFO.",
   "w.app.generic.questui.description.task8": "Scare Rookie Bot with clown face paint.",
-  "w.app.generic.questui.description.task9": "Find the secret lair and stop Herbot."
+  "w.app.generic.questui.description.task9": "Find the secret lair and stop Herbot.",
+  // QuestInterface switches to the ".completed" key after qtaskcomplete.
+  // Keep these explicit so completed cards never display a raw localization id.
+  "w.app.generic.questui.description.task0.completed": "Gary Bot has been stopped at the Mine Shack.",
+  "w.app.generic.questui.description.task1.completed": "The decaf coffee scared Gary Bot.",
+  "w.app.generic.questui.description.task2.completed": "Arctic Bot was scared by the failed spelling test.",
+  "w.app.generic.questui.description.task3.completed": "Bothopper was scared by the pink flamingo.",
+  "w.app.generic.questui.description.task4.completed": "Cadence Bot was scared by the bug.",
+  "w.app.generic.questui.description.task5.completed": "Dot Bot was scared by the ugly sweater.",
+  "w.app.generic.questui.description.task6.completed": "Sensei Bot was scared by the beard trimmer.",
+  "w.app.generic.questui.description.task7.completed": "PH Bot was scared by the toy UFO.",
+  "w.app.generic.questui.description.task8.completed": "Rookie Bot was scared by the clown face paint.",
+  "w.app.generic.questui.description.task9.completed": "Herbot has been stopped in the secret lair."
 };
 
 const HALLOWEEN_2015_ROOMS = {
@@ -115,6 +127,8 @@ export const UPDATES_2015: Update[] = [
         'play/v2/content/global/telescope/telescope.swf':ref('other/Telescope-HalloweenParty2015.swf'),
         'play/v2/content/global/binoculars/binoculars.swf':ref('other/Binoculars-HalloweenParty2015.swf'),
         'play/v2/content/global/rooms/mall.swf':ref('rooms/Hallo15_mall.swf'),
+        // Late-AS3 asks for this independent room overlay on room joins.
+        'play/v2/content/global/rooms/NOTLS-ALL-EN.swf':'svanilla:media/play/v2/content/global/rooms/NOTLS-ALL-EN.swf',
         'play/v2/content/global/rooms/school.swf':ref('rooms/Hallo15_school.swf'),
         'play/v2/content/global/rooms/park.swf':ref('rooms/Hallo15_park.swf'),
         'play/v2/content/global/rooms/partysolo1.swf':ref('rooms/Hallo15_partysolo1.swf'),
