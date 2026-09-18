@@ -92,6 +92,18 @@ function Test-PatchedRuntime([string]$FFDec,[string]$Swf,[string]$WorkRoot,[stri
   Export-Scripts -FFDec $FFdec -Swf $Swf -Out $probe -WorkRoot $WorkRoot -Label ($Label + '-export')
   $partyPath = Find-NovemberParty $probe
   $text = [IO.File]::ReadAllText($partyPath)
+  # Presence alone is not enough for the post-minigame path. Preserve the
+  # ordering that prevents the old abrupt cut: persist completion first, close
+  # the tile overlay, then let the room animate/update, and only after that open
+  # the reward dialogue. The finale uses the same path but remaps task 8 -> 9.
+  $normalized = [regex]::Replace($text,'\s+',' ')
+  $gameOrder = '(?s)static function gameCompleted\(isWon\).*?sendTaskComplete\([^;]+\);.*?pendingCompletionDialogue\s*=\s*.*?getCompletionDialogue\([^;]+\);.*?_interface\.closeContent\(\);.*?finishMiniGamePresentation\(\);'
+  if ($normalized -notmatch $gameOrder) { return $false }
+  $presentationOrder = '(?s)static function finishMiniGamePresentation\(\).*?taskCompleteRoomUpdate\(\);.*?pendingCompletionDialogue.*?_interface\.showContent\(dialoguePath\);'
+  if ($normalized -notmatch $presentationOrder) { return $false }
+  $finaleOrder = '(?s)static function getCompletedTaskIndex\(taskIndex\).*?PENULTIMATE_TASK_ID.*?HERBOT_DEFEATED_TASK_ID'
+  if ($normalized -notmatch $finaleOrder) { return $false }
+
   foreach ($needle in @(
     $CompatMarker,
     'static function configureHalloweenRobotRampage',
