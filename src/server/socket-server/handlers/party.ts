@@ -190,53 +190,15 @@ export const handlePartyTaskComplete: PenguinHandler<[number]> = async (ctx, tas
   }
 };
 
-const MODERN_BITMAP_PARTY_HINTS = [
-  'halloween',
-  'robot',
-  'rampage',
-  'quest',
-  'pickup',
-  'drop',
-  'item',
-  'reward',
-  'unlock',
-  'task',
-  'bot'
-];
-
-const pickNextIncompleteTask = (cookie: { questTaskStatus?: unknown[] }) => {
-  const status = Array.isArray(cookie.questTaskStatus) ? cookie.questTaskStatus : [];
-  const incompleteIndex = status.findIndex(value => value !== 1 && value !== true);
-  return incompleteIndex >= 0 ? incompleteIndex : status.length;
-};
-
 /**
- * Late AS3 parties can report room-object/item pickups through nx#bimp instead
- * of the generic party#qtaskcomplete packet. Treat only party-looking bitmap
- * interactions as quest progress; passive map impressions remain diagnostics.
+ * nx#bimp is late-AS3 bitmap/map telemetry, not a quest mutation packet.
+ * Halloween 2015 room pickups are client-local state until the preserved
+ * minigame sends party#qtaskcomplete. Never infer quest progress from bimp:
+ * doing so can complete the wrong Robot Rampage task merely by leaving a room
+ * through the map.
  */
 export const handleModernBitmapInteraction: PenguinHandler<[string]> = async (ctx, payload) => {
-  const { penguin, prst, data } = ctx;
-  const config = data.getPartyProgress();
-  const normalizedPayload = payload.toLowerCase();
-  const looksLikePartyInteraction = MODERN_BITMAP_PARTY_HINTS.some(hint => normalizedPayload.includes(hint));
-
-  if (config === null || !looksLikePartyInteraction) {
-    publishWaddleLiveTrace({
-      category: 'XT',
-      phase: 'handled',
-      source: 'party-bitmap-interaction',
-      action: 's%nx#bimp',
-      direction: 'in',
-      status: config === null ? 'no-active-party' : 'observed-non-party-bitmap',
-      payloadPreview: payload.slice(0, 256)
-    });
-    return;
-  }
-
-  const beforeCookie = getCurrentPartyCookie(ctx) as { questTaskStatus?: unknown[] };
-  const taskIndex = pickNextIncompleteTask(beforeCookie);
-  const completed = penguin.partyProgress.setTaskComplete(config, taskIndex);
+  const config = ctx.data.getPartyProgress();
 
   publishWaddleLiveTrace({
     category: 'XT',
@@ -244,16 +206,10 @@ export const handleModernBitmapInteraction: PenguinHandler<[string]> = async (ct
     source: 'party-bitmap-interaction',
     action: 's%nx#bimp',
     direction: 'in',
-    status: completed ? 'quest-task-completed' : 'quest-task-already-complete',
-    partyId: config.id,
-    taskIndex,
+    status: 'telemetry-only',
+    partyId: config?.id ?? '',
     payloadPreview: payload.slice(0, 256)
   });
-
-  if (completed) {
-    prst(penguin);
-    await sendCurrentPartyCookie(ctx);
-  }
 };
 
 export const handlePartyTaskUpdate: PenguinHandler<[number]> = async ({ penguin, msg, prst, data }, coins) => {
