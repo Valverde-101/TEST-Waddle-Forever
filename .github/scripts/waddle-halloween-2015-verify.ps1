@@ -32,6 +32,10 @@ Assert (-not $updates.Contains("ref('content/party.swf')")) 'recreation_party_ru
 Assert (-not $updates.Contains("ref('content/map.swf')")) 'unverified_recreation_map_live'
 Assert ($xt.Contains("['s%party#transform', 's%pt#spts']")) 'party_transform_alias_missing'
 
+Assert ($generators.Contains("const HALLOWEEN_2015_SCHOOL_ROOM_ROUTE = 'play/v2/content/global/rooms/school.swf';")) 'school_room_guard_missing'
+Match $generators "rooms\['122'\]\s*=\s*\{" 'school_room_122_missing'
+Match $generators "room_key\s*:\s*'school'" 'school_room_key_missing'
+Match $generators "path\s*:\s*'school\.swf'" 'school_room_path_missing'
 Assert ($generators.Contains("const HALLOWEEN_2015_SOLO_ROOM_ROUTE = 'play/v2/content/global/rooms/partysolo1.swf';")) 'solo_room_guard_missing'
 Match $generators "rooms\['891'\]\s*=\s*\{" 'solo_room_891_missing'
 Match $generators "room_key\s*:\s*'partysolo1'" 'solo_room_key_missing'
@@ -49,4 +53,4 @@ Assert($canonicalTargets.Contains('content/party-runtime-2015-base.swf'))'runtim
 $runtime=$canonicalAssets|Where-Object{$_.target-eq'content/party-runtime-2015-base.swf'}|Select-Object -First 1;Assert([long]$runtime.bytes-eq39406)'runtime_donor_bytes';Assert(([string]$runtime.sha256).ToLowerInvariant()-eq'd30fcd85c2f4a6b9ef6d1b81aac3a6d2f592af5f68ae13bb9d1564cb5b115cf7')'runtime_donor_sha256';$liveRuntime=Join-Path $assetRoot 'content\party-runtime-2015.swf';Assert(Test-Swf $liveRuntime)'generated_runtime_invalid'
 
 $physicalSwfs=@(Get-ChildItem -LiteralPath $assetRoot -Filter '*.swf' -File -Recurse);$expected=$historical.Count+$canonicalSwfs+1;Assert($physicalSwfs.Count-eq$expected)"physical_swfs=$($physicalSwfs.Count) expected=$expected"
-Write-Host "WADDLE_PARTY2015_VERIFY=PASS runtime=generated-halloween-compat donor=operation-crustacean-2015 activefeatures=20151101 shell=svanilla historical_verified=132 canonical_provenance=$($canonicalAssets.Count) canonical_swfs=$canonicalSwfs solo_room=891 transform=party-to-spts"
+Write-Host "WADDLE_PARTY2015_VERIFY=PASS runtime=generated-halloween-compat donor=operation-crustacean-2015 activefeatures=20151101 shell=svanilla historical_verified=132 canonical_provenance=$($canonicalAssets.Count) canonical_swfs=$canonicalSwfs school_room=122:school solo_room=891 transform=party-to-spts"
