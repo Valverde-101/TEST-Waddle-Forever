@@ -86,23 +86,65 @@ function Find-NovemberParty([string]$ScriptsRoot) {
   throw 'WADDLE_PARTY2015_RUNTIME_PATCH=FAIL november_party_source_missing'
 }
 
+function Test-FunctionTokenOrder([string]$Text,[string]$FunctionName,[string[]]$Tokens,[string]$Label) {
+  $pattern = '(?s)static\s+function\s+' + [regex]::Escape($FunctionName) + '\s*\([^)]*\)'
+  $match = [regex]::Match($Text,$pattern)
+  if (-not $match.Success) {
+    Write-Host "WADDLE_PARTY2015_RUNTIME_CONTRACT=FAIL label=$Label function=$FunctionName reason=function_missing"
+    return $false
+  }
+
+  $bodyStart = $match.Index
+  $tailStart = $match.Index + $match.Length
+  $tail = $Text.Substring($tailStart)
+  $next = [regex]::Match($tail,'(?s)\bstatic\s+function\s+[A-Za-z_][A-Za-z0-9_]*\s*\(')
+  $bodyEnd = if ($next.Success) { $tailStart + $next.Index } else { $Text.Length }
+  $body = $Text.Substring($bodyStart,$bodyEnd - $bodyStart)
+
+  $cursor = 0
+  foreach ($token in $Tokens) {
+    $index = $body.IndexOf($token,$cursor,[StringComparison]::Ordinal)
+    if ($index -lt 0) {
+      Write-Host "WADDLE_PARTY2015_RUNTIME_CONTRACT=FAIL label=$Label function=$FunctionName reason=token_missing_or_out_of_order token=$token cursor=$cursor"
+      $preview = [regex]::Replace($body,'\s+',' ')
+      if ($preview.Length -gt 2200) { $preview = $preview.Substring(0,2200) }
+      Write-Host "WADDLE_PARTY2015_RUNTIME_CONTRACT_PREVIEW label=$Label function=$FunctionName text=$preview"
+      return $false
+    }
+    $cursor = $index + $token.Length
+  }
+
+  Write-Host "WADDLE_PARTY2015_RUNTIME_CONTRACT=PASS label=$Label function=$FunctionName ordered_tokens=$($Tokens.Count)"
+  return $true
+}
+
 function Test-PatchedRuntime([string]$FFDec,[string]$Swf,[string]$WorkRoot,[string]$Label) {
   if (-not (Test-Swf $Swf)) { return $false }
   $probe = Join-Path $WorkRoot ($Label + '-scripts')
   Export-Scripts -FFDec $FFdec -Swf $Swf -Out $probe -WorkRoot $WorkRoot -Label ($Label + '-export')
   $partyPath = Find-NovemberParty $probe
   $text = [IO.File]::ReadAllText($partyPath)
-  # Presence alone is not enough for the post-minigame path. Preserve the
-  # ordering that prevents the old abrupt cut: persist completion first, close
-  # the tile overlay, then let the room animate/update, and only after that open
-  # the reward dialogue. The finale uses the same path but remaps task 8 -> 9.
-  $normalized = [regex]::Replace($text,'\s+',' ')
-  $gameOrder = '(?s)static function gameCompleted\(isWon\).*?sendTaskComplete\([^;]+\);.*?pendingCompletionDialogue\s*=\s*.*?getCompletionDialogue\([^;]+\);.*?_interface\.closeContent\(\);.*?finishMiniGamePresentation\(\);'
-  if ($normalized -notmatch $gameOrder) { return $false }
-  $presentationOrder = '(?s)static function finishMiniGamePresentation\(\).*?taskCompleteRoomUpdate\(\);.*?pendingCompletionDialogue.*?_interface\.showContent\(dialoguePath\);'
-  if ($normalized -notmatch $presentationOrder) { return $false }
-  $finaleOrder = '(?s)static function getCompletedTaskIndex\(taskIndex\).*?PENULTIMATE_TASK_ID.*?HERBOT_DEFEATED_TASK_ID'
-  if ($normalized -notmatch $finaleOrder) { return $false }
+  # Presence alone is not enough for the post-minigame path. FFDec renames
+  # local variables (_loc2_, _loc3_, ...), so verify semantic token ordering
+  # inside each function instead of matching source-level variable names.
+  if (-not (Test-FunctionTokenOrder -Text $text -FunctionName 'gameCompleted' -Tokens @(
+    'sendTaskComplete(',
+    'pendingCompletionDialogue',
+    'getCompletionDialogue(',
+    'closeContent()',
+    'finishMiniGamePresentation()'
+  ) -Label $Label)) { return $false }
+
+  if (-not (Test-FunctionTokenOrder -Text $text -FunctionName 'finishMiniGamePresentation' -Tokens @(
+    'taskCompleteRoomUpdate(',
+    'pendingCompletionDialogue',
+    'showContent('
+  ) -Label $Label)) { return $false }
+
+  if (-not (Test-FunctionTokenOrder -Text $text -FunctionName 'getCompletedTaskIndex' -Tokens @(
+    'PENULTIMATE_TASK_ID',
+    'HERBOT_DEFEATED_TASK_ID'
+  ) -Label $Label)) { return $false }
 
   foreach ($needle in @(
     $CompatMarker,
