@@ -471,7 +471,25 @@ foreach ($token in $localizations) {
     [void]$observedLocalizationKeys.Add($token)
     continue
   }
-  if ($token -match '^w\.app\.p2015\.halloween\.(?:dialogue_[A-Za-z0-9_]+|tiles[0-8])
+
+  if ($token -match '^w\.app\.p2015\.halloween\.(?:dialogue_[A-Za-z0-9_]+|tiles[0-8])$') {
+    [void]$contentCrumbTokens.Add($token)
+    continue
+  }
+
+  throw "WADDLE_PARTY2015_PROTOCOL=FAIL unknown_halloween_namespace_token=$token"
+}
+
+if ($observedLocalizationKeys.Count -lt 1) {
+  throw 'WADDLE_PARTY2015_PROTOCOL=FAIL no_localization_evidence_in_preserved_swfs'
+}
+foreach ($token in @($observedLocalizationKeys | Sort-Object)) {
+  Write-Host "WADDLE_PARTY2015_PROTOCOL_LOCALIZATION=$token"
+}
+foreach ($token in @($contentCrumbTokens | Sort-Object)) {
+  Write-Host "WADDLE_PARTY2015_PROTOCOL_CONTENT_CRUMB=$token"
+}
+Write-Host "WADDLE_PARTY2015_LOCALIZATION_EVIDENCE=PASS contract=38 observed_static=$($observedLocalizationKeys.Count) content_crumbs=$($contentCrumbTokens.Count) namespace_tokens=$($localizations.Count)"
 
 foreach ($loader in @($loaders | Sort-Object)) { Write-Host "WADDLE_PARTY2015_PROTOCOL_LOADER=$loader" }
 foreach ($badLoader in @('content/party_map_note.swf','close_ups/party_map_note.swf','music/2048.swf','music/2049.swf','music/2050.swf','music/2051.swf','music/2052.swf','music/2053.swf')) {
