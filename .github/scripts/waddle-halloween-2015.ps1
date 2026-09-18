@@ -208,6 +208,6 @@ if (-not (Test-Path -LiteralPath $runtimePatch -PathType Leaf)) {
   throw "WADDLE_PARTY2015_ASSETS=FAIL runtime_patch_missing=$runtimePatch"
 }
 & $runtimePatch -RepoRoot $canonical
-if ($LASTEXITCODE -ne 0) { throw "WADDLE_PARTY2015_ASSETS=FAIL runtime_patch_exit=$LASTEXITCODE" }
+if (-not $?) { throw 'WADDLE_PARTY2015_ASSETS=FAIL runtime_patch_failed' }
 
 Write-Host "WADDLE_PARTY2015_ASSETS=PASS required=132 total=$($manifestAssets.Count) downloaded=$downloaded reused=$reused canonical_supplements=18 generated_runtime=1 root=$target source=$pageUsed"
