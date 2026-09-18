@@ -99,6 +99,7 @@ function Test-PatchedRuntime([string]$FFDec,[string]$Swf,[string]$WorkRoot,[stri
     'static function displayItemPickupInstructions',
     'static function showRobotInstructionsPopup',
     'static function loadMiniGame',
+    'static function gameCompleted',
     'static function activateEngineOverrides',
     'static function deactivateEngineOverrides',
     'CONSTANTS.COFFEE_CUP',
@@ -230,6 +231,17 @@ static function showRobotInstructionsPopup(taskID)
 static function loadMiniGame(taskIndex)
 {
    com.clubpenguin.world.rooms2015.automated.party.NovemberParty._interface.showContent("w.app.p2015.halloween.tiles" + String(taskIndex));
+}
+static function gameCompleted(isWon)
+{
+   var taskIndex = com.clubpenguin.world.rooms2015.automated.party.NovemberParty.partyCookie.getNextAvailableTask();
+   if(isWon && taskIndex != undefined)
+   {
+      com.clubpenguin.world.rooms2015.automated.party.NovemberParty.partyCookie.sendTaskComplete(taskIndex);
+      com.clubpenguin.world.rooms2015.automated.party.NovemberParty.collectedItem = null;
+      com.clubpenguin.world.rooms2015.automated.party.NovemberParty.collectedItemTaskId = -1;
+   }
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty._interface.closeContent();
 }
 static function activateEngineOverrides()
 {
