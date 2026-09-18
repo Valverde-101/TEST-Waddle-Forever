@@ -46,6 +46,8 @@ if($generators-notmatch"const HALLOWEEN_2015_SCHOOL_ROOM_ROUTE = 'play/v2/conten
 if($generators-notmatch"rooms\['122'\]\s*=\s*\{"){throw 'WADDLE_HALLOWEEN2015_ROOMS=FAIL school_runtime_metadata_missing'}
 if($generators-notmatch"room_key\s*:\s*'school'"){throw 'WADDLE_HALLOWEEN2015_ROOMS=FAIL school_runtime_key_missing'}
 if($generators-notmatch"path\s*:\s*'school\.swf'"){throw 'WADDLE_HALLOWEEN2015_ROOMS=FAIL school_runtime_path_missing'}
+if($generators-notmatch"rooms\['122'\]\s*=\s*\{[\s\S]*?music_id\s*:\s*0"){throw 'WADDLE_HALLOWEEN2015_ROOMS=FAIL school_runtime_music_must_be_silent_without_verified_track'}
+if($generators-match"rooms\['122'\]\s*=\s*\{[\s\S]*?music_id\s*:\s*2052"){throw 'WADDLE_HALLOWEEN2015_ROOMS=FAIL school_runtime_unpreserved_music_2052'}
 if($generators-notmatch"d\.lookupFile\(HALLOWEEN_2015_SCHOOL_ROOM_ROUTE\)\s*!==\s*undefined"){throw 'WADDLE_HALLOWEEN2015_ROOMS=FAIL school_temporal_guard_missing'}
 
 # partysolo1 is a real Halloween-only room and must not be put into Waddle's
