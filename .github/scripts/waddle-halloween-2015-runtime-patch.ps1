@@ -111,7 +111,14 @@ function Test-PatchedRuntime([string]$FFDec,[string]$Swf,[string]$WorkRoot,[stri
     'CONSTANTS.UGLY_SWEATER',
     'CONSTANTS.BEARD_TRIMMER',
     'CONSTANTS.UFO',
-    'CONSTANTS.CLOWN'
+    'CONSTANTS.CLOWN',
+    'CONSTANTS.HERBERT_MONOLOGUE',
+    'CONSTANTS.HERBERT_MONOLOGUE2',
+    'CONSTANTS.HERBERT_BOT',
+    'CONSTANTS.HERBERT_CAGE',
+    'CONSTANTS.GARY_LAIR1',
+    'CONSTANTS.HERBERT_GETAWAY',
+    'CONSTANTS.GARY_FINAL'
   )) {
     if (-not $text.Contains($needle)) { return $false }
   }
@@ -207,6 +214,13 @@ static function configureHalloweenRobotRampage()
    com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.BEARD_TRIMMER = "h15_beard_trimmer";
    com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.UFO = "h15_ufo";
    com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.CLOWN = "h15_clown";
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.HERBERT_MONOLOGUE = "halloHerbertMonologue";
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.HERBERT_MONOLOGUE2 = "halloHerbertMonologue2";
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.HERBERT_BOT = "halloHerbot";
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.HERBERT_CAGE = "halloHerbertCage";
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.GARY_LAIR1 = "halloGaryLair";
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.HERBERT_GETAWAY = "halloHerbertGetaway";
+   com.clubpenguin.world.rooms2015.automated.party.NovemberParty.CONSTANTS.GARY_FINAL = "halloGaryFinal";
 }
 static function pickupItem(itemID,taskID)
 {
