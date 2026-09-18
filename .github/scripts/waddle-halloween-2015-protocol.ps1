@@ -261,7 +261,17 @@ foreach ($target in $targets) {
       Write-Host "WADDLE_PARTY2015_TILE_CRITICAL role=$($target.role) line=$safeLine"
     }
   }
-  if ([string]$target.role -match '^dialogue-(gary|aa|rh|cad|dot|sen|ph|rook)_congrats
+  if ([string]$target.role -match '^dialogue-(gary|aa|rh|cad|dot|sen|ph|rook)_congrats$') {
+    if ($evidence.files -lt 1) {
+      throw "WADDLE_PARTY2015_PROTOCOL=FAIL reward_dialogue_unscripted role=$($target.role)"
+    }
+    $rewardLines = @($text -split "`r?`n" | Where-Object { $_ -match '(?i)(inventory|item|reward|unlock|buy|claim|quest|task|closeContent|onRelease|showContent|partyCookie)' } | ForEach-Object { ($_ -replace '\\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 120)
+    Write-Host "WADDLE_PARTY2015_REWARD_DIALOGUE=ANALYZED role=$($target.role) scripts=$($evidence.files) evidence_lines=$($rewardLines.Count)"
+    foreach ($line in $rewardLines) {
+      $safeLine = if ($line.Length -gt 700) { $line.Substring(0,700) } else { $line }
+      Write-Host "WADDLE_PARTY2015_REWARD_EVIDENCE role=$($target.role) line=$safeLine"
+    }
+  }
   Add-Evidence -Text $text -Pairs $pairs -Packets $packets -Localizations $localizations -Loaders $loaders
   $reports += [pscustomobject]@{ role=[string]$target.role; file=[string]$target.path; bytes=[int64](Get-Item -LiteralPath $swf).Length; scriptFiles=[int]$evidence.files; ffdecExit=[string]$evidence.exit; ffdecAttempts=[int]$evidence.attempts }
   Write-Host "WADDLE_PARTY2015_PROTOCOL_FILE=PASS role=$($target.role) bytes=$((Get-Item -LiteralPath $swf).Length) script_files=$($evidence.files) ffdec_exit=$($evidence.exit) ffdec_attempts=$($evidence.attempts)"
