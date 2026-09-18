@@ -14,7 +14,7 @@
                          "content/map.swf",
                          "content/party.swf",
                          "content/party-base-2015.swf",
-                         "content/party-runtime-2015.swf",
+                         "content/party-runtime-2015-base.swf",
                          "game_configs/game_configs.bin",
                          "game_configs/game_strings.json",
                          "game_configs/general.json",
