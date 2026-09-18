@@ -49,9 +49,9 @@ foreach($target in @('client/ClientInterface-HalloweenParty2015.swf','close_ups/
 Require ($canonical.schema -eq 'waddle-canonical-assets/v1') 'canonical_manifest_schema'
 $canonicalAssets=@($canonical.assets); $canonicalTargets=@($canonicalAssets|ForEach-Object{[string]$_.target})
 Require ($canonicalTargets -contains 'client/QuestCommunicator.swf') 'canonical_quest_communicator_source'
-Require ($canonicalTargets -contains 'content/party-runtime-2015.swf') 'canonical_templated_party_runtime'
-$runtime=$canonicalAssets|Where-Object{$_.target -eq 'content/party-runtime-2015.swf'}|Select-Object -First 1
-Require ([long]$runtime.bytes -eq 39406) 'runtime_bytes'
-Require (([string]$runtime.sha256).ToLowerInvariant() -eq 'd30fcd85c2f4a6b9ef6d1b81aac3a6d2f592af5f68ae13bb9d1564cb5b115cf7') 'runtime_sha256'
+Require ($canonicalTargets -contains 'content/party-runtime-2015-base.swf') 'canonical_runtime_donor'
+$runtime=$canonicalAssets|Where-Object{$_.target -eq 'content/party-runtime-2015-base.swf'}|Select-Object -First 1
+Require ([long]$runtime.bytes -eq 39406) 'runtime_donor_bytes'
+Require (([string]$runtime.sha256).ToLowerInvariant() -eq 'd30fcd85c2f4a6b9ef6d1b81aac3a6d2f592af5f68ae13bb9d1564cb5b115cf7') 'runtime_donor_sha256'
 
-Write-Host "WADDLE_HALLOWEEN2015_DATA=PASS party=halloween-2015 runtime=templated-late-2015 activefeatures=20151101 features=historical-cparchives icon=historical-cparchives solo_room=891 historical_swfs=132 canonical_provenance=$($canonicalAssets.Count)"
+Write-Host "WADDLE_HALLOWEEN2015_DATA=PASS party=halloween-2015 runtime=generated-halloween-compat donor=operation-crustacean-2015 activefeatures=20151101 features=historical-cparchives icon=historical-cparchives solo_room=891 historical_swfs=132 canonical_provenance=$($canonicalAssets.Count)"
