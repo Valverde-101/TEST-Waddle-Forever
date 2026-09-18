@@ -100,6 +100,7 @@ function Test-PatchedRuntime([string]$FFDec,[string]$Swf,[string]$WorkRoot,[stri
     'static function showRobotInstructionsPopup',
     'static function loadMiniGame',
     'static function getCompletionDialogue',
+    'static function getCompletedTaskIndex',
     'static function finishMiniGamePresentation',
     'static function gameCompleted',
     'activeMiniGameTaskIndex',
@@ -272,6 +273,15 @@ static function getCompletionDialogue(taskIndex)
    }
    return null;
 }
+static function getCompletedTaskIndex(taskIndex)
+{
+   var index = Number(taskIndex);
+   if(index == com.clubpenguin.world.rooms2015.automated.party.NovemberParty.PENULTIMATE_TASK_ID)
+   {
+      return com.clubpenguin.world.rooms2015.automated.party.NovemberParty.HERBOT_DEFEATED_TASK_ID;
+   }
+   return index;
+}
 static function finishMiniGamePresentation()
 {
    var room = _global.getCurrentRoom();
@@ -295,11 +305,7 @@ static function gameCompleted(isWon)
    }
    if(isWon && taskIndex != undefined)
    {
-      var completedTaskIndex = Number(taskIndex);
-      if(completedTaskIndex == com.clubpenguin.world.rooms2015.automated.party.NovemberParty.PENULTIMATE_TASK_ID)
-      {
-         completedTaskIndex = com.clubpenguin.world.rooms2015.automated.party.NovemberParty.HERBOT_DEFEATED_TASK_ID;
-      }
+      var completedTaskIndex = com.clubpenguin.world.rooms2015.automated.party.NovemberParty.getCompletedTaskIndex(taskIndex);
       com.clubpenguin.world.rooms2015.automated.party.NovemberParty.partyCookie.sendTaskComplete(completedTaskIndex);
       com.clubpenguin.world.rooms2015.automated.party.NovemberParty.pendingCompletionDialogue = com.clubpenguin.world.rooms2015.automated.party.NovemberParty.getCompletionDialogue(taskIndex);
       com.clubpenguin.world.rooms2015.automated.party.NovemberParty.collectedItem = null;
