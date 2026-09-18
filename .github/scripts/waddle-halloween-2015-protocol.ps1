@@ -206,9 +206,12 @@ function Add-HalloweenRoomRuntimeContract($Evidence,[string]$Role) {
     }
     if ($Role -match '(?i)partysolo1' -and
         $body -match '(?i)PENULTIMATE_TASK_ID\s*=\s*8' -and
+        $body -match '(?i)HERBOT_DEFEATED_TASK_ID\s*=\s*9' -and
         $body -match '(?i)loadMiniGame\s*\(' -and
-        $body -match '(?i)sendTaskComplete\s*\(') {
-      [void]$finaleRoomEvidence.Add("$Role::task8->minigame->sendTaskComplete")
+        $body -match '(?i)taskCompleteRoomUpdate\s*\(' -and
+        $body -match '(?i)showClassDialog6\s*\(' -and
+        $body -match '(?i)showClassDialog7\s*\(') {
+      [void]$finaleRoomEvidence.Add("$Role::task8-minigame->task9-defeat->room-powerdown->dialog6->dialog7")
     }
   }
 }
@@ -267,7 +270,7 @@ foreach ($roomFile in @(Get-ChildItem -LiteralPath $roomDir -Filter '*.swf' -Fil
   $text = [string]$evidence.text
   Add-HalloweenRoomRuntimeContract -Evidence $evidence -Role $safe
   if ($text -notmatch '(?i)(pickupItem|itemCollectRelease|collectedItem|partysolo1|party7|sendJoinRoom|QUEST_TASK_ID)') { continue }
-  $roomLines = @($text -split "`r?`n" | Where-Object { $_ -match '(?i)(class com\.clubpenguin\.world\.rooms2015\.october|QUEST_TASK_ID|PENULTIMATE_TASK_ID|HERBOT_DEFEATED_TASK_ID|pickupItem|itemCollectRelease|collectedItem|displayItemPickupInstructions|partysolo1|party1_mc|party7|enterCave|sendTaskComplete|hasPlayerCompletedTask|halloHerbertGame|sendJoinRoom|triggerFunction)' } | ForEach-Object { ($_ -replace '\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 220)
+  $roomLines = @($text -split "`r?`n" | Where-Object { $_ -match '(?i)(class com\.clubpenguin\.world\.rooms2015\.october|QUEST_TASK_ID|PENULTIMATE_TASK_ID|HERBOT_DEFEATED_TASK_ID|pickupItem|itemCollectRelease|collectedItem|displayItemPickupInstructions|partysolo1|party1_mc|party7|enterCave|sendTaskComplete|hasPlayerCompletedTask|halloHerbertGame|taskCompleteRoomUpdate|showClassDialog6|showClassDialog7|HERBERT_GETAWAY|GARY_FINAL|sendJoinRoom|triggerFunction)' } | ForEach-Object { ($_ -replace '\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 220)
   foreach ($line in $roomLines) {
     $safeLine = if ($line.Length -gt 700) { $line.Substring(0,700) } else { $line }
     Write-Host "WADDLE_PARTY2015_ROOM_INTERACTION role=$safe line=$safeLine"
@@ -309,6 +312,31 @@ foreach ($method in @('getQuestVOByIndex','showRobotInstructionsPopup','loadMini
   }
 }
 
+foreach ($method in @('getCompletionDialogue','getCompletedTaskIndex','finishMiniGamePresentation','gameCompleted')) {
+  if (-not $runtimeMethods.Contains($method)) {
+    throw "WADDLE_PARTY2015_PROTOCOL=FAIL completion_runtime_method_missing=$method"
+  }
+}
+foreach ($dialoguePath in @(
+  'w.app.p2015.halloween.dialogue_Gary_congrats',
+  'w.app.p2015.halloween.dialogue_AA_congrats',
+  'w.app.p2015.halloween.dialogue_RH_congrats',
+  'w.app.p2015.halloween.dialogue_Cad_congrats',
+  'w.app.p2015.halloween.dialogue_Dot_congrats',
+  'w.app.p2015.halloween.dialogue_Sen_congrats',
+  'w.app.p2015.halloween.dialogue_PH_congrats',
+  'w.app.p2015.halloween.dialogue_Rook_congrats'
+)) {
+  if (-not $liveRuntimeText.Contains($dialoguePath)) {
+    throw "WADDLE_PARTY2015_PROTOCOL=FAIL completion_dialogue_missing=$dialoguePath"
+  }
+}
+foreach ($needle in @('PENULTIMATE_TASK_ID','HERBOT_DEFEATED_TASK_ID','taskCompleteRoomUpdate')) {
+  if (-not $liveRuntimeText.Contains($needle)) {
+    throw "WADDLE_PARTY2015_PROTOCOL=FAIL completion_lifecycle_missing=$needle"
+  }
+}
+
 $missingMethods = @($requiredPartyMethods | Where-Object { -not $runtimeMethods.Contains($_) } | Sort-Object)
 if ($missingMethods.Count -gt 0) {
   throw "WADDLE_PARTY2015_PROTOCOL=FAIL live_runtime_missing_methods=$($missingMethods -join ',')"
@@ -329,7 +357,7 @@ if ($coffeeSecretEntryEvidence.Count -lt 1) {
   throw 'WADDLE_PARTY2015_PROTOCOL=FAIL coffee_secret_lair_entry_not_found'
 }
 if ($finaleRoomEvidence.Count -lt 1) {
-  throw 'WADDLE_PARTY2015_PROTOCOL=FAIL finale_task8_minigame_completion_contract_not_found'
+  throw 'WADDLE_PARTY2015_PROTOCOL=FAIL finale_task8_to_task9_postdefeat_sequence_contract_not_found'
 }
 Write-Host "WADDLE_PARTY2015_RUNTIME_PARITY=PASS required_methods=$($requiredPartyMethods.Count) required_constants=$($requiredPartyConstants.Count) solo_room_evidence=$($soloRoomEvidence.Count) coffee_secret_entry=$($coffeeSecretEntryEvidence.Count) finale_room=$($finaleRoomEvidence.Count)"
 
