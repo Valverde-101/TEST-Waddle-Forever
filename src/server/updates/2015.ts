@@ -56,18 +56,21 @@ const HALLOWEEN_2015_DIALOGUE_STRINGS: Record<string, string> = {
   "w.app.generic.questui.description.task7": "Show PH Bot a toy UFO.",
   "w.app.generic.questui.description.task8": "Scare Rookie Bot with clown face paint.",
   "w.app.generic.questui.description.task9": "Find the secret lair and stop Herbot.",
-  // QuestInterface switches to the ".completed" key after qtaskcomplete.
-  // Keep these explicit so completed cards never display a raw localization id.
-  "w.app.generic.questui.description.task0.completed": "Gary Bot has been stopped at the Mine Shack.",
-  "w.app.generic.questui.description.task1.completed": "The decaf coffee scared Gary Bot.",
-  "w.app.generic.questui.description.task2.completed": "Arctic Bot was scared by the failed spelling test.",
-  "w.app.generic.questui.description.task3.completed": "Bothopper was scared by the pink flamingo.",
-  "w.app.generic.questui.description.task4.completed": "Cadence Bot was scared by the bug.",
-  "w.app.generic.questui.description.task5.completed": "Dot Bot was scared by the ugly sweater.",
-  "w.app.generic.questui.description.task6.completed": "Sensei Bot was scared by the beard trimmer.",
-  "w.app.generic.questui.description.task7.completed": "PH Bot was scared by the toy UFO.",
-  "w.app.generic.questui.description.task8.completed": "Rookie Bot was scared by the clown face paint.",
-  "w.app.generic.questui.description.task9.completed": "Herbot has been stopped in the secret lair."
+  // QuestInterface displays questTaskId + 1 for its description key: the
+  // server completes task 0 for Gary and the card then requests task1.completed.
+  // Reuse the party's own post-robot/finale dialogue text instead of inventing a
+  // second set of completion copy. task0.completed is retained as a defensive
+  // compatibility slot for clients that do not apply the +1 display offset.
+  "w.app.generic.questui.description.task0.completed": "Well done! We're safe from that robot, but there are more of them lurking around the island.",
+  "w.app.generic.questui.description.task1.completed": "Well done! We're safe from that robot, but there are more of them lurking around the island.",
+  "w.app.generic.questui.description.task2.completed": "Wonderful work! The Arctic Bot is deactivated and everyone is safe again.",
+  "w.app.generic.questui.description.task3.completed": "Har har! Well done, matey! That Bothopper won't be causing any more trouble.",
+  "w.app.generic.questui.description.task4.completed": "Whew! You did it! Now that's a way to finish on a high note!",
+  "w.app.generic.questui.description.task5.completed": "Good work! That robot was no match for your scare skills.",
+  "w.app.generic.questui.description.task6.completed": "Your beard-trimming skills are impressive. Well done, grasshopper.",
+  "w.app.generic.questui.description.task7.completed": "Bonza! You handled that robot with no worries at all!",
+  "w.app.generic.questui.description.task8.completed": "A secret lair in the Coffee Shop? That sounds scary. I'll alert the EPF!",
+  "w.app.generic.questui.description.task9.completed": "Excellent work! Herbert may have gotten away, but we've hopefully set him back just enough to not spoil the rest of our Halloween fun!"
 };
 
 const HALLOWEEN_2015_ROOMS = {
