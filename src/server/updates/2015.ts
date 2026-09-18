@@ -116,6 +116,9 @@ export const UPDATES_2015: Update[] = [
         'play/v2/content/global/content/party.swf':ref('content/party-runtime-2015.swf'),
         // A 2012 update left its approximation shell persistent; restore the preserved late-AS3 shell for 2015.
         'play/v2/client/shell.swf':'svanilla:media/play/v2/client/shell.swf',
+        // Use the actual vanilla intro module. Never alias this to world.swf:
+        // loading world as a child starts a second internal client/session.
+        'play/v2/client/intro_to_cp.swf':'svanilla:media/play/v2/client/intro_to_cp.swf',
         'play/v2/client/QuestCommunicator.swf':ref('client/QuestCommunicator.swf'),
         'play/v2/client/interface.swf':ref('client/ClientInterface-HalloweenParty2015.swf'),
         'play/v2/content/global/content/interface.swf':ref('client/ClientInterface-HalloweenParty2015.swf'),

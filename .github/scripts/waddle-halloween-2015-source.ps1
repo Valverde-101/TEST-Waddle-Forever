@@ -79,6 +79,7 @@ $partyContracts=@{
   id="id\s*:\s*'halloween-2015'";
   runtime="'play/v2/content/global/content/party\.swf'\s*:\s*ref\('content/party-runtime-2015\.swf'\)";
   shell="'play/v2/client/shell\.swf'\s*:\s*'svanilla:media/play/v2/client/shell\.swf'";
+  intro="'play/v2/client/intro_to_cp\.swf'\s*:\s*'svanilla:media/play/v2/client/intro_to_cp\.swf'";
   interface="'play/v2/content/global/content/interface\.swf'\s*:\s*ref\('client/ClientInterface-HalloweenParty2015\.swf'\)";
   features="'play/v2/content/global/content/features\.swf'\s*:\s*ref\('content/ContentFeatures-HalloweenParty2015\.swf'\)";
   icon="'play/v2/content/global/content/party_icon\.swf'\s*:\s*ref\('content/ContentParty_icon-HalloweenParty2015\.swf'\)";
