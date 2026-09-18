@@ -20,6 +20,24 @@ function Test-Swf([string]$Path){
 }
 
 $repo=(Resolve-Path -LiteralPath $RepoRoot).Path
+
+# Parse every Halloween 2015 PowerShell gate before running expensive FFDec work.
+# This catches truncated quotes/braces/regexes in validate-pr-source instead of
+# letting a malformed diagnostic script fail much later in protocol-evidence.
+$halloweenScripts = @(Get-ChildItem -LiteralPath (Join-Path $repo '.github\scripts') -Filter 'waddle-halloween-2015*.ps1' -File | Sort-Object FullName)
+foreach ($script in $halloweenScripts) {
+  $tokens = $null
+  $parseErrors = $null
+  [void][System.Management.Automation.Language.Parser]::ParseFile($script.FullName,[ref]$tokens,[ref]$parseErrors)
+  if (@($parseErrors).Count -gt 0) {
+    foreach ($parseError in @($parseErrors)) {
+      Write-Host "WADDLE_PARTY2015_PS_PARSE_ERROR file=$($script.Name) line=$($parseError.Extent.StartLineNumber) column=$($parseError.Extent.StartColumnNumber) message=$($parseError.Message)"
+    }
+    throw "WADDLE_PARTY2015_SOURCE=FAIL powershell_parse_errors=$(@($parseErrors).Count) file=$($script.Name)"
+  }
+  Write-Host "WADDLE_PARTY2015_PS_PARSE=PASS file=$($script.Name)"
+}
+
 $partyPath=Join-Path $repo 'src/server/updates/2015.ts'
 $gameDataPath=Join-Path $repo 'src/server/timelines/game-data.ts'
 $filesPath=Join-Path $repo 'src/server/game-data/files.ts'
