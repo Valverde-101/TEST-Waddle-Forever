@@ -181,6 +181,8 @@ $compatibilityText = ''
 $requiredPartyMethods = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
 $requiredPartyConstants = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
 $soloRoomEvidence = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+$coffeeSecretEntryEvidence = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+$finaleRoomEvidence = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 
 function Add-HalloweenRoomRuntimeContract($Evidence,[string]$Role) {
   foreach ($entry in @($Evidence.entries)) {
@@ -196,6 +198,17 @@ function Add-HalloweenRoomRuntimeContract($Evidence,[string]$Role) {
     foreach ($line in @($body -split '\r?\n' | Where-Object { $_ -match '(?i)(partysolo1|party1_mc|enterCave|sendJoinRoom)' } | ForEach-Object { ($_ -replace '\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 80)) {
       $safeLine = if ($line.Length -gt 700) { $line.Substring(0,700) } else { $line }
       [void]$soloRoomEvidence.Add("$Role::$safeLine")
+    }
+
+    if (($Role -match '(?i)coffee' -or $body -match '(?i)class\s+com\.clubpenguin\.world\.rooms2015\.october\.Coffee') -and
+        $body -match '(?i)party1_mc' -and $body -match '(?i)enterCave') {
+      [void]$coffeeSecretEntryEvidence.Add("$Role::party1_mc->enterCave")
+    }
+    if ($Role -match '(?i)partysolo1' -and
+        $body -match '(?i)PENULTIMATE_TASK_ID\s*=\s*8' -and
+        $body -match '(?i)loadMiniGame\s*\(' -and
+        $body -match '(?i)sendTaskComplete\s*\(') {
+      [void]$finaleRoomEvidence.Add("$Role::task8->minigame->sendTaskComplete")
     }
   }
 }
@@ -284,6 +297,12 @@ foreach ($constant in $robotRampageScareConstants) {
     throw "WADDLE_PARTY2015_PROTOCOL=FAIL robot_rampage_contract_missing_constant=$constant"
   }
 }
+$finaleContentConstants = @('HERBERT_MONOLOGUE','HERBERT_MONOLOGUE2','HERBERT_BOT','HERBERT_CAGE','GARY_LAIR1','HERBERT_GETAWAY','GARY_FINAL')
+foreach ($constant in $finaleContentConstants) {
+  if (-not $requiredPartyConstants.Contains($constant)) {
+    throw "WADDLE_PARTY2015_PROTOCOL=FAIL halloween_finale_contract_missing_constant=$constant"
+  }
+}
 foreach ($method in @('getQuestVOByIndex','showRobotInstructionsPopup','loadMiniGame','displayItemPickupInstructions')) {
   if (-not $requiredPartyMethods.Contains($method)) {
     throw "WADDLE_PARTY2015_PROTOCOL=FAIL robot_rampage_contract_missing_method=$method"
@@ -301,10 +320,18 @@ if ($missingConstants.Count -gt 0) {
 foreach ($method in @($requiredPartyMethods | Sort-Object)) { Write-Host "WADDLE_PARTY2015_RUNTIME_REQUIRED_METHOD=$method" }
 foreach ($constant in @($requiredPartyConstants | Sort-Object)) { Write-Host "WADDLE_PARTY2015_RUNTIME_REQUIRED_CONSTANT=$constant" }
 foreach ($evidenceLine in @($soloRoomEvidence | Sort-Object)) { Write-Host "WADDLE_PARTY2015_SOLO_ROOM_EVIDENCE=$evidenceLine" }
+foreach ($evidenceLine in @($coffeeSecretEntryEvidence | Sort-Object)) { Write-Host "WADDLE_PARTY2015_COFFEE_SECRET_ENTRY=$evidenceLine" }
+foreach ($evidenceLine in @($finaleRoomEvidence | Sort-Object)) { Write-Host "WADDLE_PARTY2015_FINALE_ROOM=$evidenceLine" }
 if ($soloRoomEvidence.Count -lt 1) {
   throw 'WADDLE_PARTY2015_PROTOCOL=FAIL partysolo1_entry_contract_not_found'
 }
-Write-Host "WADDLE_PARTY2015_RUNTIME_PARITY=PASS required_methods=$($requiredPartyMethods.Count) required_constants=$($requiredPartyConstants.Count) solo_room_evidence=$($soloRoomEvidence.Count)"
+if ($coffeeSecretEntryEvidence.Count -lt 1) {
+  throw 'WADDLE_PARTY2015_PROTOCOL=FAIL coffee_secret_lair_entry_not_found'
+}
+if ($finaleRoomEvidence.Count -lt 1) {
+  throw 'WADDLE_PARTY2015_PROTOCOL=FAIL finale_task8_minigame_completion_contract_not_found'
+}
+Write-Host "WADDLE_PARTY2015_RUNTIME_PARITY=PASS required_methods=$($requiredPartyMethods.Count) required_constants=$($requiredPartyConstants.Count) solo_room_evidence=$($soloRoomEvidence.Count) coffee_secret_entry=$($coffeeSecretEntryEvidence.Count) finale_room=$($finaleRoomEvidence.Count)"
 
 foreach ($target in $compatibilityTargets) {
   $swf = Join-Path $partyRoot ([string]$target.path)
