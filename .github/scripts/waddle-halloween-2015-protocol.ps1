@@ -254,7 +254,7 @@ foreach ($roomFile in @(Get-ChildItem -LiteralPath $roomDir -Filter '*.swf' -Fil
   $text = [string]$evidence.text
   Add-HalloweenRoomRuntimeContract -Evidence $evidence -Role $safe
   if ($text -notmatch '(?i)(pickupItem|itemCollectRelease|collectedItem|partysolo1|party7|sendJoinRoom|QUEST_TASK_ID)') { continue }
-  $roomLines = @($text -split "`r?`n" | Where-Object { $_ -match '(?i)(class com\.clubpenguin\.world\.rooms2015\.october|QUEST_TASK_ID|pickupItem|itemCollectRelease|collectedItem|displayItemPickupInstructions|partysolo1|party7|sendJoinRoom|triggerFunction)' } | ForEach-Object { ($_ -replace '\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 220)
+  $roomLines = @($text -split "`r?`n" | Where-Object { $_ -match '(?i)(class com\.clubpenguin\.world\.rooms2015\.october|QUEST_TASK_ID|PENULTIMATE_TASK_ID|HERBOT_DEFEATED_TASK_ID|pickupItem|itemCollectRelease|collectedItem|displayItemPickupInstructions|partysolo1|party1_mc|party7|enterCave|sendTaskComplete|hasPlayerCompletedTask|halloHerbertGame|sendJoinRoom|triggerFunction)' } | ForEach-Object { ($_ -replace '\s+',' ').Trim() } | Where-Object { $_.Length -gt 0 } | Select-Object -Unique -First 220)
   foreach ($line in $roomLines) {
     $safeLine = if ($line.Length -gt 700) { $line.Substring(0,700) } else { $line }
     Write-Host "WADDLE_PARTY2015_ROOM_INTERACTION role=$safe line=$safeLine"
