@@ -42,12 +42,20 @@ function Stop-FFDecTree($Process) {
   catch { try { Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue } catch {} }
 }
 
-function Invoke-FFDec([string]$FFDec,[string[]]$Args,[string]$Label,[string]$WorkRoot,[int]$TimeoutMs = 180000) {
+function Invoke-FFDec([string]$FFDec,[string[]]$ArgumentList,[string]$Label,[string]$WorkRoot,[int]$TimeoutMs = 180000) {
   $stdout = Join-Path $WorkRoot ($Label + '.stdout.txt')
   $stderr = Join-Path $WorkRoot ($Label + '.stderr.txt')
   $proc = $null
   try {
-    $proc = Start-Process -FilePath $FFDec -ArgumentList $Args -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru -WindowStyle Hidden
+    if ([string]::IsNullOrWhiteSpace($FFDec) -or -not (Test-Path -LiteralPath $FFDec -PathType Leaf)) {
+      throw "WADDLE_PARTY2015_RUNTIME_PATCH=FAIL ffdec_invalid label=$Label path=$FFDec"
+    }
+    $nullArgs = @($ArgumentList | Where-Object { $null -eq $_ -or [string]::IsNullOrWhiteSpace([string]$_) })
+    if ($ArgumentList.Count -eq 0 -or $nullArgs.Count -gt 0) {
+      throw "WADDLE_PARTY2015_RUNTIME_PATCH=FAIL ffdec_arguments_invalid label=$Label count=$($ArgumentList.Count) null_or_empty=$($nullArgs.Count)"
+    }
+    Write-Host "WADDLE_PARTY2015_RUNTIME_PATCH_FFDEC label=$Label exe=$FFDec args=$($ArgumentList -join ' ')"
+    $proc = Start-Process -FilePath $FFDec -ArgumentList $ArgumentList -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru -WindowStyle Hidden
     if (-not $proc.WaitForExit($TimeoutMs)) {
       Stop-FFDecTree $proc
       throw "WADDLE_PARTY2015_RUNTIME_PATCH=FAIL ffdec_timeout label=$Label"
@@ -65,8 +73,8 @@ function Invoke-FFDec([string]$FFDec,[string[]]$Args,[string]$Label,[string]$Wor
 function Export-Scripts([string]$FFDec,[string]$Swf,[string]$Out,[string]$WorkRoot,[string]$Label) {
   if (Test-Path -LiteralPath $Out) { Remove-Item -LiteralPath $Out -Recurse -Force }
   New-Item -ItemType Directory -Force -Path $Out | Out-Null
-  $args = @('-cli','-onerror','abort','-exportTimeout','90','-exportFileTimeout','30','-export','script',('"' + $Out + '"'),('"' + $Swf + '"'))
-  Invoke-FFDec -FFDec $FFDec -Args $args -Label $Label -WorkRoot $WorkRoot
+  $ffdecArgs = @('-cli','-onerror','abort','-exportTimeout','90','-exportFileTimeout','30','-export','script',('"' + $Out + '"'),('"' + $Swf + '"'))
+  Invoke-FFDec -FFDec $FFDec -ArgumentList $ffdecArgs -Label $Label -WorkRoot $WorkRoot
 }
 
 function Find-NovemberParty([string]$ScriptsRoot) {
@@ -201,8 +209,8 @@ $source = $source.Replace($insertNeedle,$compatMethods + [Environment]::NewLine 
 [IO.File]::WriteAllText($partyPath,$source,(New-Object System.Text.UTF8Encoding($false)))
 
 $tmp = Join-Path $work 'party-runtime-2015.swf'
-$args = @('-cli','-onerror','abort','-importScript',('"' + $base + '"'),('"' + $tmp + '"'),('"' + $scriptsRoot + '"'))
-Invoke-FFDec -FFDec $ffdec -Args $args -Label 'import-script' -WorkRoot $work -TimeoutMs 240000
+$ffdecArgs = @('-cli','-onerror','abort','-importScript',('"' + $base + '"'),('"' + $tmp + '"'),('"' + $scriptsRoot + '"'))
+Invoke-FFDec -FFDec $ffdec -ArgumentList $ffdecArgs -Label 'import-script' -WorkRoot $work -TimeoutMs 240000
 if (-not (Test-Swf $tmp)) { throw 'WADDLE_PARTY2015_RUNTIME_PATCH=FAIL generated_invalid_swf' }
 if (-not (Test-PatchedRuntime -FFDec $ffdec -Swf $tmp -WorkRoot $work -Label 'generated-live')) {
   throw 'WADDLE_PARTY2015_RUNTIME_PATCH=FAIL generated_contract_missing'
