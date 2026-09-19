@@ -79,7 +79,7 @@ if(-not[string]::IsNullOrWhiteSpace($trackedBefore)){
   $trackedBackupRoot=Join-Path $AndroidBuildRoot ('Previews\Quarantine\canonical-tracked-'+[DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'))
   New-Item -ItemType Directory -Force -Path $trackedBackupRoot | Out-Null
   $trackedBefore | Set-Content -LiteralPath (Join-Path $trackedBackupRoot 'status.txt') -Encoding UTF8
-  $dirtyPaths=@(Invoke-Git -Repo $canonical -Arguments @('diff','--name-only','HEAD','--')).text -split "\r?\n" | Where-Object {$_}
+  $dirtyPaths=@(((Invoke-Git -Repo $canonical -Arguments @('diff','--name-only','HEAD','--')).text -split "\r?\n") | Where-Object {$_})
   foreach($relative in $dirtyPaths){
     $from=Join-Path $canonical ($relative -replace '/','\')
     $to=Join-Path $trackedBackupRoot ('files\'+($relative -replace '/','\'))
