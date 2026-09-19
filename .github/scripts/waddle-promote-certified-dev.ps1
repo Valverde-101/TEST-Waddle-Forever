@@ -156,6 +156,33 @@ if(-not[string]::IsNullOrWhiteSpace($untracked)){
   }
 }
 
+# A Git checkout does not discard tracked working-tree edits. Backups above are
+# complete file copies; verify them again before clearing the tracked old HEAD.
+$dirtyBeforeReset=(Invoke-Git -Repo $canonical -Arguments @('status','--porcelain=v1','--untracked-files=no')).text
+if(-not[string]::IsNullOrWhiteSpace($dirtyBeforeReset)){
+  if([string]::IsNullOrWhiteSpace($trackedBackupRoot) -or -not(Test-Path -LiteralPath (Join-Path $trackedBackupRoot 'status.txt') -PathType Leaf)){
+    throw "WADDLE_PROMOTE=FAIL tracked_backup_missing; refusing_to_reset"
+  }
+  if($dirtyBeforeReset -ne $trackedBefore){
+    throw "WADDLE_PROMOTE=FAIL tracked_status_changed_after_backup; refusing_to_reset before=$trackedBefore after=$dirtyBeforeReset"
+  }
+  foreach($relative in $dirtyPaths){
+    $from=Join-Path $canonical ($relative -replace '/','\')
+    $to=Join-Path $trackedBackupRoot ('files\'+($relative -replace '/','\'))
+    if(Test-Path -LiteralPath $from -PathType Leaf){
+      if(-not(Test-Path -LiteralPath $to -PathType Leaf)){throw "WADDLE_PROMOTE=FAIL tracked_file_backup_missing=$relative"}
+      $before=(Get-FileHash -LiteralPath $from -Algorithm SHA256).Hash
+      $saved=(Get-FileHash -LiteralPath $to -Algorithm SHA256).Hash
+      if($before -ne $saved){throw "WADDLE_PROMOTE=FAIL tracked_file_backup_hash_mismatch=$relative"}
+    }elseif(-not(Test-Path -LiteralPath ($to+'.deleted.txt') -PathType Leaf)){
+      throw "WADDLE_PROMOTE=FAIL tracked_deletion_backup_missing=$relative"
+    }
+  }
+  Write-Host "WADDLE_PROMOTE_TRACKED_BACKUP_VERIFY=PASS files=$($dirtyPaths.Count) root=$trackedBackupRoot"
+  Invoke-Git -Repo $canonical -Arguments @('reset','--hard','HEAD') | Out-Null
+}
+$remainingTracked=(Invoke-Git -Repo $canonical -Arguments @('status','--porcelain=v1','--untracked-files=no')).text
+if(-not[string]::IsNullOrWhiteSpace($remainingTracked)){throw "WADDLE_PROMOTE=FAIL tracked_edits_remain_after_reset status=$remainingTracked"}
 Invoke-Git -Repo $canonical -Arguments @('checkout','-B',$TargetBranch,$expected) | Out-Null
 Invoke-Git -Repo $canonical -Arguments @('reset','--hard',$expected) | Out-Null
 $actual=(Invoke-Git -Repo $canonical -Arguments @('rev-parse','HEAD')).text.ToLowerInvariant()
