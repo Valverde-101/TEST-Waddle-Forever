@@ -24,9 +24,18 @@ if($expected -notmatch '^[0-9a-f]{40}$'){throw "WADDLE_PROMOTE=FAIL invalid_sha=
 
 function Invoke-Git {
   param([string]$Repo,[string[]]$Arguments,[switch]$AllowFailure)
-  $out=@(& $script:git -c "safe.directory=$Repo" -C $Repo @Arguments 2>&1)
-  $code=$LASTEXITCODE
-  $global:LASTEXITCODE=0
+  # Windows PowerShell 5.1 treats even successful native stderr (e.g.
+  # "Switched to a new branch") as a terminating NativeCommandError when
+  # ErrorActionPreference=Stop. Only the native exit code indicates Git failure.
+  $previousErrorActionPreference=$ErrorActionPreference
+  try {
+    $ErrorActionPreference='Continue'
+    $out=@(& $script:git -c "safe.directory=$Repo" -C $Repo @Arguments 2>&1)
+    $code=$LASTEXITCODE
+  } finally {
+    $ErrorActionPreference=$previousErrorActionPreference
+    $global:LASTEXITCODE=0
+  }
   if($code -ne 0 -and -not $AllowFailure){throw "WADDLE_PROMOTE=FAIL git exit=$code repo=$Repo args=$($Arguments -join ' ') output=$($out -join ' | ')"}
   [pscustomobject]@{code=$code;text=(($out|Out-String).Trim())}
 }
