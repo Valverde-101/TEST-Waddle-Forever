@@ -106,10 +106,12 @@ $assets = @($manifest.assets)
 if ($assets.Count -lt 1) {
   throw 'WADDLE_HALLOWEEN2015_CANONICAL=FAIL asset_count=0'
 }
-$targets = @($assets | ForEach-Object { [string]$_.target })
-$uniqueTargets = @($targets | Sort-Object -Unique)
-if ($uniqueTargets.Count -ne $targets.Count) {
-  throw "WADDLE_HALLOWEEN2015_CANONICAL=FAIL duplicate_targets total=$($targets.Count) unique=$($uniqueTargets.Count)"
+[string[]]$targets = @($assets | ForEach-Object { [string]$_.target })
+$targetSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::Ordinal)
+foreach ($target in $targets) {
+  if (-not $targetSet.Add($target)) {
+    throw "WADDLE_HALLOWEEN2015_CANONICAL=FAIL duplicate_target=$target"
+  }
 }
 
 $targetRoot = Join-Path $repo 'media/default/party2015'
@@ -164,19 +166,33 @@ foreach ($entry in $assets) {
   $verified++
 }
 
+# Sort with an explicit ordinal comparer. PowerShell Sort-Object is
+# culture-sensitive, so punctuation such as '-' vs '.' can be ordered
+# differently across runners and create byte-level drift in canonical-state.json.
+[string[]]$sortedTargets = @($targets)
+[Array]::Sort($sortedTargets, [StringComparer]::Ordinal)
+
 $state = [ordered]@{
   schema = 'waddle-canonical-assets-state/v2'
   party = [string]$manifest.party
   sourceRepository = [string]$manifest.sourceRepository
   sourceCommit = [string]$manifest.sourceCommit
   verified = $verified
-  assetTargets = @($assets | ForEach-Object { [string]$_.target } | Sort-Object)
+  assetTargets = $sortedTargets
 }
 $utf8 = New-Object System.Text.UTF8Encoding($false)
 # Compact JSON is the canonical on-disk representation. Windows PowerShell 5
 # otherwise emits version-specific alignment whitespace, which can create a
 # false generated-drift failure even when the state is semantically identical.
 $stateJson = ($state | ConvertTo-Json -Depth 5 -Compress) -replace "`r`n", "`n"
-[IO.File]::WriteAllText((Join-Path $targetRoot 'canonical-state.json'), $stateJson + "`n", $utf8)
+$statePath = Join-Path $targetRoot 'canonical-state.json'
+$statePayload = $stateJson + "`n"
+[IO.File]::WriteAllText($statePath, $statePayload, $utf8)
+
+# Report the exact deterministic artifact identity. If this ever drifts again,
+# CI can distinguish content drift from a line-ending/encoding issue immediately.
+$stateSha256 = (Get-FileHash -LiteralPath $statePath -Algorithm SHA256).Hash.ToLowerInvariant()
+$stateBytes = (Get-Item -LiteralPath $statePath).Length
+Write-Host "WADDLE_HALLOWEEN2015_CANONICAL_STATE=PASS bytes=$stateBytes sha256=$stateSha256 sort=ordinal encoding=utf8-nobom newline=lf"
 
 Write-Host "WADDLE_HALLOWEEN2015_CANONICAL=PASS assets=$verified downloaded=$downloaded reused=$reused source=$($manifest.sourceRepository)@$($manifest.sourceCommit) manifest=$manifestPathResolved target=$targetRoot state=deterministic"
