@@ -53,7 +53,22 @@ try {
         $entryName -eq $needle -or $entryName.EndsWith('/'+$needle)
       })
       if($matches.Count -eq 0){
-        Write-Host "WADDLE_PARTY2015_CLIENT_ASSET_PROBE=NOT_FOUND name=$($item.name) archive_blob=$blob"
+        # The pinned CPImagined media1.zip is incomplete for these late client
+        # modules. Probe Icerink's preserved media1 mirror next, but keep this
+        # diagnostic read-only until exact bytes and hashes are known.
+        $mirrorUrl = "https://icer.ink/media1.clubpenguin.com/play/v2/client/$($item.name)"
+        $mirrorOut = Join-Path $tempRoot ("mirror-" + $item.name)
+        try {
+          Invoke-WebRequest -UseBasicParsing -Uri $mirrorUrl -OutFile $mirrorOut -TimeoutSec 120
+          if(-not(Test-Swf $mirrorOut)){throw 'mirror payload is not a valid SWF'}
+          $mirrorBytes=(Get-Item -LiteralPath $mirrorOut).Length
+          $mirrorSha256=(Get-FileHash -LiteralPath $mirrorOut -Algorithm SHA256).Hash.ToLowerInvariant()
+          $mirrorBlob=Get-GitBlobSha $mirrorOut
+          $mirrorHistoricMatch=($mirrorBytes -eq [long]$item.historicBytes)
+          Write-Host "WADDLE_PARTY2015_CLIENT_ASSET_PROBE=FOUND_MIRROR name=$($item.name) url=$mirrorUrl bytes=$mirrorBytes sha256=$mirrorSha256 git_blob=$mirrorBlob historic_bytes=$($item.historicBytes) historic_match=$mirrorHistoricMatch archive_blob=$blob"
+        } catch {
+          Write-Host "WADDLE_PARTY2015_CLIENT_ASSET_PROBE=NOT_FOUND name=$($item.name) archive_blob=$blob mirror=$mirrorUrl mirror_error=$($_.Exception.Message)"
+        }
         continue
       }
       if($matches.Count -ne 1){throw "WADDLE_PARTY2015_CLIENT_ASSET_PROBE=FAIL name=$($item.name) matches=$($matches.Count)"}

@@ -198,6 +198,15 @@ if (-not (Test-Path -LiteralPath $canonicalHydrator -PathType Leaf)) {
   throw "WADDLE_PARTY2015_ASSETS=FAIL canonical_hydrator_missing=$canonicalHydrator"
 }
 & $canonicalHydrator -RepoRoot $canonical
+$canonicalStatePath = Join-Path $target 'canonical-state.json'
+if (-not (Test-Path -LiteralPath $canonicalStatePath -PathType Leaf)) {
+  throw "WADDLE_PARTY2015_ASSETS=FAIL canonical_state_missing=$canonicalStatePath"
+}
+$canonicalState = Get-Content -LiteralPath $canonicalStatePath -Raw | ConvertFrom-Json
+$canonicalSupplementCount = [int]$canonicalState.verified
+if ($canonicalSupplementCount -ne @($canonicalState.assetTargets).Count) {
+  throw "WADDLE_PARTY2015_ASSETS=FAIL canonical_state_count verified=$canonicalSupplementCount targets=$(@($canonicalState.assetTargets).Count)"
+}
 
 # The archived Operation Crustacean runtime is a compatible late-2015 donor,
 # but Halloween's Robot Rampage rooms call additional client-local APIs that
@@ -210,4 +219,4 @@ if (-not (Test-Path -LiteralPath $runtimePatch -PathType Leaf)) {
 & $runtimePatch -RepoRoot $canonical
 if (-not $?) { throw 'WADDLE_PARTY2015_ASSETS=FAIL runtime_patch_failed' }
 
-Write-Host "WADDLE_PARTY2015_ASSETS=PASS required=132 total=$($manifestAssets.Count) downloaded=$downloaded reused=$reused canonical_supplements=18 generated_runtime=1 root=$target source=$pageUsed"
+Write-Host "WADDLE_PARTY2015_ASSETS=PASS required=132 total=$($manifestAssets.Count) downloaded=$downloaded reused=$reused canonical_supplements=$canonicalSupplementCount generated_runtime=1 root=$target source=$pageUsed"

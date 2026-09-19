@@ -23,6 +23,8 @@ Match $updates "partyEndDate\s*:\s*'2015-11-05 00:00:00'" 'party_end'
 Match $updates "rooms\s*:\s*HALLOWEEN_2015_ROOMS" 'rooms'
 Match $updates "music\s*:\s*HALLOWEEN_2015_MUSIC" 'music'
 Match $updates "'play/v2/content/global/content/party\.swf'\s*:\s*ref\('content/party-runtime-2015\.swf'\)" 'party_runtime_templated_2015'
+Match $updates "'play/en/web_service/game_configs\.bin'\s*:\s*ref\('game_configs/game_configs\.bin'\)" 'game_configs_bundle'
+Match $updates "'play/v2/content/global/rooms/NOTLS-ALL-EN\.swf'\s*:\s*ref\('rooms/NOTLS-ALL-EN\.swf'\)" 'notls_canonical_route'
 Match $updates "'play/v2/client/shell\.swf'\s*:\s*'svanilla:media/play/v2/client/shell\.swf'" 'late_as3_shell_reset'
 Match $updates "'play/v2/content/global/content/interface\.swf'\s*:\s*ref\('client/ClientInterface-HalloweenParty2015\.swf'\)" 'client_interface_historical'
 Match $updates "'play/v2/content/global/content/features\.swf'\s*:\s*ref\('content/ContentFeatures-HalloweenParty2015\.swf'\)" 'features_historical'
@@ -58,6 +60,11 @@ Require ($canonical.schema -eq 'waddle-canonical-assets/v1') 'canonical_manifest
 $canonicalAssets=@($canonical.assets); $canonicalTargets=@($canonicalAssets|ForEach-Object{[string]$_.target})
 Require ($canonicalTargets -contains 'client/QuestCommunicator.swf') 'canonical_quest_communicator_source'
 Require ($canonicalTargets -contains 'content/party-runtime-2015-base.swf') 'canonical_runtime_donor'
+Require ($canonicalTargets -contains 'game_configs/game_configs.bin') 'canonical_game_configs_source'
+Require ($canonicalTargets -contains 'rooms/NOTLS-ALL-EN.swf') 'canonical_notls_source'
+$notls=$canonicalAssets|Where-Object{$_.target -eq 'rooms/NOTLS-ALL-EN.swf'}|Select-Object -First 1
+Require ([long]$notls.bytes -eq 1603221) 'canonical_notls_bytes'
+Require (([string]$notls.gitBlobSha).ToLowerInvariant() -eq '206fa334351d967f0a899b22ce00e4378e76b694') 'canonical_notls_blob'
 $runtime=$canonicalAssets|Where-Object{$_.target -eq 'content/party-runtime-2015-base.swf'}|Select-Object -First 1
 Require ([long]$runtime.bytes -eq 39406) 'runtime_donor_bytes'
 Require (([string]$runtime.sha256).ToLowerInvariant() -eq 'd30fcd85c2f4a6b9ef6d1b81aac3a6d2f592af5f68ae13bb9d1564cb5b115cf7') 'runtime_donor_sha256'
