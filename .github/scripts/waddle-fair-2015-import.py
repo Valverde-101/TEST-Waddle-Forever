@@ -153,6 +153,21 @@ def main():
         })
     ordered = sorted(entries.values(), key=lambda e: e["relativePath"].lower())
     print("WADDLE_FAIR2015_DISCOVERY page={} links={} candidates={}".format(PAGE, len(parser.links), len(ordered)), flush=True)
+    for link in parser.links:
+        if link["section"].lower() == "minigames":
+            print("WADDLE_FAIR2015_MINIGAME_PAGE name={} url={}".format(link["label"], urljoin(PAGE, link["href"])), flush=True)
+    for row in re.findall(r"<tr\\b[^>]*>.*?</tr>", html, re.I | re.S):
+        row_links = IndexLinks()
+        row_links.feed(row)
+        swfs = []
+        for link in row_links.links:
+            name = normalized_name(link)
+            if name:
+                swfs.append(name)
+        rooms = [name for name in swfs if name.startswith(("Rooms", "TheFair2014"))]
+        tracks = [name for name in swfs if name.startswith("Music")]
+        if len(rooms) == 1 and len(tracks) == 1:
+            print("WADDLE_FAIR2015_ROOM_MUSIC room={} music={}".format(rooms[0], tracks[0]), flush=True)
     for entry in ordered:
         print("WADDLE_FAIR2015_CANDIDATE category={} filename={} source={}".format(
             entry["category"], entry["name"], entry["filePage"]), flush=True)
