@@ -26,7 +26,38 @@ for asset in all_assets:
     assert blob[:3] in (b"FWS", b"CWS", b"ZWS"), f"invalid SWF {relative}"
     assert hashlib.sha256(blob).hexdigest().lower() == asset["sha256"].lower(), f"wrong sha {relative}"
     assert asset["url"].startswith("https://toolbox.solero.me/cparchives/static/images/archives/"), f"untrusted archive URL {relative}"
-assert len(list(assets.rglob("*.swf"))) == 194
+# A green inventory check is not proof of a working party. The May 2015
+# controller and original intro must be pinned and available before this PR
+# can be considered integration-ready. They cannot be substituted with Ghosts,
+# Halloween or world.swf without launching incompatible/duplicate clients.
+runtime_manifest_path = assets / "client-runtime-manifest.json"
+assert runtime_manifest_path.is_file(), (
+    "WADDLE_FAIR2015_RUNTIME_READY=FAIL original May party runtime and intro "
+    "not imported; the party icon/minigames cannot be declared functional"
+)
+runtime_manifest = json.loads(runtime_manifest_path.read_text(encoding="utf-8"))
+assert runtime_manifest.get("schema") == "waddle-fair-2015-client-runtime/v1"
+runtime_assets = runtime_manifest.get("assets", [])
+assert {entry.get("role") for entry in runtime_assets} == {"party", "intro"}, (
+    "WADDLE_FAIR2015_RUNTIME_READY=FAIL original client roles incomplete"
+)
+required_client_paths = {
+    "client/ClientParty-Fair2015_2.swf",
+    "client/ClientIntro_to_cp-06102015.swf",
+}
+assert {entry.get("relativePath") for entry in runtime_assets} == required_client_paths
+for entry in runtime_assets:
+    client_file = (assets / entry["relativePath"]).resolve()
+    assert assets.resolve() in client_file.parents and client_file.is_file()
+    original = client_file.read_bytes()
+    assert original[:3] in (b"FWS", b"CWS", b"ZWS")
+    assert len(original) == entry["bytes"]
+    assert hashlib.sha256(original).hexdigest().lower() == entry["sha256"].lower(), (
+        "WADDLE_FAIR2015_RUNTIME_READY=FAIL original client checksum mismatch"
+    )
+assert len(list(assets.rglob("*.swf"))) == 194 + len(runtime_assets)
+print("WADDLE_FAIR2015_RUNTIME_READY=PASS originals=2 pinned=true")
+
 code = (repo / "src/server/updates/2015.ts").read_text(encoding="utf-8")
 registry = (repo / "src/server/game-data/files.ts").read_text(encoding="utf-8")
 assert "const FAIR2015 = 'fair2015';" in registry and "  FAIR2015," in registry
