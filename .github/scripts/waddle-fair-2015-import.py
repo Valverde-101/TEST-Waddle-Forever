@@ -85,7 +85,7 @@ def normalized_name(link):
     file_match = re.search(r"(?:File:|File%3A)([^/?#]+?\.swf)(?:\.html)?(?:[?#]|$)", href, re.I)
     if not file_match:
         return None
-    name = unquote(file_match.group(1)).replace("_", " ")
+    name = unquote(file_match.group(1))
     if not name.lower().endswith(".swf") or "/" in name or "\\" in name or name in (".", ".."):
         return None
     return name
@@ -101,7 +101,7 @@ def media_url(file_page, filename):
             continue
         if not path.lower().endswith(".swf"):
             continue
-        if Path(path).name.lower() == filename.lower():
+        if Path(path).name.lower().replace("_", " ") == filename.lower().replace("_", " "):
             matches.append(href)
     unique = sorted(set(matches), key=lambda u: ("/static/images/archives/" not in u, len(u)))
     if not unique:
@@ -137,9 +137,6 @@ def main():
     for link in parser.links:
         name = normalized_name(link)
         if not name:
-            continue
-        # Do not silently mix other parties into the event inventory.
-        if not re.search(r"(?:fair.?2015|05202015|20150520|may2015|2015)", name, re.I):
             continue
         category = category_for(link, name)
         relative = category + "/" + name
