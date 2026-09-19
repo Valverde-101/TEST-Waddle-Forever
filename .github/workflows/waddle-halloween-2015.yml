@@ -43,6 +43,8 @@ on:
       - 'src/server/socket-server/world-handlers.ts'
       - 'src/server/file-generators/general.json.ts'
       - 'src/server/file-generators/index.ts'
+      - 'src/server/file-server/index.ts'
+      - 'src/client/diagnostic-panel.ts'
       - 'src/client/views/timeline/timeline.ts'
       - 'src/client/views/timeline/timeline-static.ts'
       - 'src/client/views/timeline/timeline.html'

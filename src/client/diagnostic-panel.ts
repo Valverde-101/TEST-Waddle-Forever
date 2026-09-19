@@ -321,7 +321,7 @@ const buildFailureAnalysis = (
       recommendedAction = 'Usar el contexto XT/XML, la ruta del resolvedor FILE y los eventos anteriores para localizar idioma, sala o timeline que construyó la solicitud.';
     }
   } else if (category === 'SWF' && statusCode >= 500) {
-    if (/^(?:read-failed|serve-failed)/.test(fileResolutionStatus)) {
+    if (/^(?:missing-resolved-target|read-failed|serve-failed)/.test(fileResolutionStatus)) {
       classification = 'SWF_BROKEN_FILE_REFERENCE_TARGET';
       confidence = 'high';
       explanation = `El SWF ${leaf} estaba mapeado por game-data a ${resolvedFileTarget || '(target desconocido)'}, pero la lectura local falló (${fileResolutionStatus}).`;

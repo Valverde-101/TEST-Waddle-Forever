@@ -52,6 +52,7 @@ $joinHandlersPath=Join-Path $repo 'src/server/socket-server/handlers/join.ts'
 $partyHandlersPath=Join-Path $repo 'src/server/socket-server/handlers/party.ts'
 $worldHandlersPath=Join-Path $repo 'src/server/socket-server/world-handlers.ts'
 $partyDataPath=Join-Path $repo 'src/server/game-data/party.ts'
+$fileServerPath=Join-Path $repo 'src/server/file-server/index.ts'
 $canonicalManifestPath=Join-Path $repo '.github/manifests/halloween-2015-canonical.json'
 $runtimePatchPath=Join-Path $repo '.github/scripts/waddle-halloween-2015-runtime-patch.ps1'
 $partyRoot=Join-Path $repo 'media/default/party2015'
@@ -103,6 +104,35 @@ Require-NotContains $party "ref('content/party-base-2015.swf')" 'obsolete_maypar
 Require-NotContains $party "ref('content/map.swf')" 'unproven_recreation_map'
 Require-NotContains $party "'play/v2/client/intro_to_cp.swf':'svanilla:media/play/v2/client/intro_to_cp.swf'" 'intro_missing_svanilla_target_forbidden'
 Require-NotContains $party "'play/v2/content/global/rooms/NOTLS-ALL-EN.swf':'svanilla:media/play/v2/content/global/rooms/NOTLS-ALL-EN.swf'" 'notls_missing_svanilla_target_forbidden'
+
+# Audit the actual Halloween event-local file mappings against the checkout.
+# A route string is not a valid contract unless its physical target exists.
+$halloweenWindow=[regex]::Match($party,"(?s)date\s*:\s*'2015-10-21'(?<body>.*?)date\s*:\s*'2015-11-05'")
+if(-not $halloweenWindow.Success){throw 'WADDLE_PARTY2015_SOURCE=FAIL halloween_event_window_missing'}
+$halloweenSource=$halloweenWindow.Value
+Require-NotContains $halloweenSource "intro_to_cp.swf" 'intro_unresolved_event_route_forbidden'
+
+$partyRefs=@([regex]::Matches($halloweenSource,"ref\('([^']+)'\)")|ForEach-Object{$_.Groups[1].Value}|Select-Object -Unique)
+foreach($relative in $partyRefs){
+  $target=Join-Path $partyRoot ([string]$relative).Replace('/','\')
+  if(-not(Test-Path -LiteralPath $target -PathType Leaf)){
+    throw "WADDLE_PARTY2015_SOURCE=FAIL missing_party2015_target ref=$relative path=$target"
+  }
+}
+
+$svanillaRefs=@([regex]::Matches($halloweenSource,"'svanilla:([^']+)'")|ForEach-Object{$_.Groups[1].Value}|Select-Object -Unique)
+$svanillaRoot=Join-Path $repo 'media/default/svanilla'
+foreach($relative in $svanillaRefs){
+  $target=Join-Path $svanillaRoot ([string]$relative).Replace('/','\')
+  if(-not(Test-Path -LiteralPath $target -PathType Leaf)){
+    throw "WADDLE_PARTY2015_SOURCE=FAIL missing_svanilla_target ref=$relative path=$target"
+  }
+}
+Write-Host "WADDLE_PARTY2015_FILE_TARGET_AUDIT=PASS party2015_refs=$($partyRefs.Count) svanilla_refs=$($svanillaRefs.Count) unresolved_intro=0"
+
+$fileServer=Read-Normalized $fileServerPath
+Require-Contains $fileServer "'missing-resolved-target'" 'file_server_missing_target_trace'
+Require-Contains $fileServer 'fs.statSync(filePath).isFile()' 'file_server_physical_preflight'
 
 $fileGenerators=Read-Normalized $fileGeneratorsPath
 Require-Contains $fileGenerators 'const getRuntimePathsJson: FileGenerator' 'runtime_paths_generator'
@@ -182,4 +212,4 @@ foreach($entry in $canonicalAssets){
 $updates=Read-Normalized $updatesPath
 Require-Contains $updates 'import { UPDATES_2015 } from "./2015";' 'updates_2015_import'
 Require-Contains $updates '...UPDATES_2015' 'updates_2015_registration'
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=generated-halloween-compat donor=operation-crustacean-2015 activefeatures=20151101 shell=svanilla configs=canonical notls=canonical intro=canonical-probe-pending mall340=canonical quest_completed=10 features=party-json-parser transform=party-to-spts robot_tf=canonical bitmap_interaction=instrumented historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=generated-halloween-compat donor=operation-crustacean-2015 activefeatures=20151101 shell=svanilla configs=canonical notls=canonical intro=unresolved-route-blocked file_targets=physical-preflight mall340=canonical quest_completed=10 features=party-json-parser transform=party-to-spts robot_tf=canonical bitmap_interaction=instrumented historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical"

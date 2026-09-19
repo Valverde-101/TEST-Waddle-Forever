@@ -202,6 +202,26 @@ export class FileServer {
       }
     }
 
+    if (filePath !== undefined) {
+      // A timeline mapping is only valid if its resolved physical target exists.
+      // Detect stale references before readFile(): ENOENT is an asset-resolution
+      // problem and must not surface as an opaque HTTP 500/server exception.
+      let resolvedTargetIsFile = false;
+      try {
+        resolvedTargetIsFile = fs.statSync(filePath).isFile();
+      } catch {
+        resolvedTargetIsFile = false;
+      }
+
+      if (!resolvedTargetIsFile) {
+        traceFileResolution(route, 'error', 'missing-resolved-target', {
+          resolver: modName !== undefined ? 'mod' : 'game-data',
+          target: resolvedTarget
+        });
+        return undefined;
+      }
+    }
+
     if (filePath === undefined) {
       const generator = this.dynamicFiles.get(route);
       if (generator !== undefined) {
