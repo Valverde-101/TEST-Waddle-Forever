@@ -367,7 +367,13 @@ export const UPDATES_2015: Update[] = [
         'close_ups/dialog_rookie_login.swf': [fairRef('close_ups/CloseUps-DialogueRookieLogin-TheFair2015.swf'), 'w.p2015.may.login'],
         'close_ups/party_map.swf': [fairRef('close_ups/ENCloseUpsPartyMap-TheFair2015.swf'), 'w.p2015.may.partymap', 'party_map'],
         'close_ups/party_map_note.swf': [fairRef('close_ups/ENCloseUpsPartyMapNote-TheFair2015.swf'), 'party_map_note'],
-        'close_ups/ride_prompt.swf': [fairRef('close_ups/ENCloseUpsRidePrompt-TheFair2015.swf'), 'w.p2015.may.rideprompt', 'ride_prompt']
+        'close_ups/ride_prompt.swf': [fairRef('close_ups/ENCloseUpsRidePrompt-TheFair2015.swf'), 'w.p2015.may.rideprompt', 'ride_prompt'],
+        // Historical Fair paths.json maps these exact MayParty avatar tokens.
+        // "coyote" intentionally points at werewolf.swf in the original config.
+        'avatar/sprites/werewolf.swf': [fairRef('avatar/AvatarSpritesWerewolf.swf'), 'w.avatarSprite.coyote'],
+        'avatar/sprites/crab.swf': [fairRef('avatar/AvatarSpritesCrab.swf'), 'w.avatarSprite.crab'],
+        'avatar/sprites/dragon.swf': [fairRef('avatar/AvatarSpritesDragon.swf'), 'w.avatarSprite.dragon'],
+        'avatar/sprites/robotcgrey.swf': [fairRef('avatar/AvatarSpritesRobotCGrey.swf'), 'w.avatarSprite.robo']
       },
       localChanges: {
         'close_ups/quest_interface.swf': { en: fairRef('close_ups/CloseUpsEN-QuestInterface-TheFair2015.swf') },
