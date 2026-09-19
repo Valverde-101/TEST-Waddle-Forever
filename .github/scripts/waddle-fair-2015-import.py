@@ -154,9 +154,9 @@ def main():
     ordered = sorted(entries.values(), key=lambda e: e["relativePath"].lower())
     print("WADDLE_FAIR2015_DISCOVERY page={} links={} candidates={}".format(PAGE, len(parser.links), len(ordered)), flush=True)
     for link in parser.links:
-        if link["section"].lower() == "minigames":
+        if link["label"] in {"Balloon Pop", "Daily Spin", "Feed-A-Puffle", "Lunar Launch", "Memory Card Game", "Puffle Paddle", "Puffle Shuffle", "Puffle Soaker", "Super Hero Bounce"}:
             print("WADDLE_FAIR2015_MINIGAME_PAGE name={} url={}".format(link["label"], urljoin(PAGE, link["href"])), flush=True)
-    for row in re.findall(r"<tr\\b[^>]*>.*?</tr>", html, re.I | re.S):
+    for row in re.findall(r"<tr\b[^>]*>.*?</tr>", html, re.I | re.S):
         row_links = IndexLinks()
         row_links.feed(row)
         swfs = []
