@@ -4,7 +4,8 @@ param(
   [Parameter(Mandatory)][string]$Repository,
   [Parameter(Mandatory)][string]$ExpectedSha,
   [string]$TargetBranch = 'dev',
-  [string]$CertificationRunId = ''
+  [string]$CertificationRunId = '',
+  [switch]$CleanupAcceptedArtifacts
 )
 
 Set-StrictMode -Version Latest
@@ -248,6 +249,36 @@ try {
   }
   throw "WADDLE_PROMOTE=FAIL canonical_launch_or_verification error=$primaryFailure"
 }
+$removed=0
+if($CleanupAcceptedArtifacts){
+  foreach($preview in @($previewWorktrees)){
+    $path=[string]$preview.FullName
+    $result=Invoke-Git -Repo $canonical -Arguments @('worktree','remove','--force','--force',$path) -AllowFailure
+    if($result.code-ne0 -and (Test-Path -LiteralPath $path)){
+      throw "WADDLE_PROMOTE_CLEANUP=FAIL preview=$path output=$($result.text)"
+    }
+    if(Test-Path -LiteralPath $path){Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction Stop}
+    $removed++
+  }
+  Invoke-Git -Repo $canonical -Arguments @('worktree','prune') | Out-Null
+  if(Test-Path -LiteralPath $previewBase -PathType Container){
+    $left=@(Get-ChildItem -LiteralPath $previewBase -Force -ErrorAction SilentlyContinue)
+    if($left.Count -eq 0){Remove-Item -LiteralPath $previewBase -Force -ErrorAction SilentlyContinue}
+  }
+
+  $quarantineBase=Join-Path $AndroidBuildRoot 'Previews\Quarantine'
+  if(Test-Path -LiteralPath $quarantineBase -PathType Container){
+    foreach($entry in @(Get-ChildItem -LiteralPath $quarantineBase -Force -ErrorAction SilentlyContinue)){
+      if($entry.Name -match '^canonical-(tracked-|user-data-|dev$)'){
+        Remove-Item -LiteralPath $entry.FullName -Recurse -Force -ErrorAction Stop
+      }
+    }
+    $left=@(Get-ChildItem -LiteralPath $quarantineBase -Force -ErrorAction SilentlyContinue)
+    if($left.Count -eq 0){Remove-Item -LiteralPath $quarantineBase -Force -ErrorAction SilentlyContinue}
+  }
+  Write-Host "WADDLE_PROMOTE_CLEANUP=PASS previews_removed=$removed canonical_quarantine_removed=true canonical_repo_preserved=$canonical"
+}
+
 $state=[ordered]@{
   schema='waddle-canonical-promotion/v1'
   status='PASS'
@@ -256,9 +287,9 @@ $state=[ordered]@{
   source_sha=$expected
   certification_run_id=$CertificationRunId
   canonical_repo=$canonical
-  preview_worktrees_removed=0
-  preview_worktrees_retained=$previewWorktrees.Count
-  pending_user_acceptance=$true
+  preview_worktrees_removed=$removed
+  preview_worktrees_retained=if($CleanupAcceptedArtifacts){0}else{$previewWorktrees.Count}
+  pending_user_acceptance=(-not $CleanupAcceptedArtifacts)
   tracked_backup_root=$trackedBackupRoot
   migrated_user_data=$migratedUserData
   migrated_swf_cache=$migratedSwfCache
@@ -267,4 +298,4 @@ $state=[ordered]@{
   promoted_utc=[DateTime]::UtcNow.ToString('o')
 }
 $state | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $canonical '.work\state\waddle-canonical-promotion.json') -Encoding UTF8
-Write-Host "WADDLE_PROMOTE=PASS mode=canonical_dev branch=$TargetBranch sha=$expected repo=$canonical previews_retained=$($previewWorktrees.Count) user_data_migrated=$migratedUserData runtime_pid=$($runtime.pid)"
+Write-Host "WADDLE_PROMOTE=PASS mode=canonical_dev branch=$TargetBranch sha=$expected repo=$canonical previews_removed=$removed cleanup_accepted=$([bool]$CleanupAcceptedArtifacts) user_data_migrated=$migratedUserData runtime_pid=$($runtime.pid)"
