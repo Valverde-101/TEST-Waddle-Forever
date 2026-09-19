@@ -82,10 +82,14 @@ def read_url(url, retries=3):
 def normalized_name(link):
     href = unquote(link["href"])
     # Mirror uses either File%3AName.swf.html or wiki/File:Name.swf.
-    file_match = re.search(r"(?:File:|File%3A)([^/?#]+?\.swf)(?:\.html)?(?:[?#]|$)", href, re.I)
-    if not file_match:
-        return None
-    name = unquote(file_match.group(1))
+    direct = urlsplit(href).path
+    if "/static/images/archives/" in direct.lower() and direct.lower().endswith(".swf"):
+        name = Path(direct).name
+    else:
+        file_match = re.search(r"(?:File:|File%3A)([^/?#]+?\.swf)(?:\.html)?(?:[?#]|$)", href, re.I)
+        if not file_match:
+            return None
+        name = unquote(file_match.group(1))
     if not name.lower().endswith(".swf") or "/" in name or "\\" in name or name in (".", ".."):
         return None
     return name
@@ -109,6 +113,8 @@ def media_url(file_page, filename):
     return unique[0]
 
 def category_for(link, filename):
+    if filename.lower().startswith("music"):
+        return "music"
     if link["category"] != "other":
         return link["category"]
     name = filename.lower()
@@ -161,7 +167,7 @@ def main():
     dest.mkdir(parents=True, exist_ok=True)
     historical = []
     for entry in ordered:
-        entry["url"] = media_url(entry["filePage"], entry["name"])
+        entry["url"] = (entry["filePage"] if "/static/images/archives/" in urlsplit(entry["filePage"]).path.lower() else media_url(entry["filePage"], entry["name"]))
         target = (dest / entry["relativePath"]).resolve()
         if dest not in target.parents:
             raise RuntimeError("WADDLE_FAIR2015=FAIL path_traversal")
