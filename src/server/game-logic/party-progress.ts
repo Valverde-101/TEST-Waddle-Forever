@@ -115,6 +115,16 @@ export class PartyProgressStore {
     return true;
   }
 
+  /** Spend Fair silver tickets independently from normal ticket balance. */
+  public spendFairSilverTicket(config: PartyProgressConfig, count = 1): boolean {
+    if (config.id !== 'fair-2015' || !config.ticketBased ||
+        !Number.isSafeInteger(count) || count <= 0) return false;
+    const state = this.getMutable(config);
+    if ((state.silverTicket ?? 0) < count) return false;
+    state.silverTicket = (state.silverTicket ?? 0) - count;
+    return true;
+  }
+
   public spinFairOncePerUtcDay(config: PartyProgressConfig, utcDay: number): boolean {
     if (!config.ticketBased || !Number.isSafeInteger(utcDay) || utcDay <= 0) return false;
     const state = this.getMutable(config);
