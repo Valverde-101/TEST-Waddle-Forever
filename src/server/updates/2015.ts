@@ -252,6 +252,64 @@ const tileGlobalChanges = Object.fromEntries(Array.from({length:9},(_,i)=>[`clos
 const tileLocalChanges = Object.fromEntries(Array.from({length:9},(_,i)=>[`close_ups/tiles_minigame${i}.swf`,{en:ref(`close_ups/Close_upsTiles_minigame${i}-HalloweenParty2015.swf`)}]));
 const musicFileChanges = Object.fromEntries(HALLOWEEN_2015_MUSIC_IDS.map(id=>[`play/v2/content/global/music/${id}.swf`,ref(`music/Music${id}.swf`)]));
 
+// Original Fair 2015 minigame archive assets, mounted at the URLs requested
+// by the late-AS3 game launchers. This is separate from Halloween's game runtime.
+const FAIR_2015_MINIGAME_FILES = {
+  'play/v2/games/cp_party_games/spin/bootstrap.swf': fairRef('minigames/daily_spin/GamesSpinBootstrap.swf'),
+  'play/v2/games/cp_party_games/spin/main.swf': fairRef('minigames/daily_spin/GamesSpinMain.swf'),
+  'play/v2/games/cp_party_games/spin/lang/en/locale.swf': fairRef('minigames/daily_spin/GamesSpinLangENLocale.swf'),
+  'play/v2/games/cp_party_games/spin/lang/en/spin.swf': fairRef('minigames/daily_spin/GamesSpinLangENSpin.swf'),
+  'play/v2/games/cp_party_games/spin/lang/en/title.swf': fairRef('minigames/daily_spin/GamesSpinLangENTitle.swf'),
+  'play/v2/games/cp_party_games/bell/bootstrap.swf': fairRef('minigames/lunar_launch/GamesBellBootstrap.swf'),
+  'play/v2/games/cp_party_games/bell/main.swf': fairRef('minigames/lunar_launch/GamesBellMain.swf'),
+  'play/v2/games/cp_party_games/bell/lang/en/locale.swf': fairRef('minigames/lunar_launch/GamesBellLangENLocale.swf'),
+  'play/v2/games/cp_party_games/bell/lang/en/title.swf': fairRef('minigames/lunar_launch/GamesBellLangENTitle.swf'),
+  'play/v2/games/cp_party_games/paddle/bootstrap.swf': fairRef('minigames/puffle_paddle/GamesPufflePaddle-Bootstrap-TheFair2015.swf'),
+  'play/v2/games/cp_party_games/paddle/main.swf': fairRef('minigames/puffle_paddle/GamesPufflePaddle-TheFair2015.swf'),
+  'play/v2/games/cp_party_games/shuffle/bootstrap.swf': fairRef('minigames/puffle_shuffle/PuffleShuffleBootstrap.swf'),
+  'play/v2/games/cp_party_games/shuffle/lang/en/locale.swf': fairRef('minigames/puffle_shuffle/PuffleShuffleLocale.swf'),
+  'play/v2/games/cp_party_games/shuffle/lang/en/title.swf': fairRef('minigames/puffle_shuffle/PuffleShuffle_title.swf'),
+  'play/v2/games/cp_party_games/shuffle/lang/en/sign.swf': fairRef('minigames/puffle_shuffle/PuffleShuffleSign.swf'),
+  'play/v2/games/cp_party_games/bounce/main.swf': fairRef('minigames/super_hero_bounce/GamesCpPartyGamesBounceMain.swf'),
+  'play/v2/games/cp_party_games/bounce/lang/en/locale.swf': fairRef('minigames/super_hero_bounce/GamesChaseLangEnLocale.swf'),
+  'play/v2/games/cp_party_games/spin/lang/de/locale.swf': fairRef('minigames/daily_spin/GamesSpinLangDELocale.swf'),
+  'play/v2/games/cp_party_games/spin/lang/de/spin.swf': fairRef('minigames/daily_spin/GamesSpinLangDESpin.swf'),
+  'play/v2/games/cp_party_games/spin/lang/de/title.swf': fairRef('minigames/daily_spin/GamesSpinLangDETitle.swf'),
+  'play/v2/games/cp_party_games/bell/lang/de/locale.swf': fairRef('minigames/lunar_launch/GamesBellLangDELocale.swf'),
+  'play/v2/games/cp_party_games/bell/lang/de/title.swf': fairRef('minigames/lunar_launch/GamesBellLangDETitle.swf'),
+  'play/v2/games/cp_party_games/spin/lang/es/locale.swf': fairRef('minigames/daily_spin/GamesSpinLangESLocale.swf'),
+  'play/v2/games/cp_party_games/spin/lang/es/spin.swf': fairRef('minigames/daily_spin/GamesSpinLangESSpin.swf'),
+  'play/v2/games/cp_party_games/spin/lang/es/title.swf': fairRef('minigames/daily_spin/GamesSpinLangESTitle.swf'),
+  'play/v2/games/cp_party_games/bell/lang/es/locale.swf': fairRef('minigames/lunar_launch/GamesBellLangESLocale.swf'),
+  'play/v2/games/cp_party_games/bell/lang/es/title.swf': fairRef('minigames/lunar_launch/GamesBellLangESTitle.swf'),
+  'play/v2/games/cp_party_games/spin/lang/fr/locale.swf': fairRef('minigames/daily_spin/GamesSpinLangFRLocale.swf'),
+  'play/v2/games/cp_party_games/spin/lang/fr/spin.swf': fairRef('minigames/daily_spin/GamesSpinLangFRSpin.swf'),
+  'play/v2/games/cp_party_games/spin/lang/fr/title.swf': fairRef('minigames/daily_spin/GamesSpinLangFRTitle.swf'),
+  'play/v2/games/cp_party_games/bell/lang/fr/locale.swf': fairRef('minigames/lunar_launch/GamesBellLangFRLocale.swf'),
+  'play/v2/games/cp_party_games/bell/lang/fr/title.swf': fairRef('minigames/lunar_launch/GamesBellLangFRTitle.swf'),
+  'play/v2/games/cp_party_games/spin/lang/pt/locale.swf': fairRef('minigames/daily_spin/GamesSpinLangPTLocale.swf'),
+  'play/v2/games/cp_party_games/spin/lang/pt/spin.swf': fairRef('minigames/daily_spin/GamesSpinLangPTSpin.swf'),
+  'play/v2/games/cp_party_games/spin/lang/pt/title.swf': fairRef('minigames/daily_spin/GamesSpinLangPTTitle.swf'),
+  'play/v2/games/cp_party_games/bell/lang/pt/locale.swf': fairRef('minigames/lunar_launch/GamesBellLangPTLocale.swf'),
+  'play/v2/games/cp_party_games/bell/lang/pt/title.swf': fairRef('minigames/lunar_launch/GamesBellLangPTTitle.swf'),
+  'play/v2/games/cp_party_games/spin/lang/ru/locale.swf': fairRef('minigames/daily_spin/GamesSpinLangRULocale.swf'),
+  'play/v2/games/cp_party_games/spin/lang/ru/spin.swf': fairRef('minigames/daily_spin/GamesSpinLangRUSpin.swf'),
+  'play/v2/games/cp_party_games/spin/lang/ru/title.swf': fairRef('minigames/daily_spin/GamesSpinLangRUTitle.swf'),
+  'play/v2/games/cp_party_games/bell/lang/ru/locale.swf': fairRef('minigames/lunar_launch/GamesBellLangRULocale.swf'),
+  'play/v2/games/cp_party_games/bell/lang/ru/title.swf': fairRef('minigames/lunar_launch/GamesBellLangRUTitle.swf'),
+  'play/v2/content/global/music/618.swf': fairRef('minigames/daily_spin/Music618.swf'),
+  'play/v2/content/global/music/614.swf': fairRef('minigames/lunar_launch/Music614.swf'),
+  'play/v2/content/global/music/222.swf': fairRef('minigames/puffle_shuffle/Music222.swf'),
+  'play/v2/content/global/music/395.swf': fairRef('minigames/super_hero_bounce/Music395.swf'),
+  'play/v2/games/cp_party_games/bounce/launcher.swf': fairRef('minigames/super_hero_bounce/ClientGame_launcher_3.swf'),
+  'play/v2/games/cp_party_games/balloon_pop/main.swf': fairRef('minigames/balloon_pop/BalloonPop.swf'),
+  'play/v2/games/cp_party_games/feed_a_puffle/main.swf': fairRef('minigames/feed_a_puffle/Feed-A-Puffle.swf'),
+  'play/v2/games/cp_party_games/memory_card_game/main.swf': fairRef('minigames/memory_card_game/MemoryCardGame.swf'),
+  'play/v2/games/cp_party_games/puffle_soaker/main.swf': fairRef('minigames/puffle_soaker/PuffleSoaker.swf'),
+  'play/v2/games/cp_party_games/spin/game.swf': fairRef('minigames/daily_spin/Grab&Spin.swf'),
+  'play/v2/games/cp_party_games/bell/game.swf': fairRef('minigames/lunar_launch/RingTheBell.swf')
+};
+
 export const UPDATES_2015: Update[] = [
   { date:'2015-05-01', rooms:{ lake:'archives:RoomsLake-May2015.swf' } },
   {
@@ -268,6 +326,9 @@ export const UPDATES_2015: Update[] = [
         'play/v2/client/interface.swf': fairRef('client/ClientInterfaceFair2015.swf'),
         'play/v2/content/global/content/interface.swf': fairRef('client/ClientInterfaceFair2015.swf'),
         'play/v2/content/global/content/party_icon.swf': fairRef('content/ContentParty_icon-TheFair2015.swf'),
+        'play/v2/content/global/scavenger_hunt/scavenger_hunt_icon.swf': fairRef('content/ContentParty_icon-TheFair2015.swf'),
+        // QuestCommunicator is a shared late-AS3 client module, not Halloween event art.
+        'play/v2/client/QuestCommunicator.swf': ref('client/QuestCommunicator.swf'),
         'play/v2/content/global/logo/logo.swf': fairRef('content/ContentLogo-TheFair2015.swf'),
         'play/v2/content/global/membership/party1.swf': fairRef('membership/MembershipParty1-TheFair2015.swf'),
         'play/v2/content/global/membership/party2.swf': fairRef('membership/MembershipParty2-TheFair2015.swf'),
@@ -278,10 +339,11 @@ export const UPDATES_2015: Update[] = [
         'play/v2/content/global/avatar/sprites/dragon.swf': fairRef('avatar/AvatarSpritesDragon.swf'),
         'play/v2/content/global/avatar/sprites/robotcgrey.swf': fairRef('avatar/AvatarSpritesRobotCGrey.swf'),
         'play/v2/content/global/avatar/sprites/werewolf.swf': fairRef('avatar/AvatarSpritesWerewolf.swf'),
-        ...FAIR_2015_MUSIC_FILES
+        ...FAIR_2015_MUSIC_FILES,
+        ...FAIR_2015_MINIGAME_FILES
       },
       globalChanges: {
-        'content/party_icon.swf': [fairRef('content/ContentParty_icon-TheFair2015.swf'), 'party_icon'],
+        'content/party_icon.swf': [fairRef('content/ContentParty_icon-TheFair2015.swf'), 'party_icon', 'scavenger_hunt_icon'],
         'close_ups/quest_interface.swf': [fairRef('close_ups/CloseUpsEN-QuestInterface-TheFair2015.swf'), 'w.app.generic.partyinterface', 'scavenger_hunt'],
         'close_ups/party_map.swf': [fairRef('close_ups/ENCloseUpsPartyMap-TheFair2015.swf'), 'party_map'],
         'close_ups/party_map_note.swf': [fairRef('close_ups/ENCloseUpsPartyMapNote-TheFair2015.swf'), 'party_map_note'],
