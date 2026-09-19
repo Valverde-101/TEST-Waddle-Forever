@@ -64,6 +64,55 @@ const getRuntimePathsJson: FileGenerator = (d) => {
   return JSON.stringify(paths);
 };
 
+const FAIR_2015_PARTY_ROUTE = 'play/v2/content/global/content/party.swf';
+
+/**
+ * Waddle's base game crumbs predate the 2015 Fair and several entries still
+ * point at legacy non-cp_party_games URLs. While the isolated Fair controller
+ * is mounted, advertise only preserved Fair game files that actually exist.
+ * Outside the Fair window getGamesJson remains byte-for-byte behaviorally
+ * unchanged, so Halloween and every other timeline keep their own game table.
+ */
+const getRuntimeGamesJson: FileGenerator = (d) => {
+  const games = JSON.parse(getGamesJson(d)) as Record<string, {
+    name: string;
+    room_id: string;
+    music_id: string;
+    stamp_group_id: string;
+    path: string;
+    is_as3: boolean;
+    show_player_in_room: boolean;
+  }>;
+
+  if (d.lookupFile(FAIR_2015_PARTY_ROUTE) === 'fair2015:cpimagined/content/party.swf') {
+    const fairGames = {
+      balloon: ['Balloon Pop', '942', '0', 'cp_party_games/balloon_pop/main.swf', false],
+      bell: ['Ring The Bell', '943', '614', 'cp_party_games/bell/bootstrap.swf', false],
+      feed: ['Feed A Puffle', '944', '0', 'cp_party_games/feed_a_puffle/main.swf', false],
+      memory: ['Memory', '945', '0', 'cp_party_games/memory_card_game/main.swf', false],
+      paddle: ['Puffle Paddle', '946', '0', 'cp_party_games/paddle/bootstrap.swf', false],
+      shuffle: ['Puffle Shuffle', '947', '222', 'cp_party_games/shuffle/bootstrap.swf', false],
+      spin: ['Spin The Wheel', '948', '618', 'cp_party_games/spin/bootstrap.swf', false],
+      bounce: ['Super Hero Bounce', '961', '395', 'cp_party_games/bounce/launcher.swf', true],
+      soaker: ['Puffle Soaker', '941', '0', 'cp_party_games/puffle_soaker/main.swf', false]
+    } as const;
+
+    for (const [key, [name, roomId, musicId, gamePath, isAs3]] of Object.entries(fairGames)) {
+      games[key] = {
+        name,
+        room_id: roomId,
+        music_id: musicId,
+        stamp_group_id: '0',
+        path: gamePath,
+        is_as3: isAs3,
+        show_player_in_room: false
+      };
+    }
+  }
+
+  return JSON.stringify(games);
+};
+
 const HALLOWEEN_2015_MALL_ROOM_ROUTE = 'play/v2/content/global/rooms/mall.swf';
 const HALLOWEEN_2015_SCHOOL_ROOM_ROUTE = 'play/v2/content/global/rooms/school.swf';
 const HALLOWEEN_2015_SOLO_ROOM_ROUTE = 'play/v2/content/global/rooms/partysolo1.swf';
@@ -284,8 +333,8 @@ const GET_GENERATORS: Record<string, FileGenerator> = {
   'play/en/web_service/game_configs/stage_script_messages.json': getStageScriptMessagesJson,
   'play/en/web_service/game_configs/paths.json': getRuntimePathsJson,
   'play/v2/content/global/crumbs/global_crumbs.swf': getGlobalCrumbsSwf,
-  'play/en/web_service/game_configs/games.json': getGamesJson,
-  'en/web_service/games.json': getGamesJson,
+  'play/en/web_service/game_configs/games.json': getRuntimeGamesJson,
+  'en/web_service/games.json': getRuntimeGamesJson,
   'play/en/web_service/game_configs/paper_items.json': getPaperItemsJson,
   'play/en/web_service/game_configs/rooms.json': getRuntimeRoomsJson,
   'setup.xml': getSetupXml,
