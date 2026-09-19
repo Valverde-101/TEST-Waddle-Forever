@@ -173,7 +173,10 @@ $state = [ordered]@{
   assetTargets = @($assets | ForEach-Object { [string]$_.target } | Sort-Object)
 }
 $utf8 = New-Object System.Text.UTF8Encoding($false)
-$stateJson = ($state | ConvertTo-Json -Depth 5) -replace "`r`n", "`n"
+# Compact JSON is the canonical on-disk representation. Windows PowerShell 5
+# otherwise emits version-specific alignment whitespace, which can create a
+# false generated-drift failure even when the state is semantically identical.
+$stateJson = ($state | ConvertTo-Json -Depth 5 -Compress) -replace "`r`n", "`n"
 [IO.File]::WriteAllText((Join-Path $targetRoot 'canonical-state.json'), $stateJson + "`n", $utf8)
 
 Write-Host "WADDLE_HALLOWEEN2015_CANONICAL=PASS assets=$verified downloaded=$downloaded reused=$reused source=$($manifest.sourceRepository)@$($manifest.sourceCommit) manifest=$manifestPathResolved target=$targetRoot state=deterministic"
