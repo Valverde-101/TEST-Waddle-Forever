@@ -70,7 +70,7 @@ jobs:
       WADDLE_EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       WADDLE_TARGET_BRANCH: ${{ github.head_ref || github.ref_name }}
       WADDLE_CERT_RUN_ID: ${{ needs.wait-certification.outputs.certification_run_id }}
-      WADDLE_PREVIEW_BRANCH: feat/halloween-party-2015
+      WADDLE_EVENT_NAME: ${{ github.event_name }}
     steps:
       - name: Resolve AndroidBuild Core and canonical repository
         shell: powershell
@@ -106,15 +106,19 @@ jobs:
           Write-Host "VALIDATED_SOURCE_SYNC_CORE=PASS root=$root core=$coreVersion git=$git canonical_repo=$repo"
 
       - id: policy
-        name: Select certified preview policy
+        name: Select physical runtime policy
         shell: powershell
         run: |
-          $run=($env:WADDLE_TARGET_BRANCH -eq $env:WADDLE_PREVIEW_BRANCH)
-          "run=$($run.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          if($run){
+          $preview=($env:WADDLE_EVENT_NAME -eq 'pull_request' -and $env:WADDLE_TARGET_BRANCH -match '^(feat|party)/')
+          $promote=($env:WADDLE_EVENT_NAME -eq 'push' -and $env:WADDLE_TARGET_BRANCH -eq 'dev')
+          "run=$($preview.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "promote=$($promote.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          if($preview){
             Write-Host "VALIDATED_SOURCE_SYNC_POLICY=PASS mode=isolated_preview target=$env:WADDLE_TARGET_BRANCH"
+          }elseif($promote){
+            Write-Host "VALIDATED_SOURCE_SYNC_POLICY=PASS mode=canonical_dev_promotion target=$env:WADDLE_TARGET_BRANCH"
           }else{
-            Write-Host "VALIDATED_SOURCE_SYNC=PASS mode=no_live_preview target=$env:WADDLE_TARGET_BRANCH canonical_mutation=false"
+            Write-Host "VALIDATED_SOURCE_SYNC=PASS mode=no_live_activation target=$env:WADDLE_TARGET_BRANCH canonical_mutation=false"
           }
 
       - name: Materialize exact-SHA certified preview launcher
