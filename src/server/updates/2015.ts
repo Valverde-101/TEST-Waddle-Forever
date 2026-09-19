@@ -117,9 +117,12 @@ export const UPDATES_2015: Update[] = [
       music:HALLOWEEN_2015_MUSIC,
       fileChanges:{
         'play/v2/content/global/content/party.swf':ref('content/party-runtime-2015.swf'),
-        // Serve the byte-pinned modern configuration bundle instead of forcing the
-        // client through its missing-bundle fallback on every fresh boot.
-        'play/en/web_service/game_configs.bin':ref('game_configs/game_configs.bin'),
+        // Do NOT mount the archived recreation game_configs.bin here.
+        // The known-good Halloween runtime intentionally lets this optional bundle
+        // miss, then loads Waddle's generated chunked config JSON. Mounting the
+        // recreation bundle replaces our timeline rooms/music/paths wholesale
+        // (for example it advertises unpreserved 2048-2053 music) and breaks the
+        // party icon/robot quest bootstrap even though the SWFs themselves resolve.
         // A 2012 update left its approximation shell persistent; restore the preserved late-AS3 shell for 2015.
         'play/v2/client/shell.swf':'svanilla:media/play/v2/client/shell.swf',
         // Never substitute intro_to_cp with world.swf: loading world as a child

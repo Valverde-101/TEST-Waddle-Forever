@@ -86,7 +86,6 @@ $partyContracts=@{
   selector="activeFeatures\s*:\s*'20151101'";
   id="id\s*:\s*'halloween-2015'";
   runtime="'play/v2/content/global/content/party\.swf'\s*:\s*ref\('content/party-runtime-2015\.swf'\)";
-  configs="'play/en/web_service/game_configs\.bin'\s*:\s*ref\('game_configs/game_configs\.bin'\)";
   shell="'play/v2/client/shell\.swf'\s*:\s*'svanilla:media/play/v2/client/shell\.swf'";
   interface="'play/v2/content/global/content/interface\.swf'\s*:\s*ref\('client/ClientInterface-HalloweenParty2015\.swf'\)";
   features="'play/v2/content/global/content/features\.swf'\s*:\s*ref\('content/ContentFeatures-HalloweenParty2015\.swf'\)";
@@ -109,6 +108,7 @@ foreach($needle in @('gameStringChanges:HALLOWEEN_2015_DIALOGUE_STRINGS','rooms:
 Require-NotContains $party "ref('content/party.swf')" 'mixed_2310_party_runtime'
 Require-NotContains $party "ref('content/party-base-2015.swf')" 'obsolete_mayparty_runtime'
 Require-NotContains $party "ref('content/map.swf')" 'unproven_recreation_map'
+Require-NotContains $party "'play/en/web_service/game_configs.bin':ref('game_configs/game_configs.bin')" 'recreation_game_configs_live_route_forbidden'
 Require-NotContains $party "'play/v2/client/intro_to_cp.swf':'svanilla:media/play/v2/client/intro_to_cp.swf'" 'intro_missing_svanilla_target_forbidden'
 Require-NotContains $party "'play/v2/content/global/rooms/NOTLS-ALL-EN.swf':'svanilla:media/play/v2/content/global/rooms/NOTLS-ALL-EN.swf'" 'notls_missing_svanilla_target_forbidden'
 
@@ -220,4 +220,4 @@ foreach($entry in $canonicalAssets){
 $updates=Read-Normalized $updatesPath
 Require-Contains $updates 'import { UPDATES_2015 } from "./2015";' 'updates_2015_import'
 Require-Contains $updates '...UPDATES_2015' 'updates_2015_registration'
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=generated-halloween-compat donor=operation-crustacean-2015 activefeatures=20151101 shell=svanilla configs=canonical notls=canonical intro=unresolved-route-blocked file_targets=manifest-audited+nonfatal-missing historical=manifest-pinned mall340=canonical quest_completed=10 features=party-json-parser transform=party-to-spts robot_tf=canonical bitmap_interaction=instrumented historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=generated-halloween-compat donor=operation-crustacean-2015 activefeatures=20151101 shell=svanilla configs=chunked-fallback notls=canonical intro=unresolved-route-blocked file_targets=manifest-audited+nonfatal-missing historical=manifest-pinned mall340=canonical quest_completed=10 features=party-json-parser transform=party-to-spts robot_tf=canonical bitmap_interaction=instrumented historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical"
