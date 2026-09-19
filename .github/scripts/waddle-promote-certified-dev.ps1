@@ -70,6 +70,12 @@ $global:LASTEXITCODE=0
 $remoteHead=(Invoke-Git -Repo $canonical -Arguments @('rev-parse',$ref)).text.ToLowerInvariant()
 if($remoteHead-ne$expected){throw "WADDLE_PROMOTE=FAIL stale_certification expected=$expected remote_head=$remoteHead"}
 
+# Preflight before stopping the known-good interactive game.
+$trackedBefore=(Invoke-Git -Repo $canonical -Arguments @('status','--porcelain=v1','--untracked-files=no')).text
+if(-not[string]::IsNullOrWhiteSpace($trackedBefore)){
+  throw "WADDLE_PROMOTE=FAIL canonical_tracked_changes_present before_stop repo=$canonical status=$trackedBefore"
+}
+
 Stop-ManagedWaddle
 
 $previewBase=Join-Path $AndroidBuildRoot 'Previews\Waddle-Forever'
@@ -86,6 +92,12 @@ foreach($line in @($registered -split "\r?\n" | Where-Object {$_ -like 'worktree
   $previewWorktrees+=Get-Item -LiteralPath $full
 }
 $previewWorktrees=@($previewWorktrees | Sort-Object LastWriteTimeUtc)
+# Keep an independent snapshot of canonical user data before any preview is imported.
+$backupBase=Join-Path $AndroidBuildRoot ('Previews\Quarantine\canonical-user-data-'+[DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'))
+if(Test-Path -LiteralPath (Join-Path $canonical 'user-data') -PathType Container){
+  Copy-Tree -Source (Join-Path $canonical 'user-data') -Destination $backupBase | Out-Null
+  Write-Host "WADDLE_PROMOTE_BACKUP=PASS user_data=$backupBase"
+}
 $migratedUserData=0
 $migratedSwfCache=0
 foreach($preview in $previewWorktrees){
@@ -138,26 +150,52 @@ if($actual-ne$expected -or $branch-ne$TargetBranch){throw "WADDLE_PROMOTE=FAIL c
 # Deletion/cleanup is a separate explicit post-acceptance operation.
 $removed=0
 Write-Host "WADDLE_PROMOTE_PREVIEW_RETENTION=PASS retained=$($previewWorktrees.Count) cleanup=deferred_until_user_acceptance"
+$fallbackPreview=@($previewWorktrees | Where-Object { $_.FullName -match '(?i)halloween-party-2015' } | Select-Object -Last 1)
+if($fallbackPreview.Count -eq 0 -and $previewWorktrees.Count -gt 0){$fallbackPreview=@($previewWorktrees | Select-Object -Last 1)}
 $start=Join-Path $canonical '.github\scripts\waddle-start.ps1'
 if(-not(Test-Path -LiteralPath $start -PathType Leaf)){throw "WADDLE_PROMOTE=FAIL start_missing=$start"}
-$tracking=$env:RUNNER_TRACKING_ID
-try{
-  Remove-Item Env:\RUNNER_TRACKING_ID -ErrorAction SilentlyContinue
-  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $start -AndroidBuildRoot $AndroidBuildRoot
-  $code=$LASTEXITCODE;$global:LASTEXITCODE=0
-}finally{
-  if([string]::IsNullOrEmpty($tracking)){Remove-Item Env:\RUNNER_TRACKING_ID -ErrorAction SilentlyContinue}else{$env:RUNNER_TRACKING_ID=$tracking}
+try {
+  $tracking=$env:RUNNER_TRACKING_ID
+  try{
+    Remove-Item Env:\RUNNER_TRACKING_ID -ErrorAction SilentlyContinue
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $start -AndroidBuildRoot $AndroidBuildRoot
+    $code=$LASTEXITCODE;$global:LASTEXITCODE=0
+  }finally{
+    if([string]::IsNullOrEmpty($tracking)){Remove-Item Env:\RUNNER_TRACKING_ID -ErrorAction SilentlyContinue}else{$env:RUNNER_TRACKING_ID=$tracking}
+  }
+  if($code-ne0){throw "WADDLE_PROMOTE=FAIL start_exit=$code"}
+  
+  $runtimePath=Join-Path $canonical '.work\state\waddle-client.json'
+  if(-not(Test-Path -LiteralPath $runtimePath -PathType Leaf)){throw "WADDLE_PROMOTE=FAIL runtime_state_missing=$runtimePath"}
+  $runtime=Get-Content -LiteralPath $runtimePath -Raw | ConvertFrom-Json
+  if([string]$runtime.status-ne'RUNNING'){throw "WADDLE_PROMOTE=FAIL runtime_status=$($runtime.status)"}
+  $runtimeSha=([string]$runtime.source_sha).Trim().ToLowerInvariant()
+  if($runtimeSha-ne$expected){throw "WADDLE_PROMOTE=FAIL runtime_sha=$runtimeSha expected=$expected"}
+  if(-not(Get-Process -Id ([int]$runtime.pid) -ErrorAction SilentlyContinue)){throw "WADDLE_PROMOTE=FAIL runtime_pid=$($runtime.pid)"}
+  
+  
+} catch {
+  $primaryFailure=[string]$_
+  if($fallbackPreview.Count -gt 0){
+    $oldStart=Join-Path $fallbackPreview[0].FullName '.github\scripts\waddle-start.ps1'
+    if(Test-Path -LiteralPath $oldStart -PathType Leaf){
+      try {
+        $tracking=$env:RUNNER_TRACKING_ID
+        try {
+          Remove-Item Env:\RUNNER_TRACKING_ID -ErrorAction SilentlyContinue
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $oldStart -AndroidBuildRoot $AndroidBuildRoot | Out-Host
+          $fallbackCode=$LASTEXITCODE;$global:LASTEXITCODE=0
+        } finally {
+          if([string]::IsNullOrEmpty($tracking)){Remove-Item Env:\RUNNER_TRACKING_ID -ErrorAction SilentlyContinue}else{$env:RUNNER_TRACKING_ID=$tracking}
+        }
+        Write-Host "WADDLE_PROMOTE_FALLBACK=ATTEMPTED preview=$($fallbackPreview[0].FullName) exit=$fallbackCode"
+      } catch {
+        Write-Host "WADDLE_PROMOTE_FALLBACK=FAIL preview=$($fallbackPreview[0].FullName) error=$($_.Exception.Message)"
+      }
+    }
+  }
+  throw "WADDLE_PROMOTE=FAIL canonical_launch_or_verification error=$primaryFailure"
 }
-if($code-ne0){throw "WADDLE_PROMOTE=FAIL start_exit=$code"}
-
-$runtimePath=Join-Path $canonical '.work\state\waddle-client.json'
-if(-not(Test-Path -LiteralPath $runtimePath -PathType Leaf)){throw "WADDLE_PROMOTE=FAIL runtime_state_missing=$runtimePath"}
-$runtime=Get-Content -LiteralPath $runtimePath -Raw | ConvertFrom-Json
-if([string]$runtime.status-ne'RUNNING'){throw "WADDLE_PROMOTE=FAIL runtime_status=$($runtime.status)"}
-$runtimeSha=([string]$runtime.source_sha).Trim().ToLowerInvariant()
-if($runtimeSha-ne$expected){throw "WADDLE_PROMOTE=FAIL runtime_sha=$runtimeSha expected=$expected"}
-if(-not(Get-Process -Id ([int]$runtime.pid) -ErrorAction SilentlyContinue)){throw "WADDLE_PROMOTE=FAIL runtime_pid=$($runtime.pid)"}
-
 $state=[ordered]@{
   schema='waddle-canonical-promotion/v1'
   status='PASS'
