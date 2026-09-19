@@ -85,29 +85,27 @@ const getRuntimeGamesJson: FileGenerator = (d) => {
   }>;
 
   if (d.lookupFile(FAIR_2015_PARTY_ROUTE) === 'fair2015:cpimagined/content/party.swf') {
-    const fairGames = {
-      balloon: ['Balloon Pop', '942', '0', 'cp_party_games/balloon_pop/main.swf', false],
-      bell: ['Ring The Bell', '943', '614', 'cp_party_games/bell/bootstrap.swf', false],
-      feed: ['Feed A Puffle', '944', '0', 'cp_party_games/feed_a_puffle/main.swf', false],
-      memory: ['Memory', '945', '0', 'cp_party_games/memory_card_game/main.swf', false],
-      paddle: ['Puffle Paddle', '946', '0', 'cp_party_games/paddle/bootstrap.swf', false],
-      shuffle: ['Puffle Shuffle', '947', '222', 'cp_party_games/shuffle/bootstrap.swf', false],
-      spin: ['Spin The Wheel', '948', '618', 'cp_party_games/spin/bootstrap.swf', false],
-      bounce: ['Super Hero Bounce', '961', '395', 'cp_party_games/bounce/launcher.swf', true],
-      soaker: ['Puffle Soaker', '941', '0', 'cp_party_games/puffle_soaker/main.swf', false]
-    } as const;
+    const fairGames: Record<string, {
+      name: string;
+      room_id: string;
+      music_id: string;
+      stamp_group_id: string;
+      path: string;
+      is_as3: boolean;
+      show_player_in_room: boolean;
+    }> = {
+      balloon: { name: 'Balloon Pop', room_id: '942', music_id: '0', stamp_group_id: '0', path: 'cp_party_games/balloon_pop/main.swf', is_as3: false, show_player_in_room: false },
+      bell: { name: 'Ring The Bell', room_id: '943', music_id: '614', stamp_group_id: '0', path: 'cp_party_games/bell/bootstrap.swf', is_as3: false, show_player_in_room: false },
+      feed: { name: 'Feed A Puffle', room_id: '944', music_id: '0', stamp_group_id: '0', path: 'cp_party_games/feed_a_puffle/main.swf', is_as3: false, show_player_in_room: false },
+      memory: { name: 'Memory', room_id: '945', music_id: '0', stamp_group_id: '0', path: 'cp_party_games/memory_card_game/main.swf', is_as3: false, show_player_in_room: false },
+      paddle: { name: 'Puffle Paddle', room_id: '946', music_id: '0', stamp_group_id: '0', path: 'cp_party_games/paddle/bootstrap.swf', is_as3: false, show_player_in_room: false },
+      shuffle: { name: 'Puffle Shuffle', room_id: '947', music_id: '222', stamp_group_id: '0', path: 'cp_party_games/shuffle/bootstrap.swf', is_as3: false, show_player_in_room: false },
+      spin: { name: 'Spin The Wheel', room_id: '948', music_id: '618', stamp_group_id: '0', path: 'cp_party_games/spin/bootstrap.swf', is_as3: false, show_player_in_room: false },
+      bounce: { name: 'Super Hero Bounce', room_id: '961', music_id: '395', stamp_group_id: '0', path: 'cp_party_games/bounce/launcher.swf', is_as3: true, show_player_in_room: false },
+      soaker: { name: 'Puffle Soaker', room_id: '941', music_id: '0', stamp_group_id: '0', path: 'cp_party_games/puffle_soaker/main.swf', is_as3: false, show_player_in_room: false }
+    };
 
-    for (const [key, [name, roomId, musicId, gamePath, isAs3]] of Object.entries(fairGames)) {
-      games[key] = {
-        name,
-        room_id: roomId,
-        music_id: musicId,
-        stamp_group_id: '0',
-        path: gamePath,
-        is_as3: isAs3,
-        show_player_in_room: false
-      };
-    }
+    Object.assign(games, fairGames);
   }
 
   return JSON.stringify(games);
