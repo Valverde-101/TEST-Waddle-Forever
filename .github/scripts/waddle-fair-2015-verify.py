@@ -94,7 +94,21 @@ for route in ("spin/bootstrap.swf", "spin/main.swf", "bell/bootstrap.swf",
     assert "play/v2/games/cp_party_games/" + route in minigame_changes, "missing game route: " + route
 assert "minigames/daily_spin/GamesSpinBootstrap.swf" in minigame_changes
 assert "minigames/daily_spin/GamesSpinMain.swf" in minigame_changes
+runtime_generators = (repo / "src/server/file-generators/index.ts").read_text(encoding="utf-8")
+assert "getRuntimeGamesJson" in runtime_generators
+for game_path in (
+    "cp_party_games/balloon_pop/main.swf",
+    "cp_party_games/bell/bootstrap.swf",
+    "cp_party_games/feed_a_puffle/main.swf",
+    "cp_party_games/memory_card_game/main.swf",
+    "cp_party_games/paddle/bootstrap.swf",
+    "cp_party_games/shuffle/bootstrap.swf",
+    "cp_party_games/spin/bootstrap.swf",
+    "cp_party_games/bounce/launcher.swf",
+    "cp_party_games/puffle_soaker/main.swf",
+):
+    assert game_path in runtime_generators, "Fair games.json route not scoped: " + game_path
 assert "'play/v2/content/global/content/party.swf': fairRef('cpimagined/content/party.swf')" in fair
 assert "intro_to_cp.swf': 'svanilla:media/play/v2/client/world.swf" not in fair
-print("WADDLE_FAIR2015_CONTRACT=PASS first_login=fmsgviewed interactive_keys=8 silver_join=fsilverjr game_routes=6")
+print("WADDLE_FAIR2015_CONTRACT=PASS first_login=fmsgviewed interactive_keys=8 silver_join=fsilverjr game_routes=9")
 print(f"WADDLE_FAIR2015_VERIFY=PASS main=141 minigames=53 total={len(seen)} rooms={len(room_names)} music={len(music_names)} paths={len(references)} halloween=preserved timeline=scoped")
