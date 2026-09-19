@@ -1,0 +1,20 @@
+name: Waddle The Fair 2015 Minigame Inventory
+on:
+  push:
+    branches: [feat/the-fair-2015]
+    paths:
+      - '.github/scripts/waddle-fair-2015-games.py'
+      - '.github/workflows/waddle-fair-2015-games.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Inventory referenced minigames from verified archive
+        run: python .github/scripts/waddle-fair-2015-games.py
