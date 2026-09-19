@@ -65,130 +65,131 @@ if ($required.Count -ne 132) {
   throw "WADDLE_PARTY2015_ASSETS=FAIL inventory_count=$($required.Count) expected=132"
 }
 
-$roomSet = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
-$roomNames | ForEach-Object { [void]$roomSet.Add($_) }
-function Get-Category([string]$Name) {
-  if ($roomSet.Contains($Name)) { return 'rooms' }
-  if ($Name -eq 'PenguinRobot.swf') { return 'avatar' }
-  if ($Name -like 'Client*') { return 'client' }
-  if ($Name -like 'Content*') { return 'content' }
-  if ($Name -like 'Membership*') { return 'membership' }
-  if ($Name -like 'Music*.swf') { return 'music' }
-  if ($Name -like 'Telescope*' -or $Name -like 'Binoculars*') { return 'other' }
-  return 'close_ups'
+# The versioned manifest is the authoritative historical inventory. Do not
+# rediscover the same files from a live wiki on every run: mirrors can change
+# ordering, markup or availability without the party assets changing at all.
+$manifestPath = Join-Path $target 'manifest.json'
+if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+  throw "WADDLE_PARTY2015_ASSETS=FAIL manifest_missing=$manifestPath"
+}
+$manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+if ([int]$manifest.schema -ne 3) {
+  throw "WADDLE_PARTY2015_ASSETS=FAIL manifest_schema=$($manifest.schema) expected=3"
+}
+if ([string]$manifest.party -ne 'Halloween Party 2015') {
+  throw "WADDLE_PARTY2015_ASSETS=FAIL manifest_party=$($manifest.party)"
+}
+if ([int]$manifest.requiredCount -ne 132) {
+  throw "WADDLE_PARTY2015_ASSETS=FAIL manifest_required=$($manifest.requiredCount) expected=132"
 }
 
-$pages = @(
-  'https://archives.clubpenguinwiki.info/wiki/Halloween_Party_2015',
-  'https://toolbox.solero.me/cparchives/wiki/Halloween_Party_2015.html'
-)
-$headers = @{
-  'User-Agent' = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Waddle-Forever-Halloween2015/2.0'
-  'Accept' = 'text/html,application/xhtml+xml,*/*'
+$manifestAssets = @($manifest.assets)
+if ([int]$manifest.total -ne $manifestAssets.Count -or $manifestAssets.Count -ne 132) {
+  throw "WADDLE_PARTY2015_ASSETS=FAIL manifest_total=$($manifest.total) entries=$($manifestAssets.Count) expected=132"
 }
-$html = $null
-$pageUsed = $null
-foreach ($page in $pages) {
-  try {
-    $response = Invoke-WebRequest -UseBasicParsing -Uri $page -Headers $headers -TimeoutSec 45
-    if ($response.Content -and $response.Content.Length -gt 1000) {
-      $html = $response.Content
-      $pageUsed = $page
-      break
-    }
-  } catch {
-    Write-Host "WADDLE_PARTY2015_ARCHIVE_PAGE=WARN url=$page error=$($_.Exception.Message)"
+
+$assetByName = @{}
+$assetByPath = @{}
+foreach ($entry in $manifestAssets) {
+  $name = [string]$entry.name
+  $relative = ([string]$entry.relativePath).Replace('\','/')
+  $category = [string]$entry.category
+  $url = [string]$entry.url
+  $sha256 = [string]$entry.sha256
+
+  if ([string]::IsNullOrWhiteSpace($name) -or -not $name.EndsWith('.swf',[StringComparison]::OrdinalIgnoreCase)) {
+    throw "WADDLE_PARTY2015_ASSETS=FAIL manifest_invalid_name=$name"
   }
-}
-if (-not $html) { throw 'WADDLE_PARTY2015_ASSETS=FAIL archive_page_unavailable' }
-
-$linkMap = @{}
-$matches = [regex]::Matches($html, 'href=["'']([^"'']+\.swf(?:\?[^"'']*)?)["'']', [Text.RegularExpressions.RegexOptions]::IgnoreCase)
-foreach ($match in $matches) {
-  $href = [Net.WebUtility]::HtmlDecode($match.Groups[1].Value)
-  try {
-    $absolute = [Uri]::new([Uri]$pageUsed,$href).AbsoluteUri
-    $uri = [Uri]$absolute
-    $name = [Uri]::UnescapeDataString([IO.Path]::GetFileName($uri.AbsolutePath))
-    if ($name -and $name.EndsWith('.swf',[StringComparison]::OrdinalIgnoreCase) -and -not $linkMap.ContainsKey($name)) {
-      $linkMap[$name] = $absolute
-    }
-  } catch {}
-}
-
-$missing = @($required | Where-Object { -not $linkMap.ContainsKey($_) })
-if ($missing.Count -gt 0) {
-  throw "WADDLE_PARTY2015_ASSETS=FAIL archive_missing_required count=$($missing.Count) names=$($missing -join ',')"
-}
-
-# Download every unique SWF linked from the archive page, while requiring the complete known 132-file inventory.
-$assetNames = @($linkMap.Keys | Sort-Object)
-if ($assetNames.Count -lt 132) {
-  throw "WADDLE_PARTY2015_ASSETS=FAIL archive_links_too_few count=$($assetNames.Count) expected_at_least=132"
-}
-
-$downloaded = 0
-$reused = 0
-$manifestAssets = New-Object System.Collections.Generic.List[object]
-foreach ($name in $assetNames) {
-  $category = Get-Category $name
-  $dir = Join-Path $target $category
-  $final = Join-Path $dir $name
-  $url = $linkMap[$name]
-  if (Test-Swf $final) {
-    $reused++
-  } else {
-    $tmp = $final + '.part'
-    Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
-    $ok = $false
-    for ($attempt = 1; $attempt -le 3 -and -not $ok; $attempt++) {
-      try {
-        Invoke-WebRequest -UseBasicParsing -Uri $url -Headers $headers -OutFile $tmp -TimeoutSec 90
-        if (-not (Test-Swf $tmp)) { throw 'downloaded payload is not a valid SWF' }
-        Move-Item -LiteralPath $tmp -Destination $final -Force
-        $ok = $true
-      } catch {
-        Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
-        if ($attempt -eq 3) { throw "WADDLE_PARTY2015_ASSETS=FAIL file=$name url=$url error=$($_.Exception.Message)" }
-        Start-Sleep -Seconds (2 * $attempt)
-      }
-    }
-    $downloaded++
+  if ($relative.StartsWith('/') -or $relative.Contains('../') -or $relative.Contains(':')) {
+    throw "WADDLE_PARTY2015_ASSETS=FAIL manifest_unsafe_relative=$relative"
   }
-  if (-not (Test-Swf $final)) { throw "WADDLE_PARTY2015_ASSETS=FAIL invalid_after_download=$final" }
-  $item = Get-Item -LiteralPath $final
-  $sha = (Get-FileHash -LiteralPath $final -Algorithm SHA256).Hash
-  $manifestAssets.Add([pscustomobject]@{
-    category = $category
-    name = $name
-    relativePath = "$category/$name"
-    url = $url
-    bytes = [long]$item.Length
-    sha256 = $sha
-    required = ($required -contains $name)
-  }) | Out-Null
+  if (-not $relative.Equals(($category.Trim('/') + '/' + $name),[StringComparison]::OrdinalIgnoreCase)) {
+    throw "WADDLE_PARTY2015_ASSETS=FAIL manifest_path_mismatch name=$name relative=$relative category=$category"
+  }
+  if (-not $url.StartsWith('https://',[StringComparison]::OrdinalIgnoreCase)) {
+    throw "WADDLE_PARTY2015_ASSETS=FAIL manifest_url=$url"
+  }
+  if ([long]$entry.bytes -lt 100 -or $sha256 -notmatch '^[A-Fa-f0-9]{64}$') {
+    throw "WADDLE_PARTY2015_ASSETS=FAIL manifest_identity name=$name bytes=$($entry.bytes) sha256=$sha256"
+  }
+  if (-not [bool]$entry.required) {
+    throw "WADDLE_PARTY2015_ASSETS=FAIL manifest_nonrequired_entry=$name"
+  }
+  if ($assetByName.ContainsKey($name)) {
+    throw "WADDLE_PARTY2015_ASSETS=FAIL manifest_duplicate_name=$name"
+  }
+  if ($assetByPath.ContainsKey($relative)) {
+    throw "WADDLE_PARTY2015_ASSETS=FAIL manifest_duplicate_path=$relative"
+  }
+  $assetByName[$name] = $entry
+  $assetByPath[$relative] = $entry
 }
 
 foreach ($requiredName in $required) {
-  $category = Get-Category $requiredName
-  $path = Join-Path (Join-Path $target $category) $requiredName
-  if (-not (Test-Swf $path)) { throw "WADDLE_PARTY2015_ASSETS=FAIL required_invalid=$requiredName" }
+  if (-not $assetByName.ContainsKey($requiredName)) {
+    throw "WADDLE_PARTY2015_ASSETS=FAIL manifest_missing_required=$requiredName"
+  }
 }
 
-$manifest = [ordered]@{
-  schema = 2
-  party = 'Halloween Party 2015'
-  sourcePage = $pageUsed
-  canonicalRoot = $target
-  requiredCount = 132
-  total = $manifestAssets.Count
-  downloaded = $downloaded
-  reused = $reused
-  generatedAt = [DateTime]::UtcNow.ToString('o')
-  assets = $manifestAssets
+[string[]]$relativePaths = @($assetByPath.Keys)
+[Array]::Sort($relativePaths,[StringComparer]::Ordinal)
+
+$headers = @{
+  'User-Agent' = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Waddle-Forever-Halloween2015/3.0'
+  'Accept' = 'application/x-shockwave-flash,application/octet-stream,*/*'
 }
-$manifestPath = Join-Path $target 'manifest.json'
-$manifest | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
+$downloaded = 0
+$reused = 0
+
+foreach ($relative in $relativePaths) {
+  $entry = $assetByPath[$relative]
+  $final = Join-Path $target $relative.Replace('/','\')
+  $expectedBytes = [long]$entry.bytes
+  $expectedSha = ([string]$entry.sha256).ToUpperInvariant()
+
+  if (Test-Path -LiteralPath $final -PathType Leaf) {
+    if (-not (Test-Swf $final)) {
+      throw "WADDLE_PARTY2015_ASSETS=FAIL tracked_invalid_swf=$relative"
+    }
+    $actualBytes = [long](Get-Item -LiteralPath $final).Length
+    $actualSha = (Get-FileHash -LiteralPath $final -Algorithm SHA256).Hash.ToUpperInvariant()
+    if ($actualBytes -ne $expectedBytes -or $actualSha -ne $expectedSha) {
+      throw "WADDLE_PARTY2015_ASSETS=FAIL tracked_identity_drift=$relative bytes=$actualBytes expected_bytes=$expectedBytes sha256=$actualSha expected_sha256=$expectedSha"
+    }
+    $reused++
+    continue
+  }
+
+  # Missing files may be recovered, but only from the URL and identity already
+  # pinned in Git. A mirror can never silently redefine an existing asset.
+  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $final) | Out-Null
+  $tmp = $final + '.part'
+  Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+  $ok = $false
+  for ($attempt = 1; $attempt -le 3 -and -not $ok; $attempt++) {
+    try {
+      Invoke-WebRequest -UseBasicParsing -Uri ([string]$entry.url) -Headers $headers -OutFile $tmp -TimeoutSec 90
+      if (-not (Test-Swf $tmp)) { throw 'downloaded payload is not a valid SWF' }
+      $actualBytes = [long](Get-Item -LiteralPath $tmp).Length
+      $actualSha = (Get-FileHash -LiteralPath $tmp -Algorithm SHA256).Hash.ToUpperInvariant()
+      if ($actualBytes -ne $expectedBytes -or $actualSha -ne $expectedSha) {
+        throw "identity mismatch bytes=$actualBytes expected_bytes=$expectedBytes sha256=$actualSha expected_sha256=$expectedSha"
+      }
+      Move-Item -LiteralPath $tmp -Destination $final -Force
+      $ok = $true
+    } catch {
+      Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue
+      if ($attempt -eq 3) {
+        throw "WADDLE_PARTY2015_ASSETS=FAIL recovery_failed=$relative url=$($entry.url) error=$($_.Exception.Message)"
+      }
+      Start-Sleep -Seconds (2 * $attempt)
+    }
+  }
+  $downloaded++
+}
+
+$manifestSha = (Get-FileHash -LiteralPath $manifestPath -Algorithm SHA256).Hash.ToLowerInvariant()
+Write-Host "WADDLE_PARTY2015_HISTORICAL_MANIFEST=PASS schema=3 assets=$($manifestAssets.Count) required=132 reused=$reused recovered=$downloaded sha256=$manifestSha source=$($manifest.sourcePage)"
 
 # The wiki inventory is only the visual/event asset layer. Hydrate the preserved
 # late-AS3 runtime/configuration supplements separately from an immutable Git commit
@@ -219,4 +220,4 @@ if (-not (Test-Path -LiteralPath $runtimePatch -PathType Leaf)) {
 & $runtimePatch -RepoRoot $canonical
 if (-not $?) { throw 'WADDLE_PARTY2015_ASSETS=FAIL runtime_patch_failed' }
 
-Write-Host "WADDLE_PARTY2015_ASSETS=PASS required=132 total=$($manifestAssets.Count) downloaded=$downloaded reused=$reused canonical_supplements=$canonicalSupplementCount generated_runtime=1 root=$target source=$pageUsed"
+Write-Host "WADDLE_PARTY2015_ASSETS=PASS required=132 total=$($manifestAssets.Count) recovered=$downloaded reused=$reused canonical_supplements=$canonicalSupplementCount generated_runtime=1 root=$target source=$($manifest.sourcePage) architecture=manifest-driven"

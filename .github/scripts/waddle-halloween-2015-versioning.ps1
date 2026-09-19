@@ -35,25 +35,34 @@ if ($PatchGenerator) {
     [IO.File]::WriteAllText($sourcePath, $patched, $utf8)
   }
 
-  # The local hydration manifest contains run-local metadata such as absolute
-  # paths, reuse counts and generation timestamps. Those values are useful on
-  # the canonical workstation but would create a meaningless Git commit on
-  # every CI pass. Commit only the reproducible inventory and hashes.
+  # The historical manifest is already canonical and manifest-driven. Verify
+  # its schema and ordinal ordering; never rewrite it in CI.
   $manifestPath = Join-Path $repo 'media\default\party2015\manifest.json'
-  if (Test-Path -LiteralPath $manifestPath -PathType Leaf) {
-    $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
-    $assets = @($manifest.assets | Sort-Object relativePath)
-    $stableManifest = [ordered]@{
-      schema = 3
-      party = [string]$manifest.party
-      sourcePage = [string]$manifest.sourcePage
-      requiredCount = [int]$manifest.requiredCount
-      total = [int]$manifest.total
-      assets = $assets
-    }
-    $json = $stableManifest | ConvertTo-Json -Depth 6
-    [IO.File]::WriteAllText($manifestPath, ($json -replace "`r`n", "`n") + "`n", $utf8)
+  if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) {
+    throw "WADDLE_PARTY2015_VERSIONING=FAIL manifest_missing=$manifestPath"
   }
+  $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+  if ([int]$manifest.schema -ne 3) {
+    throw "WADDLE_PARTY2015_VERSIONING=FAIL manifest_schema=$($manifest.schema) expected=3"
+  }
+  $assets = @($manifest.assets)
+  if ([int]$manifest.requiredCount -ne 132 -or [int]$manifest.total -ne $assets.Count -or $assets.Count -ne 132) {
+    throw "WADDLE_PARTY2015_VERSIONING=FAIL manifest_count required=$($manifest.requiredCount) total=$($manifest.total) entries=$($assets.Count)"
+  }
+  foreach ($volatile in @('generatedAt','downloaded','reused','canonicalRoot')) {
+    if ($manifest.PSObject.Properties.Name -contains $volatile) {
+      throw "WADDLE_PARTY2015_VERSIONING=FAIL volatile_manifest_field=$volatile"
+    }
+  }
+  [string[]]$paths = @($assets | ForEach-Object { ([string]$_.relativePath).Replace('\','/') })
+  [string[]]$expectedPaths = @($paths)
+  [Array]::Sort($expectedPaths,[StringComparer]::Ordinal)
+  for ($i=0; $i -lt $paths.Count; $i++) {
+    if (-not $paths[$i].Equals($expectedPaths[$i],[StringComparison]::Ordinal)) {
+      throw "WADDLE_PARTY2015_VERSIONING=FAIL manifest_not_ordinal index=$i actual=$($paths[$i]) expected=$($expectedPaths[$i])"
+    }
+  }
+
 }
 
 $remaining = [IO.File]::ReadAllText($ignorePath)

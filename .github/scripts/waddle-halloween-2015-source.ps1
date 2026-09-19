@@ -57,6 +57,13 @@ $canonicalManifestPath=Join-Path $repo '.github/manifests/halloween-2015-canonic
 $runtimePatchPath=Join-Path $repo '.github/scripts/waddle-halloween-2015-runtime-patch.ps1'
 $partyRoot=Join-Path $repo 'media/default/party2015'
 $historicalManifestPath=Join-Path $partyRoot 'manifest.json'
+$historicalHydratorPath=Join-Path $repo '.github/scripts/waddle-halloween-2015.ps1'
+
+$historicalHydrator=Read-Normalized $historicalHydratorPath
+Require-Contains $historicalHydrator 'WADDLE_PARTY2015_HISTORICAL_MANIFEST=PASS' 'historical_manifest_driven_hydrator'
+Require-Contains $historicalHydrator '[Array]::Sort($relativePaths,[StringComparer]::Ordinal)' 'historical_manifest_ordinal_sort'
+Require-NotContains $historicalHydrator '$pages = @(' 'historical_live_page_scraper_forbidden'
+Require-NotContains $historicalHydrator 'archive_links_too_few' 'historical_live_link_discovery_forbidden'
 
 $files=Read-Normalized $filesPath
 Require-Contains $files "const PARTY2015 = 'party2015';" 'party2015_file_ref_constant'
@@ -212,4 +219,4 @@ foreach($entry in $canonicalAssets){
 $updates=Read-Normalized $updatesPath
 Require-Contains $updates 'import { UPDATES_2015 } from "./2015";' 'updates_2015_import'
 Require-Contains $updates '...UPDATES_2015' 'updates_2015_registration'
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=generated-halloween-compat donor=operation-crustacean-2015 activefeatures=20151101 shell=svanilla configs=canonical notls=canonical intro=unresolved-route-blocked file_targets=physical-preflight mall340=canonical quest_completed=10 features=party-json-parser transform=party-to-spts robot_tf=canonical bitmap_interaction=instrumented historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=generated-halloween-compat donor=operation-crustacean-2015 activefeatures=20151101 shell=svanilla configs=canonical notls=canonical intro=unresolved-route-blocked file_targets=physical-preflight historical=manifest-pinned mall340=canonical quest_completed=10 features=party-json-parser transform=party-to-spts robot_tf=canonical bitmap_interaction=instrumented historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical"
