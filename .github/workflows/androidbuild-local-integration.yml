@@ -322,3 +322,26 @@ jobs:
           }
           if(Test-Path -LiteralPath $certRepo){Remove-Item -LiteralPath $certRepo -Recurse -Force -ErrorAction SilentlyContinue}
           if(Test-Path -LiteralPath $certRepo){Write-Host "WADDLE_CERT_CLEANUP=WARN path_still_exists=$certRepo"}else{Write-Host "WADDLE_CERT_CLEANUP=PASS path=$certRepo live_repo_untouched=true"}
+
+      - name: Promote certified dev into canonical physical checkout
+        if: success() && github.event_name == 'push' && github.ref_name == 'dev'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Set-StrictMode -Version Latest
+          $repo=$env:WADDLE_LIVE_REPO
+          $git=$env:WADDLE_GIT_EXE
+          $sha=$env:WADDLE_EXPECTED_SHA.Trim().ToLowerInvariant()
+          if([string]::IsNullOrWhiteSpace($repo) -or -not(Test-Path -LiteralPath (Join-Path $repo '.git'))){throw "WADDLE_PROMOTE_DISPATCH=FAIL canonical_repo_missing=$repo"}
+          if([string]::IsNullOrWhiteSpace($git) -or -not(Test-Path -LiteralPath $git -PathType Leaf)){throw "WADDLE_PROMOTE_DISPATCH=FAIL git_missing=$git"}
+          $dir=Join-Path $env:ANDROIDBUILD_ROOT 'Certification\Waddle-Promote'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $scriptPath=Join-Path $dir ("waddle-promote-certified-dev-$sha.ps1")
+          $content=@(& $git -c "safe.directory=$repo" -C $repo show "$($sha):.github/scripts/waddle-promote-certified-dev.ps1")
+          if($LASTEXITCODE -ne 0 -or $content.Count -lt 80){throw "WADDLE_PROMOTE_DISPATCH=FAIL launcher_unavailable sha=$sha"}
+          $global:LASTEXITCODE=0
+          [IO.File]::WriteAllLines($scriptPath,[string[]]$content,(New-Object Text.UTF8Encoding($false)))
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath -AndroidBuildRoot $env:ANDROIDBUILD_ROOT -Repository '${{ github.repository }}' -ExpectedSha $sha -TargetBranch 'dev' -CertificationRunId '${{ github.run_id }}'
+          if($LASTEXITCODE -ne 0){throw "WADDLE_PROMOTE_DISPATCH=FAIL promotion_exit=$LASTEXITCODE"}
+          Write-Host "WADDLE_PROMOTE_DISPATCH=PASS mode=same_runner sha=$sha repo=$repo"
+
