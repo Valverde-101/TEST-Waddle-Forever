@@ -73,13 +73,19 @@ if($remoteHead-ne$expected){throw "WADDLE_PROMOTE=FAIL stale_certification expec
 Stop-ManagedWaddle
 
 $previewBase=Join-Path $AndroidBuildRoot 'Previews\Waddle-Forever'
+# Enumerate only registered Waddle worktrees; do not recursively traverse node_modules.
 $previewWorktrees=@()
-if(Test-Path -LiteralPath $previewBase -PathType Container){
-  $previewWorktrees=@(Get-ChildItem -LiteralPath $previewBase -Directory -Recurse -ErrorAction SilentlyContinue | Where-Object {
-    Test-Path -LiteralPath (Join-Path $_.FullName '.git')
-  } | Sort-Object LastWriteTimeUtc)
+$registered=(Invoke-Git -Repo $canonical -Arguments @('worktree','list','--porcelain')).text
+$previewPrefix=[IO.Path]::GetFullPath($previewBase).TrimEnd('\')+'\'
+foreach($line in @($registered -split "\r?\n" | Where-Object {$_ -like 'worktree *'})){
+  $candidate=([string]$line.Substring(9)).Trim()
+  if([string]::IsNullOrWhiteSpace($candidate)){continue}
+  $full=[IO.Path]::GetFullPath($candidate)
+  if(-not$full.StartsWith($previewPrefix,[StringComparison]::OrdinalIgnoreCase)){continue}
+  if(-not(Test-Path -LiteralPath (Join-Path $full '.git'))){continue}
+  $previewWorktrees+=Get-Item -LiteralPath $full
 }
-
+$previewWorktrees=@($previewWorktrees | Sort-Object LastWriteTimeUtc)
 $migratedUserData=0
 $migratedSwfCache=0
 foreach($preview in $previewWorktrees){
@@ -101,16 +107,13 @@ foreach($preview in $previewWorktrees){
 }
 Write-Host "WADDLE_PROMOTE_MIGRATE=PASS previews=$($previewWorktrees.Count) user_data=$migratedUserData swf_cache=$migratedSwfCache"
 
+# Never reset the canonical checkout when it contains unpublished tracked edits.
+# A stopped migration is safer than preserving a binary diff through PowerShell text.
 $quarantine=Join-Path $AndroidBuildRoot ('Previews\Quarantine\canonical-dev\'+[DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'))
 $dirty=(Invoke-Git -Repo $canonical -Arguments @('status','--porcelain=v1','--untracked-files=no')).text
 if(-not[string]::IsNullOrWhiteSpace($dirty)){
-  New-Item -ItemType Directory -Force -Path $quarantine | Out-Null
-  (Invoke-Git -Repo $canonical -Arguments @('diff','--binary')).text | Set-Content -LiteralPath (Join-Path $quarantine 'tracked.patch') -Encoding UTF8
-  (Invoke-Git -Repo $canonical -Arguments @('diff','--cached','--binary')).text | Set-Content -LiteralPath (Join-Path $quarantine 'staged.patch') -Encoding UTF8
-  $dirty | Set-Content -LiteralPath (Join-Path $quarantine 'status.txt') -Encoding UTF8
-  Write-Host "WADDLE_PROMOTE_QUARANTINE=WARN tracked_changes_saved=$quarantine"
+  throw "WADDLE_PROMOTE=FAIL canonical_tracked_changes_present repo=$canonical status=$dirty; preserve local work before retry"
 }
-
 $untracked=(Invoke-Git -Repo $canonical -Arguments @('ls-files','--others','--exclude-standard')).text
 if(-not[string]::IsNullOrWhiteSpace($untracked)){
   foreach($relative in @($untracked -split "\r?\n" | Where-Object {$_})){
@@ -125,27 +128,16 @@ if(-not[string]::IsNullOrWhiteSpace($untracked)){
   }
 }
 
-Invoke-Git -Repo $canonical -Arguments @('reset','--hard','HEAD') | Out-Null
 Invoke-Git -Repo $canonical -Arguments @('checkout','-B',$TargetBranch,$expected) | Out-Null
 Invoke-Git -Repo $canonical -Arguments @('reset','--hard',$expected) | Out-Null
 $actual=(Invoke-Git -Repo $canonical -Arguments @('rev-parse','HEAD')).text.ToLowerInvariant()
 $branch=(Invoke-Git -Repo $canonical -Arguments @('symbolic-ref','--quiet','--short','HEAD')).text
 if($actual-ne$expected -or $branch-ne$TargetBranch){throw "WADDLE_PROMOTE=FAIL canonical_head branch=$branch actual=$actual expected=$expected"}
 
+# Retain every prior preview and its state until the user has tested canonical dev.
+# Deletion/cleanup is a separate explicit post-acceptance operation.
 $removed=0
-foreach($preview in $previewWorktrees){
-  $path=$preview.FullName
-  Invoke-Git -Repo $canonical -Arguments @('worktree','remove','--force','--force',$path) -AllowFailure | Out-Null
-  if(Test-Path -LiteralPath $path){Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue}
-  if(-not(Test-Path -LiteralPath $path)){$removed++}
-}
-Invoke-Git -Repo $canonical -Arguments @('worktree','prune') -AllowFailure | Out-Null
-$previewState=Join-Path $AndroidBuildRoot 'Previews\State'
-if(Test-Path -LiteralPath $previewState -PathType Container){
-  Get-ChildItem -LiteralPath $previewState -File -Filter '*.json' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
-}
-Write-Host "WADDLE_PROMOTE_PREVIEW_CLEANUP=PASS discovered=$($previewWorktrees.Count) removed=$removed"
-
+Write-Host "WADDLE_PROMOTE_PREVIEW_RETENTION=PASS retained=$($previewWorktrees.Count) cleanup=deferred_until_user_acceptance"
 $start=Join-Path $canonical '.github\scripts\waddle-start.ps1'
 if(-not(Test-Path -LiteralPath $start -PathType Leaf)){throw "WADDLE_PROMOTE=FAIL start_missing=$start"}
 $tracking=$env:RUNNER_TRACKING_ID
@@ -174,7 +166,9 @@ $state=[ordered]@{
   source_sha=$expected
   certification_run_id=$CertificationRunId
   canonical_repo=$canonical
-  preview_worktrees_removed=$removed
+  preview_worktrees_removed=0
+  preview_worktrees_retained=$previewWorktrees.Count
+  pending_user_acceptance=$true
   migrated_user_data=$migratedUserData
   migrated_swf_cache=$migratedSwfCache
   runtime_pid=[int]$runtime.pid
@@ -182,4 +176,4 @@ $state=[ordered]@{
   promoted_utc=[DateTime]::UtcNow.ToString('o')
 }
 $state | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $canonical '.work\state\waddle-canonical-promotion.json') -Encoding UTF8
-Write-Host "WADDLE_PROMOTE=PASS mode=canonical_dev branch=$TargetBranch sha=$expected repo=$canonical previews_removed=$removed user_data_migrated=$migratedUserData runtime_pid=$($runtime.pid)"
+Write-Host "WADDLE_PROMOTE=PASS mode=canonical_dev branch=$TargetBranch sha=$expected repo=$canonical previews_retained=$($previewWorktrees.Count) user_data_migrated=$migratedUserData runtime_pid=$($runtime.pid)"
