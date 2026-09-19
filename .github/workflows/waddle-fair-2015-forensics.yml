@@ -59,4 +59,26 @@ jobs:
             })
             Write-Host "WADDLE_FAIR_FORENSICS=PASS sample=$($sample.Key) bytes=$((Get-Item $path).Length) scripts=$($scriptFiles.Count) matches=$($matches.Count)"
             foreach($line in $matches){Write-Host "WADDLE_FAIR_CONTRACT sample=$($sample.Key) $line"}
+          $fairScripts=Join-Path $work 'fair_spin_main\scripts'
+          $primary=@(
+            'frame_1\DoAction.as',
+            '__Packages\com\clubpenguin\world\rooms2015\may\party\MayParty.as',
+            '__Packages\com\clubpenguin\world\rooms2015\may\vo\MayPartyCookieVO.as',
+            '__Packages\com\clubpenguin\world\rooms2015\may\party\MayPartyConstants.as',
+            '__Packages\com\clubpenguin\spin\Game.as'
+          )
+          foreach($relative in $primary){
+            $file=Join-Path $fairScripts $relative
+            if(-not(Test-Path -LiteralPath $file -PathType Leaf)){
+              Write-Host "WADDLE_FAIR_SOURCE_MISSING=$relative"
+              continue
+            }
+            $lines=@(Get-Content -LiteralPath $file)
+            $limit=if($relative -like '*MayParty.as') {340} elseif($relative -like '*Game.as') {125} else {190}
+            Write-Host "WADDLE_FAIR_SOURCE_BEGIN file=$relative lines=$($lines.Count) shown=$([Math]::Min($limit,$lines.Count))"
+            for($idx=0;$idx -lt [Math]::Min($limit,$lines.Count);$idx++){
+              Write-Host ("WADDLE_FAIR_SOURCE {0}:{1} {2}" -f $relative,($idx+1),$lines[$idx])
+            }
+            Write-Host "WADDLE_FAIR_SOURCE_END file=$relative"
+          }
           }
