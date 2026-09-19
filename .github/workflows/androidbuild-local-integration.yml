@@ -341,7 +341,12 @@ jobs:
           if($LASTEXITCODE -ne 0 -or $content.Count -lt 80){throw "WADDLE_PROMOTE_DISPATCH=FAIL launcher_unavailable sha=$sha"}
           $global:LASTEXITCODE=0
           [IO.File]::WriteAllLines($scriptPath,[string[]]$content,(New-Object Text.UTF8Encoding($false)))
-          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath -AndroidBuildRoot $env:ANDROIDBUILD_ROOT -Repository '${{ github.repository }}' -ExpectedSha $sha -TargetBranch 'dev' -CertificationRunId '${{ github.run_id }}'
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $scriptPath -AndroidBuildRoot $env:ANDROIDBUILD_ROOT -Repository '${{ github.repository }}' -ExpectedSha $sha -TargetBranch 'dev' -CertificationRunId '${{ github.run_id }}' -CleanupAcceptedArtifacts
           if($LASTEXITCODE -ne 0){throw "WADDLE_PROMOTE_DISPATCH=FAIL promotion_exit=$LASTEXITCODE"}
-          Write-Host "WADDLE_PROMOTE_DISPATCH=PASS mode=same_runner sha=$sha repo=$repo"
+          Remove-Item -LiteralPath $scriptPath -Force -ErrorAction SilentlyContinue
+          if(Test-Path -LiteralPath $dir -PathType Container){
+            $left=@(Get-ChildItem -LiteralPath $dir -Force -ErrorAction SilentlyContinue)
+            if($left.Count -eq 0){Remove-Item -LiteralPath $dir -Force -ErrorAction SilentlyContinue}
+          }
+          Write-Host "WADDLE_PROMOTE_DISPATCH=PASS mode=same_runner sha=$sha repo=$repo temp_promoter_cleaned=true"
 
