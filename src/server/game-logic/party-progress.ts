@@ -60,15 +60,17 @@ export class PartyProgressStore {
     return true;
   }
 
-  public getCookie(config: PartyProgressConfig): PartyProgressState {
+  public getCookie(config: PartyProgressConfig) {
     const state = this.getMutable(config);
     return {
       msgViewedArray: [...state.msgViewedArray],
       communicatorMsgArray: [...state.communicatorMsgArray],
       questTaskStatus: [...state.questTaskStatus],
       ...(config.ticketBased ? {
-        tickets: state.tickets ?? 0,
-        silverTicket: state.silverTicket ?? 0,
+        // Native Fair 2015 uses one-element arrays on the wire, while
+        // Waddle persists the authoritative balances as integers.
+        tickets: [state.tickets ?? 0],
+        silverTicket: [state.silverTicket ?? 0],
         spinDayIndex: state.spinDayIndex ?? 0
       } : {})
     };
@@ -93,6 +95,15 @@ export class PartyProgressStore {
     const current = state.tickets ?? 0;
     if (!Number.isSafeInteger(current + count)) return false;
     state.tickets = current + count;
+    return true;
+  }
+
+  public grantFairSilverTicket(config: PartyProgressConfig, count = 1): boolean {
+    if (config.id !== 'fair-2015' || !config.ticketBased || !Number.isSafeInteger(count) || count <= 0 || count > 10) return false;
+    const state = this.getMutable(config);
+    const next = (state.silverTicket ?? 0) + count;
+    if (!Number.isSafeInteger(next)) return false;
+    state.silverTicket = next;
     return true;
   }
 
