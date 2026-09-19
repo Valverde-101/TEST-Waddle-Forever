@@ -43,4 +43,19 @@ music_names = re.findall(r"^\s*'([^']+)': \d+", music, re.M)
 assert len(room_names) == 46 and len(set(room_names)) == 46, "room map invalid"
 assert set(room_names) == set(music_names), "room / music divergence"
 assert set(range(1, 13)).issubset({int(x[5:]) for x in room_names if re.fullmatch(r"party\d+", x)}), "party rooms missing"
+# Static source-contract regression checks are not a substitute for a live
+# click/game test. They prevent reintroducing the specific broken routes seen
+# in the first Fair diagnostics and the native MayParty first-login handshake.
+fair_xt = (repo / "src/server/socket-server/xt-handler.ts").read_text(encoding="utf-8")
+assert "['s%fair#fmsgviewed', 's%party#msgviewed']" in fair_xt, "native Fair first-login message is unhandled"
+for ui_key in ("w.p2015.may.partyinterface", "w.p2015.may.login",
+               "w.p2015.may.rideprompt", "w.p2015.may.partymap"):
+    assert ui_key in fair, f"original Fair showContent key not mapped: {ui_key}"
+minigame_changes = code[code.index("const FAIR_2015_MINIGAME_FILES = {"):code.index("\n};", code.index("const FAIR_2015_MINIGAME_FILES = {"))]
+for route in ("spin/bootstrap.swf", "spin/main.swf", "bell/bootstrap.swf",
+              "paddle/bootstrap.swf", "shuffle/bootstrap.swf", "bounce/main.swf"):
+    assert "play/v2/games/cp_party_games/" + route in minigame_changes, "missing game route: " + route
+assert "minigames/daily_spin/GamesSpinBootstrap.swf" in minigame_changes
+assert "minigames/daily_spin/GamesSpinMain.swf" in minigame_changes
+print("WADDLE_FAIR2015_CONTRACT=PASS first_login=fmsgviewed interactive_keys=4 game_routes=6")
 print(f"WADDLE_FAIR2015_VERIFY=PASS main=141 minigames=53 total={len(seen)} rooms={len(room_names)} music={len(music_names)} paths={len(references)} halloween=preserved timeline=scoped")
