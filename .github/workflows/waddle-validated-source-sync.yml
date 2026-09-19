@@ -63,6 +63,7 @@ jobs:
           throw "VALIDATED_SOURCE_SYNC=FAIL certification_timeout sha=$sha"
 
   sync-live:
+    if: github.event_name == 'pull_request'
     needs: wait-certification
     runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
     timeout-minutes: 45
