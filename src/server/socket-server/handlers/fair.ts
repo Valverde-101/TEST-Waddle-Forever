@@ -1,6 +1,7 @@
 import { PenguinHandler } from "./handlers";
 import { sendCurrentPartyCookie } from "./party";
 import { publishWaddleLiveTrace } from "@common/live-trace";
+import { joinRoom } from "./join";
 
 /**
  * May 2015 Fair protocol. This module has no effect on Halloween, on other
@@ -80,6 +81,23 @@ export const handleFairAwardTicket: PenguinHandler<[number]> = async (ctx, _clie
   ctx.prst(ctx.penguin);
   await sendCurrentPartyCookie(ctx);
   traceFair("fair#fawardtickets", "awarded", ctx, 1);
+};
+
+export const handleFairSilverJoin: PenguinHandler<[number, number, number]> = async (ctx, roomId, x, y) => {
+  const config = getFairConfig(ctx);
+  // MayParty.isFairRoom accepts the Fair room block 851..862. Keep this
+  // protocol party-scoped so later events cannot consume Fair currency.
+  if (config === null || !Number.isInteger(roomId) || roomId < 851 || roomId > 862 ||
+      !Number.isInteger(x) || !Number.isInteger(y) ||
+      !ctx.penguin.partyProgress.spendFairSilverTicket(config, 1)) {
+    traceFair("fair#fsilverjr", "rejected", ctx, roomId);
+    return;
+  }
+
+  ctx.prst(ctx.penguin);
+  joinRoom(ctx, roomId, x, y);
+  await sendCurrentPartyCookie(ctx);
+  traceFair("fair#fsilverjr", "joined", ctx, roomId);
 };
 
 export const handleFairDailySpin: PenguinHandler<[number]> = async (ctx, _clientClaim) => {
