@@ -352,9 +352,13 @@ export const UPDATES_2015: Update[] = [
       globalChanges: {
         'content/party_icon.swf': [fairRef('content/ContentParty_icon-TheFair2015.swf'), 'party_icon', 'scavenger_hunt_icon'],
         'close_ups/quest_interface.swf': [fairRef('close_ups/CloseUpsEN-QuestInterface-TheFair2015.swf'), 'w.p2015.may.partyinterface', 'w.app.generic.partyinterface', 'scavenger_hunt'],
-        'close_ups/party_map.swf': [fairRef('close_ups/ENCloseUpsPartyMap-TheFair2015.swf'), 'party_map'],
+        // Exact showContent identifiers referenced by the original MayPartyConstants.
+        // The localChanges below already covers the direct close-up paths, but
+        // none of these interactive showContent keys worked through that route.
+        'close_ups/dialog_rookie_login.swf': [fairRef('close_ups/CloseUps-DialogueRookieLogin-TheFair2015.swf'), 'w.p2015.may.login'],
+        'close_ups/party_map.swf': [fairRef('close_ups/ENCloseUpsPartyMap-TheFair2015.swf'), 'w.p2015.may.partymap', 'party_map'],
         'close_ups/party_map_note.swf': [fairRef('close_ups/ENCloseUpsPartyMapNote-TheFair2015.swf'), 'party_map_note'],
-        'close_ups/ride_prompt.swf': [fairRef('close_ups/ENCloseUpsRidePrompt-TheFair2015.swf'), 'ride_prompt']
+        'close_ups/ride_prompt.swf': [fairRef('close_ups/ENCloseUpsRidePrompt-TheFair2015.swf'), 'w.p2015.may.rideprompt', 'ride_prompt']
       },
       localChanges: {
         'close_ups/quest_interface.swf': { en: fairRef('close_ups/CloseUpsEN-QuestInterface-TheFair2015.swf') },
