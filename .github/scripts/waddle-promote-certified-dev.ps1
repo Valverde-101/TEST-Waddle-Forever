@@ -71,9 +71,27 @@ $remoteHead=(Invoke-Git -Repo $canonical -Arguments @('rev-parse',$ref)).text.To
 if($remoteHead-ne$expected){throw "WADDLE_PROMOTE=FAIL stale_certification expected=$expected remote_head=$remoteHead"}
 
 # Preflight before stopping the known-good interactive game.
+# Preserve complete local tracked files instead of blocking promotion or serializing
+# binary-capable diffs through PowerShell text.
 $trackedBefore=(Invoke-Git -Repo $canonical -Arguments @('status','--porcelain=v1','--untracked-files=no')).text
+$trackedBackupRoot=$null
 if(-not[string]::IsNullOrWhiteSpace($trackedBefore)){
-  throw "WADDLE_PROMOTE=FAIL canonical_tracked_changes_present before_stop repo=$canonical status=$trackedBefore"
+  $trackedBackupRoot=Join-Path $AndroidBuildRoot ('Previews\Quarantine\canonical-tracked-'+[DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'))
+  New-Item -ItemType Directory -Force -Path $trackedBackupRoot | Out-Null
+  $trackedBefore | Set-Content -LiteralPath (Join-Path $trackedBackupRoot 'status.txt') -Encoding UTF8
+  $dirtyPaths=@(Invoke-Git -Repo $canonical -Arguments @('diff','--name-only','HEAD','--')).text -split "\r?\n" | Where-Object {$_}
+  foreach($relative in $dirtyPaths){
+    $from=Join-Path $canonical ($relative -replace '/','\')
+    $to=Join-Path $trackedBackupRoot ('files\'+($relative -replace '/','\'))
+    if(Test-Path -LiteralPath $from -PathType Leaf){
+      New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null
+      Copy-Item -LiteralPath $from -Destination $to -Force
+    } else {
+      New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null
+      Set-Content -LiteralPath ($to+'.deleted.txt') -Value $relative -Encoding UTF8
+    }
+  }
+  Write-Host "WADDLE_PROMOTE_TRACKED_BACKUP=PASS root=$trackedBackupRoot files=$($dirtyPaths.Count) status=$trackedBefore"
 }
 
 Stop-ManagedWaddle
@@ -119,12 +137,10 @@ foreach($preview in $previewWorktrees){
 }
 Write-Host "WADDLE_PROMOTE_MIGRATE=PASS previews=$($previewWorktrees.Count) user_data=$migratedUserData swf_cache=$migratedSwfCache"
 
-# Never reset the canonical checkout when it contains unpublished tracked edits.
-# A stopped migration is safer than preserving a binary diff through PowerShell text.
 $quarantine=Join-Path $AndroidBuildRoot ('Previews\Quarantine\canonical-dev\'+[DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'))
 $dirty=(Invoke-Git -Repo $canonical -Arguments @('status','--porcelain=v1','--untracked-files=no')).text
 if(-not[string]::IsNullOrWhiteSpace($dirty)){
-  throw "WADDLE_PROMOTE=FAIL canonical_tracked_changes_present repo=$canonical status=$dirty; preserve local work before retry"
+  Write-Host "WADDLE_PROMOTE_TRACKED_BACKUP=PASS already_preserved=$trackedBackupRoot status=$dirty"
 }
 $untracked=(Invoke-Git -Repo $canonical -Arguments @('ls-files','--others','--exclude-standard')).text
 if(-not[string]::IsNullOrWhiteSpace($untracked)){
@@ -207,6 +223,7 @@ $state=[ordered]@{
   preview_worktrees_removed=0
   preview_worktrees_retained=$previewWorktrees.Count
   pending_user_acceptance=$true
+  tracked_backup_root=$trackedBackupRoot
   migrated_user_data=$migratedUserData
   migrated_swf_cache=$migratedSwfCache
   runtime_pid=[int]$runtime.pid
