@@ -187,8 +187,9 @@ jobs:
           }
           if($code -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL isolated_preview_exit=$code"}
 
-          $safeTarget=[regex]::Replace($env:WADDLE_TARGET_BRANCH,'[^A-Za-z0-9._-]','_')
-          $previewRoot=Join-Path $env:ANDROIDBUILD_ROOT ("Previews\Waddle-Forever\$safeTarget")
+          # Match the worktree path encoding used by waddle-certified-preview.ps1.
+          $safePreviewRelative=([regex]::Replace($env:WADDLE_TARGET_BRANCH,'[^A-Za-z0-9._/-]','_')).Replace('/','\_')
+          $previewRoot=Join-Path $env:ANDROIDBUILD_ROOT ("Previews\Waddle-Forever\$safePreviewRelative")
           $verify=Join-Path $previewRoot '.github\scripts\waddle-modern-timeline-verify.ps1'
           if(-not(Test-Path -LiteralPath $verify -PathType Leaf)){throw "VALIDATED_SOURCE_SYNC=FAIL timeline_verifier_missing=$verify"}
           # Temporary update end dates are exclusive. Nov 5 means Nov 4 remains playable.
