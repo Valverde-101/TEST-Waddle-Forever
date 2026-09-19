@@ -202,26 +202,6 @@ export class FileServer {
       }
     }
 
-    if (filePath !== undefined) {
-      // A timeline mapping is only valid if its resolved physical target exists.
-      // Detect stale references before readFile(): ENOENT is an asset-resolution
-      // problem and must not surface as an opaque HTTP 500/server exception.
-      let resolvedTargetIsFile = false;
-      try {
-        resolvedTargetIsFile = fs.statSync(filePath).isFile();
-      } catch {
-        resolvedTargetIsFile = false;
-      }
-
-      if (!resolvedTargetIsFile) {
-        traceFileResolution(route, 'error', 'missing-resolved-target', {
-          resolver: modName !== undefined ? 'mod' : 'game-data',
-          target: resolvedTarget
-        });
-        return undefined;
-      }
-    }
-
     if (filePath === undefined) {
       const generator = this.dynamicFiles.get(route);
       if (generator !== undefined) {
@@ -232,6 +212,19 @@ export class FileServer {
       try {
         return await this.readResolvedFile(route, filePath);
       } catch (error) {
+        const code = (error as NodeJS.ErrnoException)?.code;
+        if (code === 'ENOENT' || code === 'ENOTDIR') {
+          // A stale timeline/mod reference is an asset-resolution miss, not an
+          // internal server crash. Avoid an extra stat() on every successful
+          // request and classify only the actual read miss as a normal 404.
+          traceFileResolution(route, 'error', 'missing-resolved-target', {
+            resolver: modName !== undefined ? 'mod' : 'game-data',
+            target: resolvedTarget,
+            error: code
+          });
+          return undefined;
+        }
+
         traceFileResolution(route, 'error', 'read-failed', {
           resolver: modName !== undefined ? 'mod' : 'game-data',
           target: resolvedTarget,

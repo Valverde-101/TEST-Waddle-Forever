@@ -139,7 +139,8 @@ Write-Host "WADDLE_PARTY2015_FILE_TARGET_AUDIT=PASS party2015_refs=$($partyRefs.
 
 $fileServer=Read-Normalized $fileServerPath
 Require-Contains $fileServer "'missing-resolved-target'" 'file_server_missing_target_trace'
-Require-Contains $fileServer 'fs.statSync(filePath).isFile()' 'file_server_physical_preflight'
+Require-Contains $fileServer "code === 'ENOENT' || code === 'ENOTDIR'" 'file_server_missing_target_nonfatal'
+Require-NotContains $fileServer 'fs.statSync(filePath).isFile()' 'file_server_double_io_preflight_forbidden'
 
 $fileGenerators=Read-Normalized $fileGeneratorsPath
 Require-Contains $fileGenerators 'const getRuntimePathsJson: FileGenerator' 'runtime_paths_generator'
@@ -219,4 +220,4 @@ foreach($entry in $canonicalAssets){
 $updates=Read-Normalized $updatesPath
 Require-Contains $updates 'import { UPDATES_2015 } from "./2015";' 'updates_2015_import'
 Require-Contains $updates '...UPDATES_2015' 'updates_2015_registration'
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=generated-halloween-compat donor=operation-crustacean-2015 activefeatures=20151101 shell=svanilla configs=canonical notls=canonical intro=unresolved-route-blocked file_targets=physical-preflight historical=manifest-pinned mall340=canonical quest_completed=10 features=party-json-parser transform=party-to-spts robot_tf=canonical bitmap_interaction=instrumented historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=generated-halloween-compat donor=operation-crustacean-2015 activefeatures=20151101 shell=svanilla configs=canonical notls=canonical intro=unresolved-route-blocked file_targets=manifest-audited+nonfatal-missing historical=manifest-pinned mall340=canonical quest_completed=10 features=party-json-parser transform=party-to-spts robot_tf=canonical bitmap_interaction=instrumented historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical"
