@@ -1,0 +1,185 @@
+[CmdletBinding()]
+param(
+  [Parameter(Mandatory)][string]$AndroidBuildRoot,
+  [Parameter(Mandatory)][string]$Repository,
+  [Parameter(Mandatory)][string]$ExpectedSha,
+  [string]$TargetBranch = 'dev',
+  [string]$CertificationRunId = ''
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference='Stop'
+
+$module=Join-Path $AndroidBuildRoot 'Core\Current\AndroidBuild.psd1'
+if(-not(Test-Path -LiteralPath $module -PathType Leaf)){throw "WADDLE_PROMOTE=FAIL core_missing=$module"}
+Import-Module $module -DisableNameChecking -Force -WarningAction SilentlyContinue
+Enable-AndroidBuildPortableTools -AndroidBuildRoot $AndroidBuildRoot | Out-Null
+$git=[string](Get-AndroidBuildGitPath -AndroidBuildRoot $AndroidBuildRoot)
+if(-not(Test-Path -LiteralPath $git -PathType Leaf)){throw "WADDLE_PROMOTE=FAIL git_missing=$git"}
+
+$canonical=Join-Path $AndroidBuildRoot 'Repositories\TEST-Waddle-Forever'
+if(-not(Test-Path -LiteralPath (Join-Path $canonical '.git'))){throw "WADDLE_PROMOTE=FAIL canonical_missing=$canonical"}
+$expected=$ExpectedSha.Trim().ToLowerInvariant()
+if($expected -notmatch '^[0-9a-f]{40}$'){throw "WADDLE_PROMOTE=FAIL invalid_sha=$ExpectedSha"}
+
+function Invoke-Git {
+  param([string]$Repo,[string[]]$Arguments,[switch]$AllowFailure)
+  $out=@(& $script:git -c "safe.directory=$Repo" -C $Repo @Arguments 2>&1)
+  $code=$LASTEXITCODE
+  $global:LASTEXITCODE=0
+  if($code -ne 0 -and -not $AllowFailure){throw "WADDLE_PROMOTE=FAIL git exit=$code repo=$Repo args=$($Arguments -join ' ') output=$($out -join ' | ')"}
+  [pscustomobject]@{code=$code;text=(($out|Out-String).Trim())}
+}
+
+function Stop-ManagedWaddle {
+  $roots=@(
+    ([IO.Path]::GetFullPath((Join-Path $AndroidBuildRoot 'Repositories\TEST-Waddle-Forever')).TrimEnd('\')+'\'),
+    ([IO.Path]::GetFullPath((Join-Path $AndroidBuildRoot 'Previews\Waddle-Forever')).TrimEnd('\')+'\'),
+    ([IO.Path]::GetFullPath((Join-Path $AndroidBuildRoot 'Certification\Waddle-Forever')).TrimEnd('\')+'\')
+  )
+  $killed=New-Object System.Collections.Generic.List[int]
+  foreach($p in @(Get-CimInstance Win32_Process -Filter "Name='electron.exe'" -ErrorAction SilentlyContinue)){
+    $cmd=[string]$p.CommandLine
+    if([string]::IsNullOrWhiteSpace($cmd) -or $cmd -notmatch '[\\/]compiled[\\/]client[\\/]main\.js'){continue}
+    $owned=$false
+    foreach($r in $roots){if($cmd.IndexOf($r,[StringComparison]::OrdinalIgnoreCase)-ge0){$owned=$true;break}}
+    if(-not$owned){continue}
+    & taskkill.exe /PID ([int]$p.ProcessId) /T /F | Out-Null
+    $code=$LASTEXITCODE;$global:LASTEXITCODE=0
+    if($code-ne0 -and (Get-Process -Id ([int]$p.ProcessId) -ErrorAction SilentlyContinue)){throw "WADDLE_PROMOTE=FAIL stop pid=$($p.ProcessId) exit=$code"}
+    $killed.Add([int]$p.ProcessId)
+  }
+  Write-Host "WADDLE_PROMOTE_STOP=PASS killed=$($killed.Count) pids=$($killed -join ',')"
+}
+
+function Copy-Tree {
+  param([string]$Source,[string]$Destination)
+  if(-not(Test-Path -LiteralPath $Source -PathType Container)){return 0}
+  New-Item -ItemType Directory -Force -Path $Destination | Out-Null
+  & robocopy.exe $Source $Destination /E /COPY:DAT /DCOPY:DAT /R:2 /W:1 /XJ /NFL /NDL /NJH /NJS /NP | Out-Null
+  $code=$LASTEXITCODE;$global:LASTEXITCODE=0
+  if($code-ge8){throw "WADDLE_PROMOTE=FAIL robocopy source=$Source destination=$Destination exit=$code"}
+  return $code
+}
+
+$ref='refs/remotes/waddle-promote/'+([regex]::Replace($TargetBranch,'[^A-Za-z0-9._-]','_'))
+$refspec="+refs/heads/$($TargetBranch):$ref"
+& $git -c "safe.directory=$canonical" -C $canonical fetch --force --no-tags "https://github.com/$Repository.git" $refspec
+if($LASTEXITCODE-ne0){throw "WADDLE_PROMOTE=FAIL fetch branch=$TargetBranch"}
+$global:LASTEXITCODE=0
+$remoteHead=(Invoke-Git -Repo $canonical -Arguments @('rev-parse',$ref)).text.ToLowerInvariant()
+if($remoteHead-ne$expected){throw "WADDLE_PROMOTE=FAIL stale_certification expected=$expected remote_head=$remoteHead"}
+
+Stop-ManagedWaddle
+
+$previewBase=Join-Path $AndroidBuildRoot 'Previews\Waddle-Forever'
+$previewWorktrees=@()
+if(Test-Path -LiteralPath $previewBase -PathType Container){
+  $previewWorktrees=@(Get-ChildItem -LiteralPath $previewBase -Directory -Recurse -ErrorAction SilentlyContinue | Where-Object {
+    Test-Path -LiteralPath (Join-Path $_.FullName '.git')
+  } | Sort-Object LastWriteTimeUtc)
+}
+
+$migratedUserData=0
+$migratedSwfCache=0
+foreach($preview in $previewWorktrees){
+  $userSource=Join-Path $preview.FullName 'user-data'
+  if(Test-Path -LiteralPath $userSource -PathType Container){
+    Copy-Tree -Source $userSource -Destination (Join-Path $canonical 'user-data') | Out-Null
+    $migratedUserData++
+  }
+  $cacheSource=Join-Path $preview.FullName '.work\swf-analysis'
+  if(Test-Path -LiteralPath $cacheSource -PathType Container){
+    Copy-Tree -Source $cacheSource -Destination (Join-Path $canonical '.work\swf-analysis') | Out-Null
+    $migratedSwfCache++
+  }
+  $previewEnv=Join-Path $preview.FullName '.env'
+  $canonicalEnv=Join-Path $canonical '.env'
+  if((Test-Path -LiteralPath $previewEnv -PathType Leaf) -and -not(Test-Path -LiteralPath $canonicalEnv -PathType Leaf)){
+    Copy-Item -LiteralPath $previewEnv -Destination $canonicalEnv -Force
+  }
+}
+Write-Host "WADDLE_PROMOTE_MIGRATE=PASS previews=$($previewWorktrees.Count) user_data=$migratedUserData swf_cache=$migratedSwfCache"
+
+$quarantine=Join-Path $AndroidBuildRoot ('Previews\Quarantine\canonical-dev\'+[DateTime]::UtcNow.ToString('yyyyMMdd-HHmmss'))
+$dirty=(Invoke-Git -Repo $canonical -Arguments @('status','--porcelain=v1','--untracked-files=no')).text
+if(-not[string]::IsNullOrWhiteSpace($dirty)){
+  New-Item -ItemType Directory -Force -Path $quarantine | Out-Null
+  (Invoke-Git -Repo $canonical -Arguments @('diff','--binary')).text | Set-Content -LiteralPath (Join-Path $quarantine 'tracked.patch') -Encoding UTF8
+  (Invoke-Git -Repo $canonical -Arguments @('diff','--cached','--binary')).text | Set-Content -LiteralPath (Join-Path $quarantine 'staged.patch') -Encoding UTF8
+  $dirty | Set-Content -LiteralPath (Join-Path $quarantine 'status.txt') -Encoding UTF8
+  Write-Host "WADDLE_PROMOTE_QUARANTINE=WARN tracked_changes_saved=$quarantine"
+}
+
+$untracked=(Invoke-Git -Repo $canonical -Arguments @('ls-files','--others','--exclude-standard')).text
+if(-not[string]::IsNullOrWhiteSpace($untracked)){
+  foreach($relative in @($untracked -split "\r?\n" | Where-Object {$_})){
+    $probe=Invoke-Git -Repo $canonical -Arguments @('cat-file','-e',"$($expected):$relative") -AllowFailure
+    if($probe.code-ne0){continue}
+    New-Item -ItemType Directory -Force -Path $quarantine | Out-Null
+    $from=Join-Path $canonical ($relative -replace '/','\')
+    $to=Join-Path $quarantine ('untracked\'+($relative -replace '/','\'))
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $to) | Out-Null
+    Move-Item -LiteralPath $from -Destination $to -Force
+    Write-Host "WADDLE_PROMOTE_QUARANTINE=WARN untracked_collision=$relative"
+  }
+}
+
+Invoke-Git -Repo $canonical -Arguments @('reset','--hard','HEAD') | Out-Null
+Invoke-Git -Repo $canonical -Arguments @('checkout','-B',$TargetBranch,$expected) | Out-Null
+Invoke-Git -Repo $canonical -Arguments @('reset','--hard',$expected) | Out-Null
+$actual=(Invoke-Git -Repo $canonical -Arguments @('rev-parse','HEAD')).text.ToLowerInvariant()
+$branch=(Invoke-Git -Repo $canonical -Arguments @('symbolic-ref','--quiet','--short','HEAD')).text
+if($actual-ne$expected -or $branch-ne$TargetBranch){throw "WADDLE_PROMOTE=FAIL canonical_head branch=$branch actual=$actual expected=$expected"}
+
+$removed=0
+foreach($preview in $previewWorktrees){
+  $path=$preview.FullName
+  Invoke-Git -Repo $canonical -Arguments @('worktree','remove','--force','--force',$path) -AllowFailure | Out-Null
+  if(Test-Path -LiteralPath $path){Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue}
+  if(-not(Test-Path -LiteralPath $path)){$removed++}
+}
+Invoke-Git -Repo $canonical -Arguments @('worktree','prune') -AllowFailure | Out-Null
+$previewState=Join-Path $AndroidBuildRoot 'Previews\State'
+if(Test-Path -LiteralPath $previewState -PathType Container){
+  Get-ChildItem -LiteralPath $previewState -File -Filter '*.json' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+}
+Write-Host "WADDLE_PROMOTE_PREVIEW_CLEANUP=PASS discovered=$($previewWorktrees.Count) removed=$removed"
+
+$start=Join-Path $canonical '.github\scripts\waddle-start.ps1'
+if(-not(Test-Path -LiteralPath $start -PathType Leaf)){throw "WADDLE_PROMOTE=FAIL start_missing=$start"}
+$tracking=$env:RUNNER_TRACKING_ID
+try{
+  Remove-Item Env:\RUNNER_TRACKING_ID -ErrorAction SilentlyContinue
+  & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $start -AndroidBuildRoot $AndroidBuildRoot
+  $code=$LASTEXITCODE;$global:LASTEXITCODE=0
+}finally{
+  if([string]::IsNullOrEmpty($tracking)){Remove-Item Env:\RUNNER_TRACKING_ID -ErrorAction SilentlyContinue}else{$env:RUNNER_TRACKING_ID=$tracking}
+}
+if($code-ne0){throw "WADDLE_PROMOTE=FAIL start_exit=$code"}
+
+$runtimePath=Join-Path $canonical '.work\state\waddle-client.json'
+if(-not(Test-Path -LiteralPath $runtimePath -PathType Leaf)){throw "WADDLE_PROMOTE=FAIL runtime_state_missing=$runtimePath"}
+$runtime=Get-Content -LiteralPath $runtimePath -Raw | ConvertFrom-Json
+if([string]$runtime.status-ne'RUNNING'){throw "WADDLE_PROMOTE=FAIL runtime_status=$($runtime.status)"}
+$runtimeSha=([string]$runtime.source_sha).Trim().ToLowerInvariant()
+if($runtimeSha-ne$expected){throw "WADDLE_PROMOTE=FAIL runtime_sha=$runtimeSha expected=$expected"}
+if(-not(Get-Process -Id ([int]$runtime.pid) -ErrorAction SilentlyContinue)){throw "WADDLE_PROMOTE=FAIL runtime_pid=$($runtime.pid)"}
+
+$state=[ordered]@{
+  schema='waddle-canonical-promotion/v1'
+  status='PASS'
+  repository=$Repository
+  branch=$TargetBranch
+  source_sha=$expected
+  certification_run_id=$CertificationRunId
+  canonical_repo=$canonical
+  preview_worktrees_removed=$removed
+  migrated_user_data=$migratedUserData
+  migrated_swf_cache=$migratedSwfCache
+  runtime_pid=[int]$runtime.pid
+  runtime_status='RUNNING'
+  promoted_utc=[DateTime]::UtcNow.ToString('o')
+}
+$state | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $canonical '.work\state\waddle-canonical-promotion.json') -Encoding UTF8
+Write-Host "WADDLE_PROMOTE=PASS mode=canonical_dev branch=$TargetBranch sha=$expected repo=$canonical previews_removed=$removed user_data_migrated=$migratedUserData runtime_pid=$($runtime.pid)"
