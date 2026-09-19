@@ -27,7 +27,12 @@ concurrency:
 jobs:
   certify:
     runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
-    timeout-minutes: 15
+    # Complete certification is normally quick, but the exact-SHA SWF inventory
+    # can legitimately need more than the old 15-minute whole-job budget when
+    # its shared hash/deep-analysis cache is cold or partially invalidated.
+    # Keep the analyzer's own per-FFDec timeout bounded; give the enclosing job
+    # enough time to finish instead of cancelling a healthy certification.
+    timeout-minutes: 30
 
     steps:
       - name: Create isolated exact-SHA certification workspace
