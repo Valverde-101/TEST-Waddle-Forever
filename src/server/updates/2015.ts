@@ -323,12 +323,21 @@ export const UPDATES_2015: Update[] = [
         taskCount: 0, maxCoinUpdate: 0, ticketBased: true,
         service: { partyStartDate: '2015-05-20 00:00:00', partyEndDate: '2015-06-11 00:00:00', unlockDayIndex: 22, numOfDaysInParty: 22 }
       },
+      // Fair's own copy of the native dialogue keys; not Halloween quest text.
+      gameStringChanges: {
+        'w.p2015.may.dialogue.login': "Welcome to the Fair. Come to the Docks for fun games, crazy\nrides, and wacky prizes! There's a plunger hat and everything!",
+        'w.p2015.may.dialogue.dailyspin.member': "Take a spin every day to wins items, coins, or silver tickets!\n\nWin a silver ticket and you get a bonus 1,000 coins!"
+      },
       // Do not reuse Halloween's party runtime, robot state or quest protocol.
       // These original 2015 SWFs form the visual/room layer. Fair ticket,
       // daily-spin and prize transactions need their own protocol evidence.
       rooms: FAIR_2015_ROOMS,
       music: FAIR_2015_MUSIC,
       fileChanges: {
+        // Mounted only in Fair's temporary update (May 20 to June 11, 2015).
+        'play/v2/content/global/content/party.swf': fairRef('cpimagined/content/party.swf'),
+        'play/v2/content/global/content/map.swf': fairRef('cpimagined/content/map.swf'),
+        'play/v2/content/global/content/room_pin/7236.swf': fairRef('cpimagined/content/room_pin/7236.swf'),
         'play/v2/client/shell.swf': 'svanilla:media/play/v2/client/shell.swf',
         'play/v2/client/interface.swf': fairRef('client/ClientInterfaceFair2015.swf'),
         'play/v2/content/global/content/interface.swf': fairRef('client/ClientInterfaceFair2015.swf'),
