@@ -316,6 +316,13 @@ export const UPDATES_2015: Update[] = [
     date: '2015-05-20',
     temp: { party: {
       partyName: 'The Fair 2015',
+      // Historical Fair cookie namespace 20150501: separate tickets/spin from Halloween.
+      activeFeatures: '20150501',
+      partyProgress: {
+        id: 'fair-2015', messageCount: 2, communicatorMessageCount: 0,
+        taskCount: 0, maxCoinUpdate: 0, ticketBased: true,
+        service: { partyStartDate: '2015-05-20 00:00:00', partyEndDate: '2015-06-11 00:00:00', unlockDayIndex: 22, numOfDaysInParty: 22 }
+      },
       // Do not reuse Halloween's party runtime, robot state or quest protocol.
       // These original 2015 SWFs form the visual/room layer. Fair ticket,
       // daily-spin and prize transactions need their own protocol evidence.
