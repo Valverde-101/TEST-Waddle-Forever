@@ -130,6 +130,13 @@
       "bytes": 68968,
       "gitBlobSha": "e158f8f85617795cdeef6fcc60b0b4ea6b220bdd",
       "kind": "json"
+    },
+    {
+      "target": "rooms/NOTLS-ALL-EN.swf",
+      "sourcePath": "default things/rooms/NOTLS-ALL-EN.swf",
+      "bytes": 1603221,
+      "gitBlobSha": "206fa334351d967f0a899b22ce00e4378e76b694",
+      "kind": "swf"
     }
   ]
 }

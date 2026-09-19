@@ -11,6 +11,7 @@ on:
       - '.github/scripts/waddle-halloween-2015-api-probe.ps1'
       - '.github/scripts/waddle-halloween-2015-archive-runtime-probe.ps1'
       - '.github/scripts/waddle-halloween-2015-operation-selector-probe.ps1'
+      - '.github/scripts/waddle-halloween-2015-client-asset-probe.ps1'
       - '.github/workflows/waddle-halloween-2015-runtime-probe.yml'
       - 'media/default/party2015/content/party-base-2015.swf'
       - 'media/default/party2015/content/party.swf'
@@ -46,6 +47,9 @@ jobs:
       - name: Hydrate byte-pinned runtime candidate
         shell: powershell
         run: ./.github/scripts/waddle-halloween-2015-canonical.ps1 -RepoRoot $env:GITHUB_WORKSPACE
+      - name: Probe pinned client archive for exact intro modules
+        shell: powershell
+        run: ./.github/scripts/waddle-halloween-2015-client-asset-probe.ps1 -RepoRoot $env:GITHUB_WORKSPACE
       - name: Compare late-AS3 party runtimes with FFDec
         shell: powershell
         run: ./.github/scripts/waddle-halloween-2015-runtime-compat.ps1 -RepoRoot $env:GITHUB_WORKSPACE

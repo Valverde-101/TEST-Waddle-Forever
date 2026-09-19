@@ -78,13 +78,13 @@ $partyContracts=@{
   selector="activeFeatures\s*:\s*'20151101'";
   id="id\s*:\s*'halloween-2015'";
   runtime="'play/v2/content/global/content/party\.swf'\s*:\s*ref\('content/party-runtime-2015\.swf'\)";
+  configs="'play/en/web_service/game_configs\.bin'\s*:\s*ref\('game_configs/game_configs\.bin'\)";
   shell="'play/v2/client/shell\.swf'\s*:\s*'svanilla:media/play/v2/client/shell\.swf'";
-  intro="'play/v2/client/intro_to_cp\.swf'\s*:\s*'svanilla:media/play/v2/client/intro_to_cp\.swf'";
   interface="'play/v2/content/global/content/interface\.swf'\s*:\s*ref\('client/ClientInterface-HalloweenParty2015\.swf'\)";
   features="'play/v2/content/global/content/features\.swf'\s*:\s*ref\('content/ContentFeatures-HalloweenParty2015\.swf'\)";
   icon="'play/v2/content/global/content/party_icon\.swf'\s*:\s*ref\('content/ContentParty_icon-HalloweenParty2015\.swf'\)";
   robotRoute="'play/v2/content/global/avatar/sprites/robot\.swf'\s*:\s*ref\('avatar/PenguinRobot\.swf'\)";
-  notlsRoute="'play/v2/content/global/rooms/NOTLS-ALL-EN\.swf'\s*:\s*'svanilla:media/play/v2/content/global/rooms/NOTLS-ALL-EN\.swf'";
+  notlsRoute="'play/v2/content/global/rooms/NOTLS-ALL-EN\.swf'\s*:\s*ref\('rooms/NOTLS-ALL-EN\.swf'\)";
   robotPath="'avatar/sprites/robot\.swf'\s*:\s*\[ref\('avatar/PenguinRobot\.swf'\)\s*,\s*'robot_tf'\s*,\s*'w\.avatarSprite\.robot'\s*\]";
   quest="'close_ups/quest_interface\.swf'\s*:\s*\[ref\('close_ups/Close_upsQuest_interface-HalloweenParty2015\.swf'\).*?'w\.app\.generic\.partyinterface'";
   login="'close_ups/halloLogin\.swf'\s*:\s*\[ref\('close_ups/Hallo15_dialogue_login\.swf'\).*?'w\.app\.loginprompt'";
@@ -101,6 +101,8 @@ foreach($needle in @('gameStringChanges:HALLOWEEN_2015_DIALOGUE_STRINGS','rooms:
 Require-NotContains $party "ref('content/party.swf')" 'mixed_2310_party_runtime'
 Require-NotContains $party "ref('content/party-base-2015.swf')" 'obsolete_mayparty_runtime'
 Require-NotContains $party "ref('content/map.swf')" 'unproven_recreation_map'
+Require-NotContains $party "'play/v2/client/intro_to_cp.swf':'svanilla:media/play/v2/client/intro_to_cp.swf'" 'intro_missing_svanilla_target_forbidden'
+Require-NotContains $party "'play/v2/content/global/rooms/NOTLS-ALL-EN.swf':'svanilla:media/play/v2/content/global/rooms/NOTLS-ALL-EN.swf'" 'notls_missing_svanilla_target_forbidden'
 
 $fileGenerators=Read-Normalized $fileGeneratorsPath
 Require-Contains $fileGenerators 'const getRuntimePathsJson: FileGenerator' 'runtime_paths_generator'
@@ -154,6 +156,10 @@ $canonicalManifest=Get-Content -LiteralPath $canonicalManifestPath -Raw|ConvertF
 if($canonicalManifest.schema -ne 'waddle-canonical-assets/v1'){throw "WADDLE_PARTY2015_SOURCE=FAIL canonical_schema=$($canonicalManifest.schema)"}
 $canonicalAssets=@($canonicalManifest.assets); $canonicalTargets=@($canonicalAssets|ForEach-Object{[string]$_.target})
 if(-not($canonicalTargets -contains 'content/party-runtime-2015-base.swf')){throw 'WADDLE_PARTY2015_SOURCE=FAIL runtime_donor_manifest_missing'}
+if(-not($canonicalTargets -contains 'game_configs/game_configs.bin')){throw 'WADDLE_PARTY2015_SOURCE=FAIL game_configs_manifest_missing'}
+if(-not($canonicalTargets -contains 'rooms/NOTLS-ALL-EN.swf')){throw 'WADDLE_PARTY2015_SOURCE=FAIL notls_manifest_missing'}
+$notlsEntry=$canonicalAssets|Where-Object{$_.target -eq 'rooms/NOTLS-ALL-EN.swf'}|Select-Object -First 1
+if([long]$notlsEntry.bytes -ne 1603221 -or ([string]$notlsEntry.gitBlobSha).ToLowerInvariant() -ne '206fa334351d967f0a899b22ce00e4378e76b694'){throw 'WADDLE_PARTY2015_SOURCE=FAIL notls_identity'}
 $runtimeEntry=$canonicalAssets|Where-Object{$_.target -eq 'content/party-runtime-2015-base.swf'}|Select-Object -First 1
 if([long]$runtimeEntry.bytes -ne 39406 -or ([string]$runtimeEntry.sha256).ToLowerInvariant() -ne 'd30fcd85c2f4a6b9ef6d1b81aac3a6d2f592af5f68ae13bb9d1564cb5b115cf7'){throw 'WADDLE_PARTY2015_SOURCE=FAIL runtime_donor_identity'}
 if(-not(Test-Path -LiteralPath $runtimePatchPath -PathType Leaf)){throw 'WADDLE_PARTY2015_SOURCE=FAIL runtime_patch_missing'}
@@ -176,4 +182,4 @@ foreach($entry in $canonicalAssets){
 $updates=Read-Normalized $updatesPath
 Require-Contains $updates 'import { UPDATES_2015 } from "./2015";' 'updates_2015_import'
 Require-Contains $updates '...UPDATES_2015' 'updates_2015_registration'
-Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=generated-halloween-compat donor=operation-crustacean-2015 activefeatures=20151101 shell=svanilla intro_real=svanilla notls_real=svanilla mall340=canonical quest_completed=10 features=party-json-parser transform=party-to-spts robot_tf=canonical bitmap_interaction=instrumented historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical"
+Write-Host "WADDLE_PARTY2015_SOURCE=PASS runtime=generated-halloween-compat donor=operation-crustacean-2015 activefeatures=20151101 shell=svanilla configs=canonical notls=canonical intro=canonical-probe-pending mall340=canonical quest_completed=10 features=party-json-parser transform=party-to-spts robot_tf=canonical bitmap_interaction=instrumented historical_swfs=132 canonical_provenance=$($canonicalAssets.Count) canonical_present=$presentCanonical"

@@ -178,6 +178,7 @@ const isFailureEvent = (event: WaddleLiveTraceEvent) => {
   const statusCode = Number(event.statusCode || 0);
   const status = String(event.status || '').toLowerCase();
   const error = String(event.error || '').toUpperCase();
+  if (event.benign === true) return false;
   if (status === 'aborted' || error.includes('ERR_ABORTED')) return false;
   if (phase === 'error' || statusCode >= 400) return true;
   return [
@@ -279,6 +280,7 @@ const buildFailureAnalysis = (
     || [...serverFileResolution].reverse().find(event => Boolean(event.status))
     || null;
   const fileResolutionStatus = String(fileResolution?.status || '').toLowerCase();
+  const resolvedFileTarget = [...serverFileResolution].reverse().find(event => Boolean(event.target))?.target || null;
 
   const requestedByCandidates = Array.from(new Set([
     ...missingMatches.map(item => String(item.source || '')),
@@ -319,10 +321,17 @@ const buildFailureAnalysis = (
       recommendedAction = 'Usar el contexto XT/XML, la ruta del resolvedor FILE y los eventos anteriores para localizar idioma, sala o timeline que construyó la solicitud.';
     }
   } else if (category === 'SWF' && statusCode >= 500) {
-    classification = 'SWF_SERVER_FAILURE';
-    confidence = 'high';
-    explanation = `El SWF ${leaf} fue solicitado, pero el servidor respondió ${statusCode}.`;
-    recommendedAction = 'Revisar el handler HTTP/local de contenido y el mapeo al filesystem.';
+    if (/^(?:read-failed|serve-failed)/.test(fileResolutionStatus)) {
+      classification = 'SWF_BROKEN_FILE_REFERENCE_TARGET';
+      confidence = 'high';
+      explanation = `El SWF ${leaf} estaba mapeado por game-data a ${resolvedFileTarget || '(target desconocido)'}, pero la lectura local falló (${fileResolutionStatus}).`;
+      recommendedAction = 'Corregir o hidratar el target exacto de la ruta; no sustituirlo por otro SWF de bootstrap ni aceptar el mapeo solo porque el string existe.';
+    } else {
+      classification = 'SWF_SERVER_FAILURE';
+      confidence = 'high';
+      explanation = `El SWF ${leaf} fue solicitado, pero el servidor respondió ${statusCode}.`;
+      recommendedAction = 'Revisar el handler HTTP/local de contenido y el mapeo al filesystem.';
+    }
   } else if (category === 'SWF' && String(failure.status || '') === 'network-error') {
     classification = 'SWF_NETWORK_FAILURE';
     confidence = 'high';
@@ -362,7 +371,9 @@ const buildFailureAnalysis = (
       ffdec_text_matches: ffdecTextMatches,
       server_file_resolution: serverFileResolution
     },
-    likely_requester: requestedByCandidates[0] || precedingProtocol?.action || null,
+    // A temporally preceding XT packet is context, not proof that it requested
+    // the asset. Only static dependency/reference evidence may name a requester.
+    likely_requester: requestedByCandidates[0] || null,
     file_resolution: fileResolution
   });
 };
@@ -559,7 +570,7 @@ const installPanelIntoRenderer = (window: BrowserWindow): Promise<DiagnosticPane
 
     const updateStats = () => {
       const trace = Array.isArray(window.__WADDLE_LIVE_TRACE__) ? window.__WADDLE_LIVE_TRACE__ : [];
-      const failures = trace.filter(e => e && String(e.status || '').toLowerCase() !== 'aborted' && !String(e.error || '').toUpperCase().includes('ERR_ABORTED') && (String(e.phase || '').toLowerCase() === 'error' || Number(e.statusCode || 0) >= 400 || ['unhandled-action','unhandled-context','invalid-signature','send-failed','handler-threw','network-error','http-error'].includes(String(e.status || '').toLowerCase())));
+      const failures = trace.filter(e => e && !e.benign && String(e.status || '').toLowerCase() !== 'aborted' && !String(e.error || '').toUpperCase().includes('ERR_ABORTED') && (String(e.phase || '').toLowerCase() === 'error' || Number(e.statusCode || 0) >= 400 || ['unhandled-action','unhandled-context','invalid-signature','send-failed','handler-threw','network-error','http-error'].includes(String(e.status || '').toLowerCase())));
       const swfFailures = failures.filter(e => String(e.category || '').toUpperCase() === 'SWF');
       panel.querySelector('#wd-errors').textContent = String(failures.length);
       panel.querySelector('#wd-swf').textContent = String(swfFailures.length);

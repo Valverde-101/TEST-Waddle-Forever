@@ -117,11 +117,15 @@ export const UPDATES_2015: Update[] = [
       music:HALLOWEEN_2015_MUSIC,
       fileChanges:{
         'play/v2/content/global/content/party.swf':ref('content/party-runtime-2015.swf'),
+        // Serve the byte-pinned modern configuration bundle instead of forcing the
+        // client through its missing-bundle fallback on every fresh boot.
+        'play/en/web_service/game_configs.bin':ref('game_configs/game_configs.bin'),
         // A 2012 update left its approximation shell persistent; restore the preserved late-AS3 shell for 2015.
         'play/v2/client/shell.swf':'svanilla:media/play/v2/client/shell.swf',
-        // Use the actual vanilla intro module. Never alias this to world.swf:
-        // loading world as a child starts a second internal client/session.
-        'play/v2/client/intro_to_cp.swf':'svanilla:media/play/v2/client/intro_to_cp.swf',
+        // Never substitute intro_to_cp with world.swf: loading world as a child
+        // starts a second internal client/session. The exact intro module is being
+        // recovered from the pinned media archive below, so do not advertise a
+        // nonexistent local target in the meantime.
         'play/v2/client/QuestCommunicator.swf':ref('client/QuestCommunicator.swf'),
         'play/v2/client/interface.swf':ref('client/ClientInterface-HalloweenParty2015.swf'),
         'play/v2/content/global/content/interface.swf':ref('client/ClientInterface-HalloweenParty2015.swf'),
@@ -133,8 +137,9 @@ export const UPDATES_2015: Update[] = [
         'play/v2/content/global/telescope/telescope.swf':ref('other/Telescope-HalloweenParty2015.swf'),
         'play/v2/content/global/binoculars/binoculars.swf':ref('other/Binoculars-HalloweenParty2015.swf'),
         'play/v2/content/global/rooms/mall.swf':ref('rooms/Hallo15_mall.swf'),
-        // Late-AS3 asks for this independent room overlay on room joins.
-        'play/v2/content/global/rooms/NOTLS-ALL-EN.swf':'svanilla:media/play/v2/content/global/rooms/NOTLS-ALL-EN.swf',
+        // Exact all-episodes Night of the Living Sled from the pinned source;
+        // never substitute the episode-3-only SWF.
+        'play/v2/content/global/rooms/NOTLS-ALL-EN.swf':ref('rooms/NOTLS-ALL-EN.swf'),
         'play/v2/content/global/rooms/school.swf':ref('rooms/Hallo15_school.swf'),
         'play/v2/content/global/rooms/park.swf':ref('rooms/Hallo15_park.swf'),
         'play/v2/content/global/rooms/partysolo1.swf':ref('rooms/Hallo15_partysolo1.swf'),

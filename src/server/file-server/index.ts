@@ -162,6 +162,7 @@ export class FileServer {
 
   private async getFile(route: string): Promise<Buffer | string | undefined> {
     let filePath: string | undefined;
+    let resolvedTarget: string | undefined;
     const modName = this.modFiles.get(route);
 
     if (modName !== undefined) {
@@ -172,10 +173,11 @@ export class FileServer {
         traceFileResolution(route, 'error', 'unsafe-mod-target', { mod: modName });
         return undefined;
       }
+      resolvedTarget = toForwardSlash(path.join(modName, route));
       traceFileResolution(route, 'handled', 'resolved-mod', {
         resolver: 'mod',
         mod: modName,
-        target: toForwardSlash(path.join(modName, route))
+        target: resolvedTarget
       });
     } else {
       const lookup = this.gameData.lookupFile(route);
@@ -191,9 +193,10 @@ export class FileServer {
           });
           return undefined;
         }
+        resolvedTarget = toForwardSlash(String(relativeFile));
         traceFileResolution(route, 'handled', 'resolved-game-data', {
           resolver: 'game-data',
-          target: toForwardSlash(String(relativeFile)),
+          target: resolvedTarget,
           memoryCacheEligible: isClothingAssetRoute(route)
         });
       }
@@ -211,6 +214,7 @@ export class FileServer {
       } catch (error) {
         traceFileResolution(route, 'error', 'read-failed', {
           resolver: modName !== undefined ? 'mod' : 'game-data',
+          target: resolvedTarget,
           error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
         });
         throw error;
