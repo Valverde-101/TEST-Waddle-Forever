@@ -22,6 +22,8 @@ export type PartyProgressConfig = {
   taskCount: number;
   /** Maximum coins accepted in one qtupdate packet. Defaults to 10. */
   maxCoinUpdate?: number;
+  /** The Fair's ticket economy is isolated from Halloween's robot quest state. */
+  ticketBased?: true;
   /**
    * Optional late-AS3 `partyservice` bootstrap. Keeping this with the persisted
    * party configuration makes the runtime reusable for later modern parties.
@@ -56,6 +58,12 @@ export type PartyProgressState = {
   msgViewedArray: number[];
   communicatorMsgArray: number[];
   questTaskStatus: number[];
+  /** Fair-only persisted balances; omitted from other parties' cookies. */
+  tickets?: number;
+  silverTicket?: number;
+  spinDayIndex?: number;
+  /** Server-only Fair daily-spin guard; never sent as part of the cookie. */
+  fairLastSpinDay?: number;
 };
 
 export type PartyProgressStoreData = Record<string, PartyProgressState>;

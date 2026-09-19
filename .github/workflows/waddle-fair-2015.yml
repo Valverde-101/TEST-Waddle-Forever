@@ -1,0 +1,62 @@
+name: Waddle The Fair 2015 Source Import
+
+on:
+  push:
+    branches: [feat/the-fair-2015]
+    paths:
+      - '.github/scripts/waddle-fair-2015-import.py'
+      - '.github/workflows/waddle-fair-2015.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: waddle-fair-2015-source-discovery
+  cancel-in-progress: true
+
+jobs:
+  discover-historical-fair-assets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Validate Python importer syntax
+        run: python -m py_compile .github/scripts/waddle-fair-2015-import.py
+      - name: Import and SHA-256 pin historical Fair 2015 SWFs
+        run: python .github/scripts/waddle-fair-2015-import.py --repo-root .
+      - name: Verify imported assets before commit
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json, hashlib
+          root=Path('media/default/fair2015')
+          m=json.loads((root/'manifest.json').read_text(encoding='utf-8'))
+          assert m['schema']=='waddle-fair-2015-assets/v1'
+          assert m['count']>=140
+          assets=m['assets']
+          assert len(assets)==m['count']
+          names=[a['relativePath'].lower() for a in assets]
+          assert len(names)==len(set(names))
+          for a in assets:
+              p=root/a['relativePath']
+              data=p.read_bytes()
+              assert data[:3] in (b'FWS', b'CWS', b'ZWS') and len(data)>100
+              assert len(data)==a['bytes'] and hashlib.sha256(data).hexdigest()==a['sha256']
+              assert a['url'].startswith('https://toolbox.solero.me/cparchives/static/images/archives/')
+          print(f"WADDLE_FAIR2015_VERIFIED=PASS files={len(assets)}")
+          PY
+      - name: Commit pinned original assets only to Fair feature branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- media/default/fair2015
+          if git diff --cached --quiet; then
+            echo "WADDLE_FAIR2015_PUBLISH=PASS mode=already_tracked"
+          else
+            git commit -m "Archive and pin The Fair 2015 original assets"
+            git push origin HEAD:refs/heads/feat/the-fair-2015
+            echo "WADDLE_FAIR2015_PUBLISH=PASS mode=branch_only"
+          fi

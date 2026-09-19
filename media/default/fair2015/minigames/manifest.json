@@ -1,0 +1,484 @@
+{
+  "schema": "waddle-fair-2015-minigames/v1",
+  "description": "All SWFs directly linked by nine minigame pages cited by The Fair 2015 archive; availability alone does not prove 2015 compatibility.",
+  "count": 53,
+  "assets": [
+    {
+      "game": "Balloon Pop",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Balloon_Pop.html",
+      "name": "BalloonPop.swf",
+      "relativePath": "minigames/balloon_pop/BalloonPop.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/7/7f/BalloonPop.swf",
+      "bytes": 228455,
+      "sha256": "3af34f84dabb1c255ea1caab7bc794d3c4f662628f7834d56afa2141bbf0aafd"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "Grab&Spin.swf",
+      "relativePath": "minigames/daily_spin/Grab&Spin.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/6/60/Grab&Spin.swf",
+      "bytes": 53910,
+      "sha256": "751f4f58ff88708bd6e0ce5538c2afa41ec3faf29e9b18bfd1e3d7d78072d99c"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "GamesSpinBootstrap.swf",
+      "relativePath": "minigames/daily_spin/GamesSpinBootstrap.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/6/60/GamesSpinBootstrap.swf",
+      "bytes": 6364,
+      "sha256": "ada970a377e945e1e0dc69a30f14f563e49cd8fe08a20897a2464ea58a1b72dc"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "GamesSpinLangENLocale.swf",
+      "relativePath": "minigames/daily_spin/GamesSpinLangENLocale.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/b/bb/GamesSpinLangENLocale.swf",
+      "bytes": 581,
+      "sha256": "25ff5854187593f3d4b4212929e89022d9adb6fcf3a7dbffcffa986f55bee9c5"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "GamesSpinLangPTLocale.swf",
+      "relativePath": "minigames/daily_spin/GamesSpinLangPTLocale.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/1/1d/GamesSpinLangPTLocale.swf",
+      "bytes": 640,
+      "sha256": "cea003a03544130d1d3b6da43d91c8960344ace561c1bf88ddf52e4c3b5b0090"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "GamesSpinLangFRLocale.swf",
+      "relativePath": "minigames/daily_spin/GamesSpinLangFRLocale.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/8/87/GamesSpinLangFRLocale.swf",
+      "bytes": 655,
+      "sha256": "431d9bad128dffc1fdbb566590f924c01ff36c77ddd9fb253e05b2ba6dd631cf"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "GamesSpinLangESLocale.swf",
+      "relativePath": "minigames/daily_spin/GamesSpinLangESLocale.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/b/b2/GamesSpinLangESLocale.swf",
+      "bytes": 619,
+      "sha256": "3ef486b386336b3d1472195a3a3f5a7ee5d0bd61845d564c1152adf20e576749"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "GamesSpinLangDELocale.swf",
+      "relativePath": "minigames/daily_spin/GamesSpinLangDELocale.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/1/1c/GamesSpinLangDELocale.swf",
+      "bytes": 648,
+      "sha256": "059c12e39c911f4f5c9eb21def5ef6114d0b8908fc2a3e85082c55996cd6c5f8"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "GamesSpinLangRULocale.swf",
+      "relativePath": "minigames/daily_spin/GamesSpinLangRULocale.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/9/95/GamesSpinLangRULocale.swf",
+      "bytes": 775,
+      "sha256": "ceaf8ff24357767a45ff2b334b27a5385f338f6b4887869d86153b53c7ee6d8f"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "GamesSpinMain.swf",
+      "relativePath": "minigames/daily_spin/GamesSpinMain.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/d/df/GamesSpinMain.swf",
+      "bytes": 379579,
+      "sha256": "4df4515ecfec126fd4822b3a48587b50df9091fbe6cebe28b0a1a040fb4489e3"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "Music618.swf",
+      "relativePath": "minigames/daily_spin/Music618.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/4/4b/Music618.swf",
+      "bytes": 243719,
+      "sha256": "37efc9ca1235c9df6f6180fb6de56ffc7d1d68402749851c3047e02ebe74ec4f"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "GamesSpinLangENSpin.swf",
+      "relativePath": "minigames/daily_spin/GamesSpinLangENSpin.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/f/f2/GamesSpinLangENSpin.swf",
+      "bytes": 3631,
+      "sha256": "73c66ce402036b68216a4ef06d59597272e4d50b84cbea6804213a9a66bee75a"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "GamesSpinLangPTSpin.swf",
+      "relativePath": "minigames/daily_spin/GamesSpinLangPTSpin.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/2/27/GamesSpinLangPTSpin.swf",
+      "bytes": 3446,
+      "sha256": "1c044c9686f7111c240a33e240800180eb04ff3fb8b51ec1392e9f135fad2266"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "GamesSpinLangFRSpin.swf",
+      "relativePath": "minigames/daily_spin/GamesSpinLangFRSpin.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/6/6c/GamesSpinLangFRSpin.swf",
+      "bytes": 4095,
+      "sha256": "83dec917b88079fc7fefb6c1a50d86f7fef4a98fd63aec6dcaee7a37c07bf796"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "GamesSpinLangESSpin.swf",
+      "relativePath": "minigames/daily_spin/GamesSpinLangESSpin.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/0/01/GamesSpinLangESSpin.swf",
+      "bytes": 3657,
+      "sha256": "48e8e73678316362aa257c3f33da93077deff02e046b48f36e9c402c22cbc704"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "GamesSpinLangDESpin.swf",
+      "relativePath": "minigames/daily_spin/GamesSpinLangDESpin.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/7/78/GamesSpinLangDESpin.swf",
+      "bytes": 3863,
+      "sha256": "20db278af646f557bdab27325c9709c930d874d51958934be9a6a9cd63c3ae93"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "GamesSpinLangRUSpin.swf",
+      "relativePath": "minigames/daily_spin/GamesSpinLangRUSpin.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/7/78/GamesSpinLangRUSpin.swf",
+      "bytes": 3475,
+      "sha256": "7dd588bdad64b07dbad9d418952f2943be29e56143e4d5cf75924b32d51fea0c"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "GamesSpinLangENTitle.swf",
+      "relativePath": "minigames/daily_spin/GamesSpinLangENTitle.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/2/2f/GamesSpinLangENTitle.swf",
+      "bytes": 13789,
+      "sha256": "d308b6d0169a349b3fffb0a35f5039e092a0ae791207692f1281e19b27a6dc3d"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "GamesSpinLangPTTitle.swf",
+      "relativePath": "minigames/daily_spin/GamesSpinLangPTTitle.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/b/b0/GamesSpinLangPTTitle.swf",
+      "bytes": 10866,
+      "sha256": "a640541b7e3c834c4b412f2421799ca2187791a43424f906a6c568bb6ad4f961"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "GamesSpinLangFRTitle.swf",
+      "relativePath": "minigames/daily_spin/GamesSpinLangFRTitle.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/0/0e/GamesSpinLangFRTitle.swf",
+      "bytes": 28976,
+      "sha256": "b322e68c93fce7dc29e548bc799a4b5e80e61d095937c78940bca6f442c21e32"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "GamesSpinLangESTitle.swf",
+      "relativePath": "minigames/daily_spin/GamesSpinLangESTitle.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/5/57/GamesSpinLangESTitle.swf",
+      "bytes": 14828,
+      "sha256": "b0f03c5a68cbe69d355c72287cb59c5e0086484001be8ab8c9e7c24500af77e8"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "GamesSpinLangDETitle.swf",
+      "relativePath": "minigames/daily_spin/GamesSpinLangDETitle.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/0/00/GamesSpinLangDETitle.swf",
+      "bytes": 15419,
+      "sha256": "2b13ba785e88d9929d40c4628cb2dc357ddbaa5acbf6df1a0bc6f6db1f636eb6"
+    },
+    {
+      "game": "Daily Spin",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Daily_Spin.html",
+      "name": "GamesSpinLangRUTitle.swf",
+      "relativePath": "minigames/daily_spin/GamesSpinLangRUTitle.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/3/36/GamesSpinLangRUTitle.swf",
+      "bytes": 44609,
+      "sha256": "277fae487b9d930bb545e69e80acc18068725fbb16e6601861e891102f7d7825"
+    },
+    {
+      "game": "Feed-A-Puffle",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Feed-A-Puffle.html",
+      "name": "Feed-A-Puffle.swf",
+      "relativePath": "minigames/feed_a_puffle/Feed-A-Puffle.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/7/7a/Feed-A-Puffle.swf",
+      "bytes": 166505,
+      "sha256": "81f11cf905658855d7745a474457ec8a0f79aa785469595aa2085e976d0bb14b"
+    },
+    {
+      "game": "Lunar Launch",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Lunar_Launch.html",
+      "name": "RingTheBell.swf",
+      "relativePath": "minigames/lunar_launch/RingTheBell.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/c/c5/RingTheBell.swf",
+      "bytes": 115720,
+      "sha256": "05e18f97b418a946267d2e10857438c1bf0abf88f226257c2b895083e3de1531"
+    },
+    {
+      "game": "Lunar Launch",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Lunar_Launch.html",
+      "name": "GamesBellBootstrap.swf",
+      "relativePath": "minigames/lunar_launch/GamesBellBootstrap.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/8/80/GamesBellBootstrap.swf",
+      "bytes": 6272,
+      "sha256": "e1fda1e5dbaaf2e5da650b554aa7eef0055e40f278fb4bc5bac2593bdce8f68e"
+    },
+    {
+      "game": "Lunar Launch",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Lunar_Launch.html",
+      "name": "GamesBellLangENLocale.swf",
+      "relativePath": "minigames/lunar_launch/GamesBellLangENLocale.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/3/36/GamesBellLangENLocale.swf",
+      "bytes": 433,
+      "sha256": "67e47229cd485ac11483942a1ca074ab4e5eafa333586ea7ab1659b03bd018d2"
+    },
+    {
+      "game": "Lunar Launch",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Lunar_Launch.html",
+      "name": "GamesBellLangPTLocale.swf",
+      "relativePath": "minigames/lunar_launch/GamesBellLangPTLocale.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/7/72/GamesBellLangPTLocale.swf",
+      "bytes": 455,
+      "sha256": "943b82c46c284a56478b8c6b41c274cefc446f33bf975a8e25b589659c9bfd01"
+    },
+    {
+      "game": "Lunar Launch",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Lunar_Launch.html",
+      "name": "GamesBellLangFRLocale.swf",
+      "relativePath": "minigames/lunar_launch/GamesBellLangFRLocale.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/d/d7/GamesBellLangFRLocale.swf",
+      "bytes": 456,
+      "sha256": "71f1a88e4a49608fe2be7d29cd7e63801b2b633f690ac29a6cdeb4acca727dd8"
+    },
+    {
+      "game": "Lunar Launch",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Lunar_Launch.html",
+      "name": "GamesBellLangESLocale.swf",
+      "relativePath": "minigames/lunar_launch/GamesBellLangESLocale.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/8/8b/GamesBellLangESLocale.swf",
+      "bytes": 464,
+      "sha256": "771e467f337a35f5c3097efd1c222953735f96ad94fdb6c4a40ca1a698c54dae"
+    },
+    {
+      "game": "Lunar Launch",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Lunar_Launch.html",
+      "name": "GamesBellLangDELocale.swf",
+      "relativePath": "minigames/lunar_launch/GamesBellLangDELocale.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/5/50/GamesBellLangDELocale.swf",
+      "bytes": 447,
+      "sha256": "11e0c6a46287138525c1ff04b339a36462c9346048f3d4127977f98b970a833a"
+    },
+    {
+      "game": "Lunar Launch",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Lunar_Launch.html",
+      "name": "GamesBellLangRULocale.swf",
+      "relativePath": "minigames/lunar_launch/GamesBellLangRULocale.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/4/43/GamesBellLangRULocale.swf",
+      "bytes": 512,
+      "sha256": "b45b398a5ff9295addc7e3f2d62d6bd36c474bb0bf927174563396f2385cceb0"
+    },
+    {
+      "game": "Lunar Launch",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Lunar_Launch.html",
+      "name": "GamesBellMain.swf",
+      "relativePath": "minigames/lunar_launch/GamesBellMain.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/8/8a/GamesBellMain.swf",
+      "bytes": 131134,
+      "sha256": "99d6bdad2a6af0f9a1d071d027f8532c04731ce6b833d432299c070325231d3e"
+    },
+    {
+      "game": "Lunar Launch",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Lunar_Launch.html",
+      "name": "Music614.swf",
+      "relativePath": "minigames/lunar_launch/Music614.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/9/99/Music614.swf",
+      "bytes": 251697,
+      "sha256": "bd2f84aac1e0790619b8c286301dcc0bc0935e8f8dbbdb9b19825d5fe151961e"
+    },
+    {
+      "game": "Lunar Launch",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Lunar_Launch.html",
+      "name": "GamesBellLangENTitle.swf",
+      "relativePath": "minigames/lunar_launch/GamesBellLangENTitle.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/0/07/GamesBellLangENTitle.swf",
+      "bytes": 4432,
+      "sha256": "4fa059608d3cbb812229df1e156159b3438906da23786d54b765c74bc339e875"
+    },
+    {
+      "game": "Lunar Launch",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Lunar_Launch.html",
+      "name": "GamesBellLangPTTitle.swf",
+      "relativePath": "minigames/lunar_launch/GamesBellLangPTTitle.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/5/58/GamesBellLangPTTitle.swf",
+      "bytes": 1526,
+      "sha256": "8cbae3fa96ff269aef21bf596bf3fa698b04b9dea362a680bb13550fd221b0c6"
+    },
+    {
+      "game": "Lunar Launch",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Lunar_Launch.html",
+      "name": "GamesBellLangFRTitle.swf",
+      "relativePath": "minigames/lunar_launch/GamesBellLangFRTitle.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/f/f5/GamesBellLangFRTitle.swf",
+      "bytes": 2118,
+      "sha256": "8c01c9a156abdaf477d3f59e291eb4c5a2d73b1bbffe654a40195bfae5605d90"
+    },
+    {
+      "game": "Lunar Launch",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Lunar_Launch.html",
+      "name": "GamesBellLangESTitle.swf",
+      "relativePath": "minigames/lunar_launch/GamesBellLangESTitle.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/0/08/GamesBellLangESTitle.swf",
+      "bytes": 821,
+      "sha256": "23bb76f1d040628951d8a93e96b0021aafb5b45c5f531e997ce561d7c43d4f96"
+    },
+    {
+      "game": "Lunar Launch",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Lunar_Launch.html",
+      "name": "GamesBellLangDETitle.swf",
+      "relativePath": "minigames/lunar_launch/GamesBellLangDETitle.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/4/4a/GamesBellLangDETitle.swf",
+      "bytes": 2407,
+      "sha256": "ebfffa54008d374c7a1f71f45fe83e7c150e4eab32df087b4350873731694178"
+    },
+    {
+      "game": "Lunar Launch",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Lunar_Launch.html",
+      "name": "GamesBellLangRUTitle.swf",
+      "relativePath": "minigames/lunar_launch/GamesBellLangRUTitle.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/9/98/GamesBellLangRUTitle.swf",
+      "bytes": 4334,
+      "sha256": "7f017f68137d29d733ac3d4ce05f6eff575e531365b5c4a12f9d3960eb524e70"
+    },
+    {
+      "game": "Memory Card Game",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Memory_Card_Game.html",
+      "name": "MemoryCardGame.swf",
+      "relativePath": "minigames/memory_card_game/MemoryCardGame.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/e/e4/MemoryCardGame.swf",
+      "bytes": 117750,
+      "sha256": "43e580d70dcdbd385b2865e0b6cccf4c9ca5fd67c3f0fb85e402bcb5b543b288"
+    },
+    {
+      "game": "Puffle Paddle",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Puffle_Paddle.html",
+      "name": "GamesPufflePaddle-TheFair2015.swf",
+      "relativePath": "minigames/puffle_paddle/GamesPufflePaddle-TheFair2015.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/4/41/GamesPufflePaddle-TheFair2015.swf",
+      "bytes": 185608,
+      "sha256": "5df8bdb2bcc2dd4b0118fbd1272975a0c05e5bd28f2c5f4267d4febceb2cf8ee"
+    },
+    {
+      "game": "Puffle Paddle",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Puffle_Paddle.html",
+      "name": "GamesPufflePaddle-Bootstrap-TheFair2015.swf",
+      "relativePath": "minigames/puffle_paddle/GamesPufflePaddle-Bootstrap-TheFair2015.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/c/c3/GamesPufflePaddle-Bootstrap-TheFair2015.swf",
+      "bytes": 6272,
+      "sha256": "5cc2385605ae9078c5e430e3ac176df9d4afa00c8be449a0ced4bcf193f76d73"
+    },
+    {
+      "game": "Puffle Shuffle",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Puffle_Shuffle.html",
+      "name": "Music222.swf",
+      "relativePath": "minigames/puffle_shuffle/Music222.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/1/16/Music222.swf",
+      "bytes": 82972,
+      "sha256": "c845daef2ed47adacef7da6b0a1b9ac0f7e1aaa294d505db1796f04a9d80859f"
+    },
+    {
+      "game": "Puffle Shuffle",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Puffle_Shuffle.html",
+      "name": "PuffleShuffleBootstrap.swf",
+      "relativePath": "minigames/puffle_shuffle/PuffleShuffleBootstrap.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/a/a1/PuffleShuffleBootstrap.swf",
+      "bytes": 6428,
+      "sha256": "590227f1a6d459bdeef066349cea9dc7901ee98590d2e9503b6084dd499bb967"
+    },
+    {
+      "game": "Puffle Shuffle",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Puffle_Shuffle.html",
+      "name": "PuffleShuffleLocale.swf",
+      "relativePath": "minigames/puffle_shuffle/PuffleShuffleLocale.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/6/61/PuffleShuffleLocale.swf",
+      "bytes": 519,
+      "sha256": "9ea674b8208f2c7400d35f2d34ce2e0599eb522ee70bb450a09aec16c04786b9"
+    },
+    {
+      "game": "Puffle Shuffle",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Puffle_Shuffle.html",
+      "name": "PuffleShuffleSign.swf",
+      "relativePath": "minigames/puffle_shuffle/PuffleShuffleSign.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/5/50/PuffleShuffleSign.swf",
+      "bytes": 5273,
+      "sha256": "165f0fa1cec83bd2af4c78b1c5f5491ff90d25a9f81ea885075d974e6afcf33a"
+    },
+    {
+      "game": "Puffle Shuffle",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Puffle_Shuffle.html",
+      "name": "PuffleShuffle_title.swf",
+      "relativePath": "minigames/puffle_shuffle/PuffleShuffle_title.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/3/32/PuffleShuffle_title.swf",
+      "bytes": 3020,
+      "sha256": "2e51b2ab388e6d2bb89c3caec0bb3f4fbcbdd54f7c62bb9d1a966040db1e46db"
+    },
+    {
+      "game": "Puffle Soaker",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Puffle_Soaker.html",
+      "name": "PuffleSoaker.swf",
+      "relativePath": "minigames/puffle_soaker/PuffleSoaker.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/3/33/PuffleSoaker.swf",
+      "bytes": 220427,
+      "sha256": "6f5ddee066cf53161e97ac8a3a4421ced609f58fc0976bd9ad2d6e732ec19789"
+    },
+    {
+      "game": "Super Hero Bounce",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Super_Hero_Bounce.html",
+      "name": "ClientGame_launcher_3.swf",
+      "relativePath": "minigames/super_hero_bounce/ClientGame_launcher_3.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/9/95/ClientGame_launcher_3.swf",
+      "bytes": 122881,
+      "sha256": "b3684f4df06a443f8c98934af4cbe108ca359feaf659a328878a767797e2ece5"
+    },
+    {
+      "game": "Super Hero Bounce",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Super_Hero_Bounce.html",
+      "name": "GamesChaseLangEnLocale.swf",
+      "relativePath": "minigames/super_hero_bounce/GamesChaseLangEnLocale.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/0/04/GamesChaseLangEnLocale.swf",
+      "bytes": 8889,
+      "sha256": "f27c441062685c231ee6055e455b082dda9460159778afd2370e17ecf35a0149"
+    },
+    {
+      "game": "Super Hero Bounce",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Super_Hero_Bounce.html",
+      "name": "GamesCpPartyGamesBounceMain.swf",
+      "relativePath": "minigames/super_hero_bounce/GamesCpPartyGamesBounceMain.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/6/6c/GamesCpPartyGamesBounceMain.swf",
+      "bytes": 860138,
+      "sha256": "1d9ca3a424d92674008e6bdd7a758c1c3e46a35e631696d61c38be5c7b1e3e31"
+    },
+    {
+      "game": "Super Hero Bounce",
+      "filePage": "https://toolbox.solero.me/cparchives/wiki/Super_Hero_Bounce.html",
+      "name": "Music395.swf",
+      "relativePath": "minigames/super_hero_bounce/Music395.swf",
+      "url": "https://toolbox.solero.me/cparchives/static/images/archives/3/35/Music395.swf",
+      "bytes": 228377,
+      "sha256": "d423b364f3c8df0bbc5876e9d5c0b893ab568c5207e01750a74e52952a864d27"
+    }
+  ]
+}

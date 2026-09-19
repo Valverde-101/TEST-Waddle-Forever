@@ -1,0 +1,84 @@
+name: Waddle The Fair 2015 Runtime Forensics
+
+on:
+  push:
+    branches: [feat/the-fair-2015]
+    paths:
+      - '.github/workflows/waddle-fair-2015-forensics.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: waddle-fair-2015-runtime-forensics
+  cancel-in-progress: true
+
+jobs:
+  inspect-original-client-contracts:
+    runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Extract archived Fair client and game runtime contracts
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root=$env:GITHUB_WORKSPACE
+          $ffdec=Get-ChildItem -LiteralPath 'V:\AndroidBuild\Tools\FFDec' -Filter 'ffdec-cli.exe' -Recurse -File | Sort-Object FullName -Descending | Select-Object -First 1
+          if(-not $ffdec){throw 'WADDLE_FAIR_FORENSICS=FAIL ffdec_missing'}
+          $work=Join-Path $env:RUNNER_TEMP 'fair2015-forensics'
+          New-Item -ItemType Directory -Force -Path $work | Out-Null
+          $samples=[ordered]@{
+            fair_icon='media/default/fair2015/content/ContentParty_icon-TheFair2015.swf'
+            fair_interface='media/default/fair2015/client/ClientInterfaceFair2015.swf'
+            fair_spin_bootstrap='media/default/fair2015/minigames/daily_spin/GamesSpinBootstrap.swf'
+            fair_spin_main='media/default/fair2015/minigames/daily_spin/GamesSpinMain.swf'
+            fair_paddle_bootstrap='media/default/fair2015/minigames/puffle_paddle/GamesPufflePaddle-Bootstrap-TheFair2015.swf'
+            generic_party='media/default/svanilla/media/play/v2/content/global/content/party.swf'
+            ghost_party='media/default/unknown/ghosts/party.swf'
+            late2015_party='media/default/party2015/content/party-runtime-2015-base.swf'
+          }
+          foreach($sample in $samples.GetEnumerator()){
+            $path=Join-Path $root $sample.Value
+            if(-not(Test-Path -LiteralPath $path -PathType Leaf)){throw "WADDLE_FAIR_FORENSICS=FAIL missing=$path"}
+            $out=Join-Path $work $sample.Key
+            New-Item -ItemType Directory -Force -Path $out | Out-Null
+            $previous=$ErrorActionPreference; $ErrorActionPreference='Continue'
+            try {
+              $logs=@(& $ffdec.FullName -cli -onerror abort -exportTimeout 90 -exportFileTimeout 30 -export script $out $path 2>&1 | Out-String)
+              $exit=$LASTEXITCODE
+            } finally { $ErrorActionPreference=$previous }
+            if($exit-ne0){throw "WADDLE_FAIR_FORENSICS=FAIL sample=$($sample.Key) ffdec_exit=$exit log=$($logs -join ' ')"}
+            $scriptFiles=@(Get-ChildItem -LiteralPath $out -Filter '*.as' -Recurse -File)
+            $tokens='FairParty|ServerCookieService|partyCookie|party_icon|partyinterface|ticket|silverTicket|spinDayIndex|cp_party_games|send.*Game|dailyspin|bootstrap\.swf|features\.swf|QuestInterface|PartyMap'
+            $matches=@($scriptFiles | Select-String -Pattern $tokens -CaseSensitive:$false | Select-Object -First 95 | ForEach-Object {
+              '{0}:{1} {2}' -f $_.Path.Substring($out.Length+1),$_.LineNumber,$_.Line.Trim()
+            })
+            Write-Host "WADDLE_FAIR_FORENSICS=PASS sample=$($sample.Key) bytes=$((Get-Item $path).Length) scripts=$($scriptFiles.Count) matches=$($matches.Count)"
+            foreach($line in $matches){Write-Host "WADDLE_FAIR_CONTRACT sample=$($sample.Key) $line"}
+          $fairScripts=Join-Path $work 'fair_spin_main\scripts'
+          $primary=@(
+            'frame_1\DoAction.as',
+            '__Packages\com\clubpenguin\world\rooms2015\may\party\MayParty.as',
+            '__Packages\com\clubpenguin\world\rooms2015\may\vo\MayPartyCookieVO.as',
+            '__Packages\com\clubpenguin\world\rooms2015\may\party\MayPartyConstants.as',
+            '__Packages\com\clubpenguin\spin\Game.as'
+          )
+          foreach($relative in $primary){
+            $file=Join-Path $fairScripts $relative
+            if(-not(Test-Path -LiteralPath $file -PathType Leaf)){
+              Write-Host "WADDLE_FAIR_SOURCE_MISSING=$relative"
+              continue
+            }
+            $lines=@(Get-Content -LiteralPath $file)
+            $limit=if($relative -like '*MayParty.as') {340} elseif($relative -like '*Game.as') {125} else {190}
+            Write-Host "WADDLE_FAIR_SOURCE_BEGIN file=$relative lines=$($lines.Count) shown=$([Math]::Min($limit,$lines.Count))"
+            for($idx=0;$idx -lt [Math]::Min($limit,$lines.Count);$idx++){
+              Write-Host ("WADDLE_FAIR_SOURCE {0}:{1} {2}" -f $relative,($idx+1),$lines[$idx])
+            }
+            Write-Host "WADDLE_FAIR_SOURCE_END file=$relative"
+          }
+          }
