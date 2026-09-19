@@ -1,0 +1,142 @@
+{
+  "schema": "waddle-canonical-assets/v1",
+  "party": "Halloween Party 2015",
+  "sourceRepository": "CPImagined/CPImagined-Archive",
+  "sourceCommit": "130504b8cbbba1666e31442f6ca27f6687157e63",
+  "description": "Preserved late-AS3 Halloween 2015 runtime/configuration supplements. Git-backed supplements are pinned to an immutable source commit and archive-backed runtime supplements are pinned by HTTPS URL, exact byte length and SHA-256. Historical CPArchives SWFs remain untouched; coherent supplements are hydrated to distinct target paths so no preserved historical file is overwritten.",
+  "assets": [
+    {
+      "target": "content/party.swf",
+      "sourcePath": "parties/2310 2 halloween classic edition/party.swf",
+      "bytes": 148584,
+      "gitBlobSha": "221b8f888c1ab1a27bb56b5c5d500afc1fd8f7c9",
+      "kind": "swf"
+    },
+    {
+      "target": "content/party-base-2015.swf",
+      "sourcePath": "parties/2310 2 halloween classic edition/hadnler stuff/global content/party.swf",
+      "bytes": 61387,
+      "gitBlobSha": "ab12a27ebb1776bc30cc14d8ef748413f093ea80",
+      "kind": "swf"
+    },
+    {
+      "target": "content/party-runtime-2015-base.swf",
+      "sourceUrl": "https://toolbox.solero.me/cparchives/static/images/archives/a/ae/ClientParty-OperationCrustacean.swf",
+      "bytes": 39406,
+      "sha256": "d30fcd85c2f4a6b9ef6d1b81aac3a6d2f592af5f68ae13bb9d1564cb5b115cf7",
+      "kind": "swf"
+    },
+    {
+      "target": "content/map.swf",
+      "sourcePath": "parties/2310 2 halloween classic edition/map.swf",
+      "bytes": 243088,
+      "gitBlobSha": "ac69c389aef36ba7abb555b4bc1154359e43db11",
+      "kind": "swf"
+    },
+    {
+      "target": "client/ClientInterface-HalloweenClassic2015.swf",
+      "sourcePath": "parties/2310 2 halloween classic edition/interface/interface.swf",
+      "bytes": 1670806,
+      "gitBlobSha": "5286f60dbfc51c780691f8427e2a4f8b0b63dc21",
+      "kind": "swf"
+    },
+    {
+      "target": "close_ups/Close_upsQuest_interface-HalloweenClassic2015.swf",
+      "sourcePath": "parties/2310 2 halloween classic edition/party interface/quest_interface.swf",
+      "bytes": 597937,
+      "gitBlobSha": "1a51f8e7283068cba3678d1d225ea155dc6afd5a",
+      "kind": "swf"
+    },
+    {
+      "target": "client/QuestCommunicator.swf",
+      "sourcePath": "default things/QuestCommunicator/QuestCommunicator.swf",
+      "bytes": 877687,
+      "gitBlobSha": "838419da433da9515148b2cc12852ec4a501c8e9",
+      "kind": "swf"
+    },
+    {
+      "target": "close_ups/ghostAdopt.swf",
+      "sourcePath": "parties/2310 2 halloween classic edition/dialogue/ghostAdopt/ghostAdopt.swf",
+      "bytes": 299875,
+      "gitBlobSha": "28d7c38ebbb377d890a31ed06fed49c65c36b487",
+      "kind": "swf"
+    },
+    {
+      "target": "close_ups/skipDialogue.swf",
+      "sourcePath": "parties/2310 2 halloween classic edition/dialogue/skipDialogue/skipDialogue.swf",
+      "bytes": 107469,
+      "gitBlobSha": "9e933888609d72415e803a6916f8cd861a6b17da",
+      "kind": "swf"
+    },
+    {
+      "target": "close_ups/halloLogin.swf",
+      "sourcePath": "parties/2310 2 halloween classic edition/dialogue/halloLogin/halloLogin.swf",
+      "bytes": 74159,
+      "gitBlobSha": "052a30679c93ff4a5d052d74220a270293c4a818",
+      "kind": "swf"
+    },
+    {
+      "target": "game_configs/game_configs.bin",
+      "sourcePath": "parties/2310 2 halloween classic edition/spoopy configs/game_configs.bin",
+      "bytes": 232384,
+      "gitBlobSha": "fd824863bde070f47fb3f809f12619311c5ded59",
+      "kind": "zip-config"
+    },
+    {
+      "target": "game_configs/game_strings.json",
+      "sourcePath": "parties/2310 2 halloween classic edition/spoopy configs/game_strings.json",
+      "bytes": 272169,
+      "gitBlobSha": "03decb93bc21d4cf0ce82daf650373a30094b619",
+      "kind": "json"
+    },
+    {
+      "target": "game_configs/general.json",
+      "sourcePath": "parties/2310 2 halloween classic edition/spoopy configs/general.json",
+      "bytes": 383,
+      "gitBlobSha": "ac9d001a82ab3a2ecb2cfbe792f59b61aee55468",
+      "kind": "json"
+    },
+    {
+      "target": "game_configs/jokes.json",
+      "sourcePath": "parties/2310 2 halloween classic edition/spoopy configs/jokes.json",
+      "bytes": 680,
+      "gitBlobSha": "665494a7321c66b03240b6c15b67673bb31d26ef",
+      "kind": "json"
+    },
+    {
+      "target": "game_configs/mascots.json",
+      "sourcePath": "parties/2310 2 halloween classic edition/spoopy configs/mascots.json",
+      "bytes": 5142,
+      "gitBlobSha": "695cf696cbb2476fa54d2be23420bd957c347f16",
+      "kind": "json"
+    },
+    {
+      "target": "game_configs/paths.json",
+      "sourcePath": "parties/2310 2 halloween classic edition/spoopy configs/paths.json",
+      "bytes": 43058,
+      "gitBlobSha": "91ed6be91d07d48df1e1b82c9ea0da2938372561",
+      "kind": "json"
+    },
+    {
+      "target": "game_configs/rooms.json",
+      "sourcePath": "parties/2310 2 halloween classic edition/spoopy configs/rooms.json",
+      "bytes": 52963,
+      "gitBlobSha": "8c5c711613371d361c883eec1fa971728a964688",
+      "kind": "json"
+    },
+    {
+      "target": "game_configs/safe_chat_messages.json",
+      "sourcePath": "parties/2310 2 halloween classic edition/spoopy configs/safe_chat_messages.json",
+      "bytes": 68968,
+      "gitBlobSha": "e158f8f85617795cdeef6fcc60b0b4ea6b220bdd",
+      "kind": "json"
+    },
+    {
+      "target": "rooms/NOTLS-ALL-EN.swf",
+      "sourcePath": "default things/rooms/NOTLS-ALL-EN.swf",
+      "bytes": 1603221,
+      "gitBlobSha": "206fa334351d967f0a899b22ce00e4378e76b694",
+      "kind": "swf"
+    }
+  ]
+}

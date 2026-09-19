@@ -1,0 +1,64 @@
+name: Waddle Halloween 2015 Runtime Probe
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'feat/halloween-party-2015'
+    paths:
+      - '.github/manifests/halloween-2015-canonical.json'
+      - '.github/scripts/waddle-halloween-2015-runtime-compat.ps1'
+      - '.github/scripts/waddle-halloween-2015-api-probe.ps1'
+      - '.github/scripts/waddle-halloween-2015-archive-runtime-probe.ps1'
+      - '.github/scripts/waddle-halloween-2015-operation-selector-probe.ps1'
+      - '.github/scripts/waddle-halloween-2015-client-asset-probe.ps1'
+      - '.github/workflows/waddle-halloween-2015-runtime-probe.yml'
+      - 'media/default/party2015/content/party-base-2015.swf'
+      - 'media/default/party2015/content/party.swf'
+      - 'media/default/party2015/content/ContentFeatures-HalloweenParty2015.swf'
+      - 'media/default/party2015/close_ups/Close_upsQuest_interface-HalloweenParty2015.swf'
+      - 'media/default/party2015/close_ups/Hallo15_dialogue_login.swf'
+      - 'media/default/party2015/client/QuestCommunicator.swf'
+      - 'media/default/svanilla/media/play/v2/content/global/content/party.swf'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: waddle-halloween-2015-runtime-probe
+  cancel-in-progress: true
+
+jobs:
+  compare-party-runtimes:
+    runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
+    timeout-minutes: 20
+    steps:
+      - name: Enable AndroidBuild managed Git for checkout
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $gitDir='V:\AndroidBuild\Tools\Git\cmd'
+          if(-not(Test-Path -LiteralPath (Join-Path $gitDir 'git.exe') -PathType Leaf)){throw "WADDLE_PARTY2015_RUNTIME_PROBE=FAIL git_missing=$gitDir"}
+          $gitDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - name: Hydrate byte-pinned runtime candidate
+        shell: powershell
+        run: ./.github/scripts/waddle-halloween-2015-canonical.ps1 -RepoRoot $env:GITHUB_WORKSPACE
+      - name: Probe pinned client archive for exact intro modules
+        shell: powershell
+        run: ./.github/scripts/waddle-halloween-2015-client-asset-probe.ps1 -RepoRoot $env:GITHUB_WORKSPACE
+      - name: Compare late-AS3 party runtimes with FFDec
+        shell: powershell
+        run: ./.github/scripts/waddle-halloween-2015-runtime-compat.ps1 -RepoRoot $env:GITHUB_WORKSPACE
+      - name: Derive exact Halloween 2015 runtime API contract
+        shell: powershell
+        run: ./.github/scripts/waddle-halloween-2015-api-probe.ps1 -RepoRoot $env:GITHUB_WORKSPACE
+      - name: Probe preserved late-2015 ClientParty runtimes
+        shell: powershell
+        run: ./.github/scripts/waddle-halloween-2015-archive-runtime-probe.ps1 -RepoRoot $env:GITHUB_WORKSPACE
+      - name: Probe Operation Crustacean selector/bootstrap
+        shell: powershell
+        run: ./.github/scripts/waddle-halloween-2015-operation-selector-probe.ps1 -RepoRoot $env:GITHUB_WORKSPACE

@@ -13,10 +13,12 @@ import { ItemType } from '@server/game-logic/items';
 import { isFlag } from '@server/game-logic/flags';
 import { STARTER_DECKS } from '@server/game-logic/starter-deck';
 import { CARDS } from '@server/game-logic/cards';
+import { publishWaddleLiveTrace } from '@common/live-trace';
 import { choose } from '@common/utils';
 import { SPY_DRILLS_DATA } from '@server/game-logic/spy-drills';
 import { PenguinHandler, PenguinGuard, RoomHandler, WorldContext } from './handlers';
 import { handleLeaveFire } from './fire';
+import { sendModernPartyBootstrap } from './party';
 
 
 function unequipPuffle(p: WorldPenguin): void {
@@ -104,6 +106,27 @@ const enterRoom: PenguinHandler<[WorldRoom, number, number]> = (ctx, r, x, y) =>
   if (!data.isSpOnJr() || x !== 0 || y !== 0) {
     msg.send(r.players, 'ap', getPenguinString(data, penguin, { x, y, frame: 1 }));
   }
+
+  publishWaddleLiveTrace({
+    category: 'XT',
+    phase: 'handled',
+    source: 'room-join',
+    action: 'room-avatar-state',
+    direction: 'out',
+    status: 'serialized-local-penguin',
+    roomId: r.id,
+    penguinId: penguin.id,
+    avatarId: penguin.avatar.id,
+    color: penguin.inventory.color,
+    head: penguin.inventory.head,
+    face: penguin.inventory.face,
+    neck: penguin.inventory.neck,
+    body: penguin.inventory.body,
+    hand: penguin.inventory.hand,
+    feet: penguin.inventory.feet,
+    pin: penguin.inventory.pin,
+    background: penguin.inventory.background
+  });
 
   // modern versions don't have the puffle information on penguin so the packet is resent
   if (!data.puffleHandItems()) {
@@ -194,7 +217,14 @@ export const handleJoinServer: PenguinHandler<[]> = async (ctx) => {
   }
 
   if (data.isVanillaEngine()) {
-    msg.send(penguin, 'activefeatures', data.getActiveFeatures() ?? '');
+    if (data.getPartyProgress() !== null) {
+      // Late-AS3 party runtimes are passive until the server pushes all three
+      // bootstrap packets. Preserve the archived Houdini/CPImagined order so
+      // party.swf can construct CURRENT_PARTY and then mount icon/interface UI.
+      await sendModernPartyBootstrap(ctx);
+    } else {
+      await msg.send(penguin, 'activefeatures', data.getActiveFeatures() ?? '');
+    }
   }
 
   if (!data.isPreCpip()) {

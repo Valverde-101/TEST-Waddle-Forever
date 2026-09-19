@@ -196,12 +196,17 @@ export const handleAdoptPuffle: PenguinHandler<[number, string, number]> = (ctx,
 
   const isFreeBrownPuffle = puffleType === 9 && data.isBrownPuffleFree();
 
-  const cost =
-    (isFreeBrownPuffle || category === PuffleCategory.Gold) ? 0 :
-    (data.isVanillaEngine() && category !== PuffleCategory.Creature) ? 400 : 800;
-
   const puffleTypeId = puffleSubtype === 0 ? puffleType : puffleSubtype;
   const puffleInfo = PUFFLES.getStrict(puffleTypeId);
+
+  // Creature puffles have event-specific prices in the canonical puffle table.
+  // In particular Halloween 2015's Ghost Puffle (1022) is free, while the
+  // permanent dog/cat/wild creatures remain 800 coins. Keep the historical
+  // normal-puffle pricing behavior unchanged.
+  const cost =
+    (isFreeBrownPuffle || category === PuffleCategory.Gold) ? 0 :
+    category === PuffleCategory.Creature ? puffleInfo.cost :
+    data.isVanillaEngine() ? 400 : 800;
 
   // TODO -> add proper dates (as opposed to vanilla engine)
   if (data.isVanillaEngine()) {

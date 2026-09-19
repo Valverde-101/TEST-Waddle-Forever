@@ -19,13 +19,20 @@ env:
 # read-only junctions to the canonical packages. SWF analysis alone reuses its
 # historical cache because that cache is analysis state, not live runtime state.
 concurrency:
-  group: waddle-certification-${{ github.event.pull_request.number || github.ref_name }}
+  # Only the newest PR/source SHA is useful for the interactive preview. Cancel
+  # obsolete certification runs so they cannot monopolize the physical runner.
+  group: waddle-certification-live-repo-test-waddle-forever
   cancel-in-progress: true
 
 jobs:
   certify:
     runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
-    timeout-minutes: 15
+    # Complete certification is normally quick, but the exact-SHA SWF inventory
+    # can legitimately need more than the old 15-minute whole-job budget when
+    # its shared hash/deep-analysis cache is cold or partially invalidated.
+    # Keep the analyzer's own per-FFDec timeout bounded; give the enclosing job
+    # enough time to finish instead of cancelling a healthy certification.
+    timeout-minutes: 30
 
     steps:
       - name: Create isolated exact-SHA certification workspace
@@ -61,14 +68,23 @@ jobs:
           if(-not(Test-Path -LiteralPath $gitExe -PathType Leaf)){throw "WADDLE_CERT=FAIL git_missing=$gitExe"}
           "WADDLE_GIT_EXE=$gitExe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-          $liveRepo=Join-Path $root 'Repositories\TEST-Waddle-Forever'
+          $liveRepoCandidates=@(
+            (Join-Path $root 'Previews\Waddle-Forever\feat\_halloween-party-2015'),
+            (Join-Path $root 'Repositories\TEST-Waddle-Forever')
+          )
+          $liveRepo=$null
+          foreach($candidate in $liveRepoCandidates){
+            if((Test-Path -LiteralPath (Join-Path $candidate '.git')) -and (Test-Path -LiteralPath (Join-Path $candidate 'node_modules') -PathType Container)){
+              $liveRepo=$candidate
+              break
+            }
+          }
+          if(-not $liveRepo){throw "WADDLE_CERT=FAIL canonical_git_or_node_modules_missing candidates=$($liveRepoCandidates -join ';')"}
           $sourceModules=Join-Path $liveRepo 'node_modules'
-          if(-not(Test-Path -LiteralPath (Join-Path $liveRepo '.git'))){throw "WADDLE_CERT=FAIL canonical_git_missing=$liveRepo"}
-          if(-not(Test-Path -LiteralPath $sourceModules -PathType Container)){throw "WADDLE_CERT=FAIL canonical_node_modules_missing=$sourceModules"}
 
           $userData=Join-Path $liveRepo 'user-data'
           New-Item -ItemType Directory -Force -Path $userData | Out-Null
-          $probe=Join-Path $userData '.androidbuild-preserve-probe'
+          $probe=Join-Path $userData ('.androidbuild-preserve-probe-{0}-{1}' -f $env:GITHUB_RUN_ID,$env:GITHUB_RUN_ATTEMPT)
           $probeValue=[guid]::NewGuid().ToString('N')
           Set-Content -LiteralPath $probe -Value $probeValue -Encoding ASCII
 

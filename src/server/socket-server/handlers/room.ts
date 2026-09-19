@@ -107,9 +107,15 @@ export const handleCloseToy: RoomHandler<[]> = ({ msg, room, penguin }) => {
   msg.send(room.players, 'rt', penguin.id);
 }
 
-export const handlePlayerTransform: RoomHandler<[number]> = ({ msg, room, penguin }, avatarId) => {
+export const handlePlayerTransform: RoomHandler<[number]> = ({ msg, room, penguin, data }, avatarId) => {
   penguin.avatar.transform(avatarId);
   msg.send(room.players, 'spts', penguin.id, avatarId);
+
+  // The late-AS3 Halloween 2015 UI updates the player-card avatar from spts,
+  // but the room renderer may keep the existing penguin display object alive.
+  // Send the full player update immediately after changing avatar state so the
+  // current room reparses the extended penguin string that contains avatarId.
+  msg.send(room.players, 'up', getPenguinString(data, penguin, room.getState(penguin)));
 }
 
 export const sendTeleportOld: RoomHandler<[number, number, number]> = ({ msg, penguin, room }, x, y, frame) => {
@@ -131,7 +137,7 @@ export const handleJoinTable: RoomHandler<[number]> =({ msg, penguin, room }, ta
 
   const before = table.getCount();
 
-  const seatId = table.getSeatIndex(penguin) ?? table.assignSeatIndex(penguin);
+  const seatId = room.getTable(tableId).getSeatIndex(penguin) ?? table.assignSeatIndex(penguin);
 
   if (seatId !== WorldTable.TABLE_SPECTATOR_SEAT && before === 0) {
     table.reset();

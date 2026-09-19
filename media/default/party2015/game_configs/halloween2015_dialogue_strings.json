@@ -1,0 +1,67 @@
+{
+  "schema": "waddle-halloween-2015-dialogue-localization/v1",
+  "language": "en",
+  "namespace": "w.app.p2015.halloween.",
+  "notes": "Complete runtime localization contract for the 34 Halloween 2015 dialogue SWFs. Finale values are preserved from the pinned CPImagined game_strings bundle. Missing MascBot values are restored from contemporary 2015 dialogue evidence and normalized to the English runtime namespace so no dialogue resolves to an empty key.",
+  "strings": {
+    "w.app.p2015.halloween.login1": "Gadzooks! The robots I built for the 10th Anniversary have gone haywire. What a spooky way to begin Halloween!",
+    "w.app.p2015.halloween.login2": "Could you help me deal with these crazed contraptions? The Gary Bot is threatening the Mine Shack right now!",
+    "w.app.p2015.halloween.gary1": "The Gary Bot is out of control. Since it was programmed to act like me, it should share my greatest fear.",
+    "w.app.p2015.halloween.gary2": "Scare the robot with decaf coffee! You can find some at the Coffee Shop.",
+    "w.app.p2015.halloween.gary3": "Excellent! You found the decaf coffee. Show it to the Gary Bot!",
+    "w.app.p2015.halloween.gary4": "Success! That caused a fear overload. Now deactivate it by connecting the green terminal to the yellow terminal.",
+    "w.app.p2015.halloween.gary5": "Well done! We're safe from that robot, but there are more of them lurking around the island.",
+
+    "w.app.p2015.halloween.AA1": "Oh my! A robot that looks like me is frightening citizens. We have to put a stop to this.",
+    "w.app.p2015.halloween.AA2": "There is one thing that should scare it: terrible spelling. Show the robot that failed spelling test!",
+    "w.app.p2015.halloween.AA3": "Wonderful work! The Arctic Bot is deactivated and everyone is safe again.",
+
+    "w.app.p2015.halloween.rockhopper1": "Avast! That crazy robot thinks it can be me! Head to the Forest, matey!",
+    "w.app.p2015.halloween.rockhopper2": "Scare that robot with a fearsome pink flamingo!",
+    "w.app.p2015.halloween.rockhopper3": "Har har! Well done, matey! That Bothopper won't be causing any more trouble.",
+
+    "w.app.p2015.halloween.Djcadence1": "Eeeee! There's a scary robot at the Ski Village! And this one is BIG!",
+    "w.app.p2015.halloween.Djcadence2": "What scares me besides evil glitchy robots? Bugs! That's it! Show that bot a bug!",
+    "w.app.p2015.halloween.Djcadence3": "Whew! You did it! Now that's a way to finish on a high note!",
+
+    "w.app.p2015.halloween.Dot1": "I'm all for disguises, but there's a robot that looks like me at the Cove. We have to shut it down!",
+    "w.app.p2015.halloween.Dot2": "We'll need my greatest fear: an old ugly sweater. Show one to the Dot Bot!",
+    "w.app.p2015.halloween.Dot3": "Good work! That robot was no match for your scare skills.",
+
+    "w.app.p2015.halloween.Sensei1": "There is a disturbance at the Beach: a mechanical monster in my clothes, but without my inner calm.",
+    "w.app.p2015.halloween.Sensei2": "We must frighten this robot. Threaten its beard with the beard trimmer.",
+    "w.app.p2015.halloween.Sensei3": "Your beard-trimming skills are impressive. Well done, grasshopper.",
+
+    "w.app.p2015.halloween.PH1": "Crikey! There's a bonkers robot at the Snow Forts. Let's get over there!",
+    "w.app.p2015.halloween.PH2": "It should fear anything that scares me. Show the bot that toy UFO!",
+    "w.app.p2015.halloween.PH3": "Bonza! You handled that robot with no worries at all!",
+
+    "w.app.p2015.halloween.Rookie1": "Yikes! Somebody call the EPF! The Rookie Bot is going berserk at the Plaza!",
+    "w.app.p2015.halloween.Rookie2": "Ahhh! It's as scary as a clown! Wait... that's it! Scare it with clown face paint!",
+    "w.app.p2015.halloween.RookieBOT1": "BZZT! You found my fear. But you'll never find the secret lair in the Coffee Shop! ...Oops! Running scared.exe! ShUTTiNG DooOOoown!",
+    "w.app.p2015.halloween.Rookie3": "A secret lair in the Coffee Shop? That sounds scary. I'll alert the EPF!",
+
+    "w.app.p2015.halloween.finale.HerbertMonologue1": "Look, I've told you before, I didn't bring Herbot back!\n\nI think it was that pesky di-",
+    "w.app.p2015.halloween.finale.HerbertMonologue2": "Ah, a penguin!\nSo, you think you can just take MY inventions and turn them into party props?\nI'll show YOU not to humiliate Herbert P. Bear, Esquire!",
+    "w.app.p2015.halloween.finale.HerBOTReply1": "Making the same mistakes twice, are we?\n\nI really am the superior bear.",
+    "w.app.p2015.halloween.finale.HerbertScared1": "GRRRR...\n\nI knew I shouldn't have taken inspiration from that movie...",
+    "w.app.p2015.halloween.finale.GaryScreen1": "Connection terminated.\n\nI'm sorry to interrupt you Herbert, if you even-",
+    "w.app.p2015.halloween.finale.HerbertReply1": "WHATEVER!\n\nJust get me out of here so I can destroy you with my actual NEW inventions.",
+    "w.app.p2015.halloween.finale.GaryScreen2": "Quick, we can't let Herbot escape! Credit due to Herbert, it seems as if he left the same laser intact that put Herbot out of commission the last time. Blast him with the laser and then short circuit his wires!",
+    "w.app.p2015.halloween.finale.HerbertRunaway1": "MWAHAHAHAHA! You can't stop Klutzy and I!\n\nWe'll take over this whole island! Quick Klutzy, to the Skyberg!",
+    "w.app.p2015.halloween.finale.GaryScreen3": "Excellent work!\nHerbert may have gotten away, but we've hopefully set him back just enough to not spoil the rest of our Halloween fun!"
+  },
+  "preservedFinaleKeys": [
+    "w.app.p2015.halloween.finale.HerbertMonologue1",
+    "w.app.p2015.halloween.finale.HerbertMonologue2",
+    "w.app.p2015.halloween.finale.HerBOTReply1",
+    "w.app.p2015.halloween.finale.HerbertScared1",
+    "w.app.p2015.halloween.finale.GaryScreen1",
+    "w.app.p2015.halloween.finale.HerbertReply1",
+    "w.app.p2015.halloween.finale.GaryScreen2",
+    "w.app.p2015.halloween.finale.HerbertRunaway1",
+    "w.app.p2015.halloween.finale.GaryScreen3"
+  ],
+  "restoredMascBotKeys": 29,
+  "totalKeys": 38
+}

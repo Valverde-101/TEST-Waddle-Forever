@@ -14,10 +14,54 @@ type XtParseResult =
   | { ok: true; value: ParsedXtMessage }
   | { ok: false; reason: string };
 
+/**
+ * Canonicalize only protocol variants that are proven to share server semantics.
+ * Keep late-2015 party transform fallbacks here so templated runtimes update the
+ * same authoritative avatar state as the native pt#spts packet.
+ */
+const XT_ACTION_ALIASES = new Map<string, string>([
+  ['s%halloween#partycookie', 's%party#partycookie'],
+  ['s%halloween#msgviewed', 's%party#msgviewed'],
+  ['s%halloween#qcmsgviewed', 's%party#qcmsgviewed'],
+  ['s%halloween#qtaskcomplete', 's%party#qtaskcomplete'],
+  ['s%halloween#qtupdate', 's%party#qtupdate'],
+  ['s%fair#fair', 's%party#partycookie'],
+  ['s%fair#partycookie', 's%party#partycookie'],
+  ['s%fair#msgviewed', 's%party#msgviewed'],
+  ['s%fair#ftransform', 's%pt#spts'],
+  ['s%party#transform', 's%pt#spts'],
+  // The preserved late-2015 templated runtime has the transform call path but
+  // lacks SET_TRANSFORM in its constants class, producing party#undefined with
+  // the numeric avatar id. This one-argument fallback is the same transform.
+  ['s%party#undefined', 's%pt#spts']
+]);
+
+const canonicalizeXtAction = (action: string): string => XT_ACTION_ALIASES.get(action) ?? action;
+
+const TRACE_PAYLOAD_ACTIONS = new Set<string>([
+  's%nx#bimp',
+  's%party#qtaskcomplete',
+  's%party#qtupdate',
+  's%halloween#qtaskcomplete',
+  's%halloween#qtupdate',
+  's%party#transform',
+  's%party#undefined',
+  's%pt#spts'
+]);
+
+const sanitizeTracePayload = (value: string): string => value
+  .replace(/[A-Za-z0-9_-]{24,}/g, '[token]')
+  .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, '[email]');
+
+const getTracePayloadPreview = (action: string, args: string[]) => {
+  if (!TRACE_PAYLOAD_ACTIONS.has(action)) {
+    return undefined;
+  }
+  const joined = args.map(sanitizeTracePayload).join('|');
+  return joined.length > 512 ? `${joined.slice(0, 512)}...` : joined;
+};
+
 const parseXtMessage = (message: string): XtParseResult => {
-  // XT is a percent-delimited protocol with both a leading and trailing '%'.
-  // Never let malformed client traffic throw out of the socket event callback:
-  // reject the frame explicitly and preserve a diagnostic instead.
   if (!message.startsWith('%xt%')) {
     return { ok: false, reason: 'missing-xt-prefix' };
   }
@@ -26,7 +70,6 @@ const parseXtMessage = (message: string): XtParseResult => {
   }
 
   const values = message.split('%');
-  // Minimum legal frame: %xt%<extension>%<code>%<room>%
   if (values.length < 6 || values[0] !== '' || values[1] !== 'xt' || values[values.length - 1] !== '') {
     return { ok: false, reason: 'invalid-frame-shape' };
   }
@@ -66,19 +109,13 @@ type XtCallbackInfoWrapped<Ctx extends WorldContext> = [
 
 export type XtParams = {
   once?: boolean
-  /**
-   * In miliseconds, how much to wait before accepting the next packet
-   * from the same client
-   */
+  /** In milliseconds, how much to wait before accepting the next packet. */
   cooldown?: number
 }
 
 class CallbackManager<Ctx extends WorldContext> {
   private _cooldown: number | null = null;
-  private _once: boolean = false;
-  // Callback managers live for the whole server lifetime. WeakMaps ensure a
-  // disconnected ClientSocket can be garbage-collected instead of being retained
-  // forever by once/cooldown bookkeeping.
+  private _once = false;
   private _handled = new WeakMap<ClientSocket, boolean>();
   private _timestamps = new WeakMap<ClientSocket, number>();
 
@@ -96,10 +133,8 @@ class CallbackManager<Ctx extends WorldContext> {
 
     if (this._cooldown !== null) {
       const last = this._timestamps.get(client);
-
       if (last !== undefined && last + this._cooldown > now) {
         const remainingMs = Math.max(0, last + this._cooldown - now);
-        console.log('Rate limited');
         publishWaddleLiveTrace({
           category: 'XT',
           phase: 'handled',
@@ -114,26 +149,18 @@ class CallbackManager<Ctx extends WorldContext> {
       }
     }
 
-    if (this._once) {
-      if (this._handled.get(client)) {
-        console.log('Already handled');
-        publishWaddleLiveTrace({
-          category: 'XT',
-          phase: 'handled',
-          source: 'xt-handler',
-          action,
-          status: 'already-handled',
-          argCount: args.length
-        });
-        return;
-      }
+    if (this._once && this._handled.get(client)) {
+      publishWaddleLiveTrace({
+        category: 'XT',
+        phase: 'handled',
+        source: 'xt-handler',
+        action,
+        status: 'already-handled',
+        argCount: args.length
+      });
+      return;
     }
 
-    // Commit acceptance state before entering game logic. The old implementation
-    // checked these maps but never wrote to them, so `once` and `cooldown` were
-    // effectively no-ops and repeated packets could execute the same handler
-    // indefinitely. Marking before dispatch also closes the re-entrancy window
-    // for back-to-back packets while an async handler is still running.
     if (this._cooldown !== null) {
       this._timestamps.set(client, now);
     }
@@ -175,23 +202,28 @@ export class XtHandler {
       return;
     }
 
-    const { name, args } = parsedMessage.value;
+    const { name: wireAction, args } = parsedMessage.value;
+    const action = canonicalizeXtAction(wireAction);
+    const aliased = action !== wireAction;
+    const payloadPreview = getTracePayloadPreview(wireAction, args) ?? getTracePayloadPreview(action, args);
 
     publishWaddleLiveTrace({
       category: 'XT',
       phase: 'request',
       source: 'xt-handler',
-      action: name,
+      action: wireAction,
+      canonicalAction: aliased ? action : undefined,
       direction: 'in',
       argCount: args.length,
-      messageLength: message.length
+      messageLength: message.length,
+      payloadPreview
     });
-    
+
     if ('penguin' in context) {
-      logverbose(getBlueString(`incoming XT [${context.penguin.name}]: `), name, args);
+      logverbose(getBlueString(`incoming XT [${context.penguin.name}]: `), wireAction, args);
     }
 
-    const callbacks = this._callbacks.get(name);
+    const callbacks = this._callbacks.get(action);
 
     if (callbacks !== undefined) {
       const callbackInfo = callbacks.find(([[contextTester, guard]]) => contextTester(context) ? guard(context) : false);
@@ -201,72 +233,96 @@ export class XtHandler {
           category: 'XT',
           phase: 'error',
           source: 'xt-handler',
-          action: name,
+          action: wireAction,
+          canonicalAction: aliased ? action : undefined,
           direction: 'in',
           status: 'unhandled-context',
           argCount: args.length,
-          contextKeys: Object.keys(context)
+          contextKeys: Object.keys(context),
+          payloadPreview
         });
         return;
       }
 
       const [_, signature, callback] = callbackInfo;
-      const parsedArgs = parseArgs(args, signature);
-      const compatibility = parsedArgs === null ? getXtCompatibilityRule(name, args.length) : undefined;
+
+      // Airtower serializes an empty payload array as a final empty field.
+      const emptyArrayFraming = Array.isArray(signature) && signature.length === 0 && args.length === 1 && args[0] === '';
+      const argsForParsing = emptyArrayFraming ? [] : args;
+      const parsedArgs = parseArgs(argsForParsing, signature);
+      // Compatibility is evaluated against the canonical action. This lets the
+      // native Halloween `partycookie [0]` reuse the verified late-AS3 selector
+      // rule without weakening signature checks for any other namespace.
+      const compatibility = parsedArgs === null ? getXtCompatibilityRule(action, args) : undefined;
       if (parsedArgs === null && compatibility === undefined) {
-        logverbose(getRedString('incorrect type signature: ' + name));
+        logverbose(getRedString('incorrect type signature: ' + wireAction));
         publishWaddleLiveTrace({
           category: 'XT',
           phase: 'error',
           source: 'xt-handler',
-          action: name,
+          action: wireAction,
+          canonicalAction: aliased ? action : undefined,
           direction: 'in',
           status: 'invalid-signature',
-          argCount: args.length
+          argCount: args.length,
+          payloadPreview
         });
         return;
       }
 
-      // Compatibility rules are explicit and read-only. Their extra arguments
-      // are version metadata/pagination fields that the legacy Waddle callback
-      // does not consume, so dispatch with the canonical parsed argument list.
-      // For normal signatures parsedArgs remains authoritative.
       const dispatchArgs = parsedArgs ?? [];
       publishWaddleLiveTrace({
         category: 'XT',
         phase: 'handled',
         source: 'xt-handler',
-        action: name,
+        action: wireAction,
+        canonicalAction: aliased ? action : undefined,
         direction: 'in',
-        status: compatibility === undefined ? 'handler-dispatched' : 'compatibility-signature',
+        status: aliased
+          ? 'compatibility-action-alias'
+          : emptyArrayFraming
+            ? 'empty-array-framing'
+            : compatibility === undefined
+              ? 'handler-dispatched'
+              : 'compatibility-signature',
         argCount: dispatchArgs.length,
         receivedArgCount: args.length,
-        compatibilityReason: compatibility?.reason
+        compatibilityReason: aliased
+          ? `native late-AS3 party namespace mapped to ${action}`
+          : emptyArrayFraming
+            ? 'Airtower encoded an empty argument array as a trailing empty XT payload field'
+            : compatibility?.reason,
+        payloadPreview
       });
+
       try {
-        const result = callback.call(client, context, name, ...dispatchArgs);
+        const result = callback.call(client, context, wireAction, ...dispatchArgs);
         void Promise.resolve(result).then(() => {
           publishWaddleLiveTrace({
             category: 'XT',
             phase: 'handled',
             source: 'xt-handler',
-            action: name,
+            action: wireAction,
+            canonicalAction: aliased ? action : undefined,
             direction: 'in',
             status: 'handler-complete',
             argCount: dispatchArgs.length,
             receivedArgCount: args.length,
-            compatibility: compatibility !== undefined
+            compatibility: aliased || compatibility !== undefined || emptyArrayFraming,
+            payloadPreview
           });
         }).catch(error => {
           publishWaddleLiveTrace({
             category: 'XT',
             phase: 'error',
             source: 'xt-handler',
-            action: name,
+            action: wireAction,
+            canonicalAction: aliased ? action : undefined,
             direction: 'in',
             status: 'handler-threw',
             async: true,
-            error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+            error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+            payloadPreview
           });
           throw error;
         });
@@ -275,60 +331,61 @@ export class XtHandler {
           category: 'XT',
           phase: 'error',
           source: 'xt-handler',
-          action: name,
+          action: wireAction,
+          canonicalAction: aliased ? action : undefined,
           direction: 'in',
           status: 'handler-threw',
-          error: error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+          error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+          payloadPreview
         });
         throw error;
       }
     } else {
-      // Keep the type guard and the response in the same lexical scope. WorldContext
-      // intentionally permits pre-login contexts without a penguin, so moving the
-      // guard into a ternary loses TypeScript's narrowing before the send call.
       if ('penguin' in context) {
-        const fallback = getXtReadOnlyFallback(name);
+        const fallback = getXtReadOnlyFallback(action);
         if (fallback !== undefined) {
           context.msg.send(context.penguin, fallback.responseAction, ...fallback.responseArgs);
           publishWaddleLiveTrace({
             category: 'XT',
             phase: 'handled',
             source: 'xt-handler',
-            action: name,
+            action: wireAction,
+            canonicalAction: aliased ? action : undefined,
             direction: 'in',
             status: 'compatibility-response',
             argCount: args.length,
             responseAction: fallback.responseAction,
-            compatibilityReason: fallback.reason
+            compatibilityReason: fallback.reason,
+            payloadPreview
           });
           return;
         }
       }
 
-      if (isNoResponseClientPacket(name)) {
-        // These packets are protocol acknowledgements/lifecycle notifications, not
-        // missing gameplay handlers. Accepting them explicitly removes false
-        // "unhandled-action" noise while preserving strict errors for everything
-        // that really is unsupported.
+      if (isNoResponseClientPacket(action)) {
         publishWaddleLiveTrace({
           category: 'XT',
           phase: 'handled',
           source: 'xt-handler',
-          action: name,
+          action: wireAction,
+          canonicalAction: aliased ? action : undefined,
           direction: 'in',
           status: 'protocol-acknowledged',
-          argCount: args.length
+          argCount: args.length,
+          payloadPreview
         });
       } else {
-        logverbose(getRedString('unhandled XT: ' + name));
+        logverbose(getRedString('unhandled XT: ' + wireAction));
         publishWaddleLiveTrace({
           category: 'XT',
           phase: 'error',
           source: 'xt-handler',
-          action: name,
+          action: wireAction,
+          canonicalAction: aliased ? action : undefined,
           direction: 'in',
           status: 'unhandled-action',
-          argCount: args.length
+          argCount: args.length,
+          payloadPreview
         });
       }
     }

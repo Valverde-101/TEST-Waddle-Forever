@@ -361,6 +361,17 @@ const getResourceAction = (url: string) => {
   }
 };
 
+const isBenignOfflineCompatibilityResource = (url: string) => {
+  try {
+    const pathname = new URL(url).pathname.replace(/\/+$/, '') || '/';
+    return pathname === '/services'
+      || pathname === '/datatech/serverlog/v1/json'
+      || pathname === '/social/autocomplete/v2/search/clientRules';
+  } catch {
+    return false;
+  }
+};
+
 const isInterestingResource = (url: string, resourceType: string) => {
   if (/\.(?:swf|xml|json|js|css)(?:[?#]|$)/i.test(url)) {
     return true;
@@ -446,6 +457,8 @@ const instrumentSession = (session: Session) => {
     const statusCode = Number(details.statusCode || 0);
     const slow = durationMs !== null && durationMs >= slowResourceThresholdMs;
     const failedStatus = statusCode >= 400;
+    const benign = failedStatus && isBenignOfflineCompatibilityResource(url);
+    const diagnosticFailure = failedStatus && !benign;
     const interesting = request?.interesting ?? isInterestingResource(url, resourceType);
 
     if (interesting || slow || failedStatus) {
@@ -458,12 +471,14 @@ const instrumentSession = (session: Session) => {
         fromCache: Boolean(details.fromCache),
         durationMs,
         slow,
-        failedStatus
+        failedStatus: diagnosticFailure,
+        httpStatusFailed: failedStatus,
+        benign
       });
 
       publishWaddleLiveTrace({
         category,
-        phase: failedStatus ? 'error' : 'response',
+        phase: benign ? 'state' : (failedStatus ? 'error' : 'response'),
         source: 'electron-webrequest',
         action,
         requestId: details.id,
@@ -471,11 +486,12 @@ const instrumentSession = (session: Session) => {
         resourceType,
         url,
         statusCode,
-        status: failedStatus ? 'http-error' : 'ok',
+        status: benign ? 'offline-compatibility-missing' : (failedStatus ? 'http-error' : 'ok'),
         fromCache: Boolean(details.fromCache),
         durationMs,
         slow,
-        direction: 'in'
+        direction: 'in',
+        benign
       });
     }
 
