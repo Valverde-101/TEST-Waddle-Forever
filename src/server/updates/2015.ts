@@ -351,7 +351,7 @@ export const UPDATES_2015: Update[] = [
       },
       globalChanges: {
         'content/party_icon.swf': [fairRef('content/ContentParty_icon-TheFair2015.swf'), 'party_icon', 'scavenger_hunt_icon'],
-        'close_ups/quest_interface.swf': [fairRef('close_ups/CloseUpsEN-QuestInterface-TheFair2015.swf'), 'w.app.generic.partyinterface', 'scavenger_hunt'],
+        'close_ups/quest_interface.swf': [fairRef('close_ups/CloseUpsEN-QuestInterface-TheFair2015.swf'), 'w.p2015.may.partyinterface', 'w.app.generic.partyinterface', 'scavenger_hunt'],
         'close_ups/party_map.swf': [fairRef('close_ups/ENCloseUpsPartyMap-TheFair2015.swf'), 'party_map'],
         'close_ups/party_map_note.swf': [fairRef('close_ups/ENCloseUpsPartyMapNote-TheFair2015.swf'), 'party_map_note'],
         'close_ups/ride_prompt.swf': [fairRef('close_ups/ENCloseUpsRidePrompt-TheFair2015.swf'), 'ride_prompt']
