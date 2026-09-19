@@ -27,10 +27,16 @@ FILES = (
 )
 
 def download_exact(title, minimum, maximum):
-    digest = hashlib.md5(title.encode("utf-8")).hexdigest()
-    location = digest[:1] + "/" + digest[:2] + "/" + quote(title, safe="-_.")
+    # The archive category displays spaces while MediaWiki's storage may have
+    # imported filenames before normalization. Probe each documented spelling
+    # and both hash spellings; no arbitrary remote URL or party substitution.
+    names = tuple(dict.fromkeys((title, title.replace("_", " "), title.replace(" ", "_"))))
     attempts = []
     for origin in MIRRORS:
+      for hash_name in names:
+       digest = hashlib.md5(hash_name.encode("utf-8")).hexdigest()
+       for target_name in names:
+        location = digest[:1] + "/" + digest[:2] + "/" + quote(target_name, safe="-_.")
         url = origin + location
         try:
             with urlopen(Request(url, headers={"User-Agent": "Waddle-Forever-Fair2015/1.0"}), timeout=40) as response:
