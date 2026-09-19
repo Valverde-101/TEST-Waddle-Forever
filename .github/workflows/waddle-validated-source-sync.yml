@@ -196,3 +196,31 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'VALIDATED_SOURCE_SYNC=FAIL compiled_timeline_verification'}
           $global:LASTEXITCODE=0
           Write-Host "VALIDATED_SOURCE_SYNC_TIMELINE=PASS preview=$previewRoot picker_through=2017 compiled=true exclusive_party_end=2015-11-05"
+
+      - name: Materialize canonical promotion launcher
+        if: steps.policy.outputs.promote == 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $git=$env:WADDLE_MANAGED_GIT
+          $repo=$env:WADDLE_CANONICAL_REPO
+          $sha=$env:WADDLE_EXPECTED_SHA.Trim().ToLowerInvariant()
+          $dir=Join-Path $env:ANDROIDBUILD_ROOT 'Certification\\Waddle-Promote'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $scriptPath=Join-Path $dir ("waddle-promote-certified-dev-$sha.ps1")
+          $content=@(& $git -c "safe.directory=$repo" -C $repo show "$($sha):.github/scripts/waddle-promote-certified-dev.ps1")
+          if($LASTEXITCODE -ne 0 -or $content.Count -lt 80){throw "VALIDATED_SOURCE_SYNC=FAIL promotion_launcher_unavailable sha=$sha"}
+          $global:LASTEXITCODE=0
+          [IO.File]::WriteAllLines($scriptPath,[string[]]$content,(New-Object Text.UTF8Encoding($false)))
+          "WADDLE_PROMOTION_SCRIPT=$scriptPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "VALIDATED_SOURCE_SYNC_PROMOTION_SCRIPT=PASS sha=$sha path=$scriptPath"
+
+      - name: Promote certified dev into canonical physical checkout
+        if: steps.policy.outputs.promote == 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $env:WADDLE_PROMOTION_SCRIPT -AndroidBuildRoot $env:ANDROIDBUILD_ROOT -Repository '${{ github.repository }}' -ExpectedSha $env:WADDLE_EXPECTED_SHA -TargetBranch 'dev' -CertificationRunId $env:WADDLE_CERT_RUN_ID
+          if($LASTEXITCODE -ne 0){throw "VALIDATED_SOURCE_SYNC=FAIL canonical_promotion_exit=$LASTEXITCODE"}
+          Write-Host "VALIDATED_SOURCE_SYNC=PASS mode=canonical_dev_promoted sha=$env:WADDLE_EXPECTED_SHA repo=$env:WADDLE_CANONICAL_REPO"
+
