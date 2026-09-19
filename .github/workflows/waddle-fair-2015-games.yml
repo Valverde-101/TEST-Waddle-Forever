@@ -7,7 +7,7 @@ on:
       - '.github/workflows/waddle-fair-2015-games.yml'
   workflow_dispatch:
 permissions:
-  contents: read
+  contents: write
 jobs:
   inventory:
     runs-on: ubuntu-latest
@@ -15,6 +15,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
-      - name: Inventory referenced minigames from verified archive
-        run: python .github/scripts/waddle-fair-2015-games.py
+          persist-credentials: true
+      - name: Download and pin minigames listed by Fair 2015
+        run: python .github/scripts/waddle-fair-2015-games.py --repo-root . --import-assets
+      - name: Validate original minigames before publication
+        run: |
+          python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          root=Path('media/default/fair2015')
+          m=json.loads((root/'minigames/manifest.json').read_text(encoding='utf-8'))
+          assert m['schema']=='waddle-fair-2015-minigames/v1'
+          assert m['count']>=50 and len(m['assets'])==m['count']
+          for a in m['assets']:
+              raw=(root/a['relativePath']).read_bytes()
+              assert raw[:3] in (b'FWS',b'CWS',b'ZWS')
+              assert len(raw)==a['bytes'] and hashlib.sha256(raw).hexdigest()==a['sha256']
+          print(f"WADDLE_FAIR2015_GAMES_VERIFY=PASS files={m['count']}")
+          PY
+      - name: Commit minigame archives only to Fair feature branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- media/default/fair2015/minigames
+          if git diff --cached --quiet; then
+            echo "WADDLE_FAIR2015_GAMES_PUBLISH=PASS mode=already_tracked"
+          else
+            git commit -m "Archive and pin The Fair 2015 minigame files"
+            git push origin HEAD:refs/heads/feat/the-fair-2015
+            echo "WADDLE_FAIR2015_GAMES_PUBLISH=PASS mode=branch_only"
+          fi
