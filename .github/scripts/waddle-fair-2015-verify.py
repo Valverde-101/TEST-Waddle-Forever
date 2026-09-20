@@ -103,12 +103,15 @@ rooms = re.search(r"const FAIR_2015_ROOMS = \{(.*?)\n\};", code, re.S).group(1)
 music = re.search(r"const FAIR_2015_MUSIC = \{(.*?)\n\};", code, re.S).group(1)
 room_names = re.findall(r"^\s*'([^']+)': fairRef", rooms, re.M)
 music_names = re.findall(r"^\s*'([^']+)': \d+", music, re.M)
-assert len(room_names) == 46 and len(set(room_names)) == 46, "original Fair room map invalid"
-# Stage is a separately archived pre-Mall room, not one of the 46 Fair SWFs;
-# retain the exact historical room count and verify this scoped supplement.
+# Exactly 46 original Fair rooms PLUS the separately archived May theatre.
+# Counting the supplement among the original 46 incorrectly rejects a fully
+# mapped Fair+theatre timeline and masked unrelated diagnostic-only changes.
+archived_fair_rooms = [name for name in room_names if name != 'stage']
+assert len(archived_fair_rooms) == 46 and len(set(archived_fair_rooms)) == 46, "original Fair room map invalid"
+assert len(room_names) == 47 and len(set(room_names)) == 47, "May theatre supplement duplicated or missing"
 assert "'stage': fairRef('period/RoomsStage-May2015.swf')" in rooms, "Original May theatre supplement unavailable"
 assert (assets / 'period/RoomsStage-May2015.swf').is_file(), "Original May theatre absent"
-assert set(room_names) | {'stage'} == set(music_names), "room / music divergence"
+assert set(room_names) == set(music_names), "room / music divergence"
 assert set(range(1, 13)).issubset({int(x[5:]) for x in room_names if re.fullmatch(r"party\d+", x)}), "party rooms missing"
 # Static source-contract regression checks are not a substitute for a live
 # click/game test. They prevent reintroducing the specific broken routes seen
