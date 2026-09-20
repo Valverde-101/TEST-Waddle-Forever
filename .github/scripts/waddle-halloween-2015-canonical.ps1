@@ -187,7 +187,36 @@ $utf8 = New-Object System.Text.UTF8Encoding($false)
 $stateJson = ($state | ConvertTo-Json -Depth 5 -Compress) -replace "`r`n", "`n"
 $statePath = Join-Path $targetRoot 'canonical-state.json'
 $statePayload = $stateJson + "`n"
-[IO.File]::WriteAllText($statePath, $statePayload, $utf8)
+# The asset-state record is tracked, not a disposable runtime cache. Windows
+# checkout can materialize an equivalent JSON payload with different bytes.
+# Rewriting an already verified record made Halloween's generated-drift gate
+# reject unrelated Fair PRs. Compare the decoded state, fail closed on any
+# actual provenance/asset change, and leave the tracked file byte-for-byte
+# untouched when the manifest and all 19 verified assets agree.
+if (Test-Path -LiteralPath $statePath -PathType Leaf) {
+  $existingState = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
+  $expectedState = $stateJson | ConvertFrom-Json
+  $fields = @('schema', 'party', 'sourceRepository', 'sourceCommit', 'verified')
+  foreach ($field in $fields) {
+    if ([string]$existingState.$field -cne [string]$expectedState.$field) {
+      throw "WADDLE_HALLOWEEN2015_CANONICAL=FAIL tracked_state_drift field=$field; update tracked state in a dedicated reviewed commit"
+    }
+  }
+  [string[]]$existingTargets = @($existingState.assetTargets)
+  if ($existingTargets.Count -ne $sortedTargets.Count) {
+    throw "WADDLE_HALLOWEEN2015_CANONICAL=FAIL tracked_state_targets_count expected=$($sortedTargets.Count) actual=$($existingTargets.Count)"
+  }
+  for ($i = 0; $i -lt $sortedTargets.Count; $i++) {
+    if ($existingTargets[$i] -cne $sortedTargets[$i]) {
+      throw "WADDLE_HALLOWEEN2015_CANONICAL=FAIL tracked_state_targets_mismatch index=$i expected=$($sortedTargets[$i]) actual=$($existingTargets[$i])"
+    }
+  }
+  Write-Host "WADDLE_HALLOWEEN2015_CANONICAL_STATE=PASS tracked_record_unchanged=true assets_verified=$verified"
+} else {
+  # A new checkout must not silently synthesize or publish a fake provenance
+  # record; this file is part of the pinned Halloween archive contract.
+  throw "WADDLE_HALLOWEEN2015_CANONICAL=FAIL tracked_state_missing=$statePath"
+}
 
 # Report the exact deterministic artifact identity. If this ever drifts again,
 # CI can distinguish content drift from a line-ending/encoding issue immediately.
