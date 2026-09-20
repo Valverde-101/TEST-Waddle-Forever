@@ -161,6 +161,14 @@ export const sendModernPartyBootstrap: PenguinHandler<[]> = async (ctx) => {
  * is converted to the eager three-packet bootstrap.
  */
 export const handleRetrievePartyCookie: PenguinHandler<[]> = async (ctx) => {
+  // The original unpatched DecemberParty reads its feature selector after the
+  // world and its party modules initialize. The generic join bootstrap is
+  // emitted BEFORE lp and BEFORE features.swf is requested; replay only the
+  // Holiday feature ID when the initialized client explicitly asks for its
+  // cookie. Do not rebroadcast it for the already-working Halloween/Fair stack.
+  if (ctx.data.getPartyProgress()?.id === 'holiday-2015') {
+    await ctx.msg.send(ctx.penguin, 'activefeatures', ctx.data.getActiveFeatures() ?? '');
+  }
   await sendCurrentPartyCookie(ctx);
   await sendCurrentPartyService(ctx);
 
