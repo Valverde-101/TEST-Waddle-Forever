@@ -575,7 +575,8 @@ const collectShareBundle = async (window: BrowserWindow) => {
   const summaryLines = [
     'WADDLE DIAGNOSTIC SHARE',
     `Generated UTC: ${bundle.generated_utc}`,
-    `Classification: ${analysis.classification || 'NO_FAILURE_OBSERVED'}`,
+    `Classification (prioritized): ${analysis.classification || 'NO_FAILURE_OBSERVED'}`,
+    `Last observed error: ${bundle.last_failure_analysis?.classification || 'NO_FAILURE_OBSERVED'}`,
     `Confidence: ${analysis.confidence || 'n/a'}`,
     `Failure: ${analysis.failure?.category || ''} ${analysis.failure?.action || ''} status=${analysis.failure?.statusCode || analysis.failure?.status || ''}`.trim(),
     `Local resolver: ${analysis.file_resolution?.status || 'n/a'} ${analysis.file_resolution?.resolver || ''} ${analysis.file_resolution?.target || ''}`.trim(),
@@ -583,26 +584,33 @@ const collectShareBundle = async (window: BrowserWindow) => {
     `Explanation: ${analysis.explanation || analysis.message || ''}`,
     `Recommended action: ${analysis.recommended_action || ''}`,
     `Live trace events: ${trace.length}`,
+    `Incident groups: ${incidents.length}; actionable: ${bundle.incident_summary.actionable_count}; background: ${bundle.incident_summary.background_count}`,
+    `Scene assets fingerprinted: ${sceneAssets.length}`,
+    `Scene capture: ${screenshot.status === 'captured' ? screenshot.file : 'unavailable'}`,
     `File resolution events: ${fileResolutionEvents.length}`,
     `Renderer console events: ${recentConsoleMessages.length}`,
     '',
-    'Share the JSON file for full evidence. The TXT file is a compact summary.'
+    'Share JSON and PNG for a visual defect. PNG may show usernames or other visible personal information: review before sharing.'
   ];
 
   fs.writeFileSync(jsonPath, JSON.stringify(bundle, null, 2), 'utf8');
   fs.writeFileSync(txtPath, summaryLines.join('\r\n'), 'utf8');
   fs.copyFileSync(jsonPath, latestJson);
   fs.copyFileSync(txtPath, latestTxt);
+  if (screenshot.status === 'captured') fs.copyFileSync(pngPath, path.join(shareRoot, 'waddle-share-latest.png'));
 
   try {
     const timestamped = fs.readdirSync(shareRoot)
-      .filter(name => /^waddle-share-\d.*\.(?:json|txt)$/i.test(name))
+      .filter(name => /^waddle-share-\d.*\.(?:json|txt|png)$/i.test(name))
       .map(name => {
         const fullPath = path.join(shareRoot, name);
         return { fullPath, mtime: fs.statSync(fullPath).mtimeMs };
       })
       .sort((a, b) => b.mtime - a.mtime);
-    for (const stale of timestamped.slice(6)) {
+    // Keep three complete sets of JSON, TXT and optional PNG together.
+    const basename = (name: string) => name.replace(/\.(?:json|txt|png)$/i, '');
+    const keep = new Set(Array.from(new Set(timestamped.map(entry => basename(path.basename(entry.fullPath))))).slice(0, 3));
+    for (const stale of timestamped.filter(entry => !keep.has(basename(path.basename(entry.fullPath))))) {
       try {
         fs.unlinkSync(stale.fullPath);
       } catch {
@@ -621,8 +629,11 @@ const collectShareBundle = async (window: BrowserWindow) => {
     confidence: analysis.confidence || 'n/a',
     latest_json: path.relative(process.cwd(), latestJson),
     latest_txt: path.relative(process.cwd(), latestTxt),
+    latest_png: screenshot.status === 'captured' ? path.relative(process.cwd(), path.join(shareRoot, 'waddle-share-latest.png')) : null,
     timestamped_json: path.relative(process.cwd(), jsonPath),
-    message: 'Diagnóstico recopilado. Se abrió la carpeta; comparte waddle-share-latest.json para analizar el problema completo.'
+    message: screenshot.status === 'captured'
+      ? 'Diagnóstico con captura. Comparte waddle-share-latest.json y waddle-share-latest.png (revisa datos visibles antes de enviar).'
+      : 'Diagnóstico recopilado. Comparte waddle-share-latest.json y una captura manual del mapa: no se pudo capturar la pantalla automáticamente.'
   };
 };
 
