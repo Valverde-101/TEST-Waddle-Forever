@@ -168,6 +168,31 @@ def main() -> None:
     document = ArchiveLinks()
     document.feed(page.decode('utf-8', errors='replace'))
     discovered = document.entries
+    if not discovered:
+        from collections import Counter
+        class HrefAudit(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.hrefs = []
+                self.headings = []
+                self.current = ''
+            def handle_starttag(self, tag, attrs):
+                if tag == 'a':
+                    self.hrefs.append(dict(attrs).get('href',''))
+                if tag in ('h1','h2','h3'):
+                    self.current = tag
+            def handle_data(self, data):
+                if self.current and data.strip():
+                    self.headings.append((self.current,data.strip()[:50]))
+            def handle_endtag(self, tag):
+                if self.current == tag:self.current = ''
+        audit = HrefAudit()
+        audit.feed(page.decode('utf-8', errors='replace'))
+        print('WADDLE_HOLIDAY2015_HTML_AUDIT=' +
+              json.dumps({'bytes':len(page),'headings':audit.headings[:36],
+                  'hrefs':audit.hrefs[:45], 'swf_anchors':sum('.swf' in x.lower() for x in audit.hrefs),
+                  'sample':page[:700].decode('utf-8',errors='replace')},ensure_ascii=False),
+              flush=True)
     unique: dict[str, dict[str, str]] = {}
     for entry in discovered:
         key = f"{entry['phase']}/{entry['section']}/{entry['name']}"
