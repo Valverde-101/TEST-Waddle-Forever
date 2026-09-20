@@ -403,6 +403,5 @@ export const UPDATES_2015: Update[] = [
   // Timeline shows the December pre-party separately from the live Holiday event.
   { date:'2015-12-02', temp:{ event:HOLIDAY_2015_ADVENT } },
   { date:'2015-12-17', end:['event'], temp:{ party:HOLIDAY_2015_PARTY } },
-  // 2016-01-07 is an exclusive end: January 6 remains fully selectable.
-  { date:'2016-01-07', end:['party'] }
+  // The exclusive end is in 2016.ts to retain chronological update ordering.
 ];
