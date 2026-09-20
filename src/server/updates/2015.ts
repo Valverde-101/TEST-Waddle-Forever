@@ -1,4 +1,4 @@
-import { Update } from ".";
+import { CPUpdate, Update } from ".";
 
 const P = 'party2015:';
 const ref = (relative: string) => P + relative;
@@ -254,7 +254,7 @@ const holidayMusicFiles = Object.fromEntries(Object.entries(HOLIDAY_2015_MUSIC_F
 
 // The original Advent Calendar opens before the decorated party. Its icon and
 // close-up must not replace the full penguin interface or persist after 16 Dec.
-const HOLIDAY_2015_ADVENT = {
+const HOLIDAY_2015_ADVENT: CPUpdate = {
   partyName: 'Advent Calendar 2015',
   decorated: false as const,
   roomComment: 'The 2015 Advent Calendar opens in the Snow Forts',
@@ -274,7 +274,7 @@ const HOLIDAY_2015_ADVENT = {
     'membership/party1.swf': { en: holidayRef('preparty/membership/2015AdventCalendarmembership.swf') }
   }
 };
-const HOLIDAY_2015_PARTY = {
+const HOLIDAY_2015_PARTY: CPUpdate = {
   partyName: 'Holiday Party 2015',
   // Party cookie uses an independent ID, not Halloween's quest/task state.
   partyProgress: {
