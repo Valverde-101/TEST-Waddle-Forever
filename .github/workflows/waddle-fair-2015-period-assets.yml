@@ -1,0 +1,91 @@
+name: Waddle The Fair 2015 Original May Map and Theatre
+
+on:
+  push:
+    branches: [feat/the-fair-2015]
+    paths:
+      - '.github/workflows/waddle-fair-2015-period-assets.yml'
+  pull_request:
+    branches: [dev]
+    paths:
+      - '.github/workflows/waddle-fair-2015-period-assets.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: waddle-fair-2015-period-assets
+  cancel-in-progress: false
+
+jobs:
+  preserve-may-2015:
+    if: github.repository == 'Valverde-101/TEST-Waddle-Forever' && github.head_ref == 'feat/the-fair-2015'
+    runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/the-fair-2015
+          persist-credentials: true
+      - name: Download exact historical March 2015 island map and May 2015 Stage
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root=Join-Path $env:GITHUB_WORKSPACE 'media/default/fair2015/period'
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          $ffdec=Get-ChildItem -LiteralPath 'V:\AndroidBuild\Tools\FFDec' -Filter 'ffdec-cli.exe' -Recurse -File | Sort-Object FullName -Descending | Select-Object -First 1
+          if(-not $ffdec){throw 'WADDLE_FAIR_PERIOD=FAIL missing_ffdec'}
+          $sourceList=@(
+            @{Name='ContentMap-03262015.swf';URL='https://toolbox.solero.me/cparchives/static/images/archives/b/b6/ContentMap-03262015.swf';SizeMin=10000},
+            @{Name='RoomsStage-May2015.swf';URL='https://toolbox.solero.me/cparchives/static/images/archives/1/17/RoomsStage-May2015.swf';SizeMin=20000}
+          )
+          $rows=@()
+          foreach($source in $sourceList){
+            $dest=Join-Path $root $source.Name
+            $temp=$dest+'.part'
+            if(-not(Test-Path -LiteralPath $dest -PathType Leaf)){
+              Remove-Item -LiteralPath $temp -ErrorAction SilentlyContinue
+              Invoke-WebRequest -Uri $source.URL -UseBasicParsing -OutFile $temp -TimeoutSec 120
+              if($LASTEXITCODE -and $LASTEXITCODE -ne 0){throw 'WADDLE_FAIR_PERIOD=FAIL archive_download'}
+              Move-Item -LiteralPath $temp -Destination $dest -Force
+            }
+            $data=[IO.File]::ReadAllBytes($dest)
+            $signature=[Text.Encoding]::ASCII.GetString($data,0,3)
+            if($data.Length -lt $source.SizeMin -or $signature -notin @('FWS','CWS','ZWS')){throw "WADDLE_FAIR_PERIOD=FAIL invalid_archive_swf=$($source.Name)"}
+            $hash=(Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash.ToLowerInvariant()
+            $extract=Join-Path $env:RUNNER_TEMP ('fair-period-'+$source.Name)
+            New-Item -ItemType Directory -Path $extract -Force | Out-Null
+            & $ffdec.FullName -cli -onerror abort -exportTimeout 90 -exportFileTimeout 40 -export script $extract $dest
+            if($LASTEXITCODE -ne 0){throw "WADDLE_FAIR_PERIOD=FAIL decompile=$($source.Name)"}
+            $scripts=@(Get-ChildItem -LiteralPath $extract -Filter '*.as' -Recurse -File)
+            if($scripts.Count -lt 1){throw "WADDLE_FAIR_PERIOD=FAIL no_scripts=$($source.Name)"}
+            foreach($f in $scripts){
+              if($f.FullName -match 'frame_1[\\/]DoAction\.as$' -or $f.FullName -match '[\\/]world[\\/]rooms[\\/]Stage\.as$'){
+                $lines=@(Get-Content -LiteralPath $f.FullName)
+                for($i=0;$i -lt [Math]::Min($lines.Count,650);$i++){
+                  Write-Host ("WADDLE_FAIR_PERIOD_CODE file={0} source={1}:{2} {3}" -f $source.Name,$f.FullName.Substring($extract.Length+1),($i+1),$lines[$i])
+                }
+              }
+            }
+            $rows+=@{relativePath=('period/'+$source.Name);url=$source.URL;sha256=$hash;bytes=$data.Length}
+            Write-Host "WADDLE_FAIR_PERIOD=PASS asset=$($source.Name) sha256=$hash bytes=$($data.Length) scripts=$($scripts.Count)"
+          }
+          $proof=[ordered]@{schema='waddle-fair-2015-period-assets/v1';assets=@($rows)}
+          $json=ConvertTo-Json -InputObject $proof -Depth 5
+          [IO.File]::WriteAllText((Join-Path $root 'manifest.json'),(($json -replace "`r`n","`n")+"`n"),(New-Object System.Text.UTF8Encoding($false)))
+      - name: Publish source originals in this same Fair PR without editing Halloween
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- media/default/fair2015/period
+          git diff --cached --quiet
+          if($LASTEXITCODE -eq 1){
+            git commit -m "assets(fair2015): preserve March 2015 island map and May 2015 Stage originals"
+            if($LASTEXITCODE -ne 0){throw 'WADDLE_FAIR_PERIOD=FAIL commit'}
+            git push origin HEAD:refs/heads/feat/the-fair-2015
+            if($LASTEXITCODE -ne 0){throw 'WADDLE_FAIR_PERIOD=FAIL push'}
+          }
+          Write-Host 'WADDLE_FAIR_PERIOD=PASS archived_originals_preserved=true same_pr=true'
