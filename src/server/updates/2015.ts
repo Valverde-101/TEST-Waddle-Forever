@@ -325,6 +325,11 @@ export const UPDATES_2015: Update[] = [
         taskCount: 0, maxCoinUpdate: 0, ticketBased: true,
         service: { partyStartDate: '2015-05-20 00:00:00', partyEndDate: '2015-06-11 00:00:00', unlockDayIndex: 22, numOfDaysInParty: 22 }
       },
+      // Native map-note support is separate from the Fair close-up routes:
+      // without this update the normal island map has no active party marker.
+      // The archived Fair note appears on the island map and opens Fair's
+      // separate party map via its original button/close-up interaction.
+      mapNote: fairRef('close_ups/ENCloseUpsPartyMapNote-TheFair2015.swf'),
       // Fair's own copy of the native dialogue keys; not Halloween quest text.
       gameStringChanges: {
         'w.p2015.may.dialogue.login': "Welcome to the Fair. Come to the Docks for fun games, crazy\nrides, and wacky prizes! There's a plunger hat and everything!",
@@ -370,9 +375,12 @@ export const UPDATES_2015: Update[] = [
         // The localChanges below already covers the direct close-up paths, but
         // none of these interactive showContent keys worked through that route.
         'close_ups/dialog_rookie_login.swf': [fairRef('close_ups/CloseUps-DialogueRookieLogin-TheFair2015.swf'), 'w.p2015.may.login'],
-        'close_ups/party_map.swf': [fairRef('close_ups/ENCloseUpsPartyMap-TheFair2015.swf'), 'w.p2015.may.partymap', 'party_map'],
-        'close_ups/party_map_note.swf': [fairRef('close_ups/ENCloseUpsPartyMapNote-TheFair2015.swf'), 'party_map_note'],
+        'close_ups/party_map.swf': [fairRef('close_ups/ENCloseUpsPartyMap-TheFair2015.swf'), 'w.p2015.may.partymap', 'w.party.map', 'party_map'],
+        'close_ups/party_map_note.swf': [fairRef('close_ups/ENCloseUpsPartyMapNote-TheFair2015.swf'), 'party_map_note', 'w.p2015.may.partymapnote'],
         'close_ups/ride_prompt.swf': [fairRef('close_ups/ENCloseUpsRidePrompt-TheFair2015.swf'), 'w.p2015.may.rideprompt', 'ride_prompt'],
+        'close_ups/igloo_prompt.swf': [fairRef('close_ups/ENCloseUpsIglooPrompt-TheFair2015.swf'), 'igloo_prompt'],
+        'close_ups/party_igloo_list.swf': [fairRef('close_ups/ENCloseUpsPartyIglooList-TheFair2015.swf'), 'party_igloo_list'],
+        'close_ups/dialog_rookie_firstdailyspin_login.swf': [fairRef('close_ups/CloseUpsDialogRookieFirstdailyspinLogin-TheFair2015.swf'), 'w.p2015.may.dailyspin.login'],
         // Historical Fair paths.json maps these exact MayParty avatar tokens.
         // "coyote" intentionally points at werewolf.swf in the original config.
         'avatar/sprites/werewolf.swf': [fairRef('avatar/AvatarSpritesWerewolf.swf'), 'w.avatarSprite.coyote'],
@@ -382,9 +390,11 @@ export const UPDATES_2015: Update[] = [
       },
       localChanges: {
         'close_ups/quest_interface.swf': { en: fairRef('close_ups/CloseUpsEN-QuestInterface-TheFair2015.swf') },
-        'close_ups/party_map.swf': { en: fairRef('close_ups/ENCloseUpsPartyMap-TheFair2015.swf') },
-        'close_ups/party_map_note.swf': { en: fairRef('close_ups/ENCloseUpsPartyMapNote-TheFair2015.swf') },
-        'close_ups/ride_prompt.swf': { en: fairRef('close_ups/ENCloseUpsRidePrompt-TheFair2015.swf') },
+        'close_ups/party_map.swf': { en: fairRef('close_ups/ENCloseUpsPartyMap-TheFair2015.swf'), de: fairRef('close_ups/DECloseUpsPartyMap-TheFair2015.swf'), es: fairRef('close_ups/ESCloseUpsPartyMap-TheFair2015.swf'), fr: fairRef('close_ups/FRCloseUpsPartyMap-TheFair2015.swf'), pt: fairRef('close_ups/PTCloseUpsPartyMap-TheFair2015.swf'), ru: fairRef('close_ups/RUCloseUpsPartyMap-TheFair2015.swf') },
+        'close_ups/party_map_note.swf': { en: fairRef('close_ups/ENCloseUpsPartyMapNote-TheFair2015.swf'), de: fairRef('close_ups/DECloseUpsPartyMapNote-TheFair2015.swf'), es: fairRef('close_ups/ESCloseUpsPartyMapNote-TheFair2015.swf'), fr: fairRef('close_ups/FRCloseUpsPartyMapNote-TheFair2015.swf'), pt: fairRef('close_ups/PTCloseUpsPartyMapNote-TheFair2015.swf'), ru: fairRef('close_ups/RUCloseUpsPartyMapNote-TheFair2015.swf') },
+        'close_ups/ride_prompt.swf': { en: fairRef('close_ups/ENCloseUpsRidePrompt-TheFair2015.swf'), de: fairRef('close_ups/DECloseUpsRidePrompt-TheFair2015.swf'), es: fairRef('close_ups/ESCloseUpsRidePrompt-TheFair2015.swf'), fr: fairRef('close_ups/FRCloseUpsRidePrompt-TheFair2015.swf'), pt: fairRef('close_ups/PTCloseUpsRidePrompt-TheFair2015.swf'), ru: fairRef('close_ups/RUCloseUpsRidePrompt-TheFair2015.swf') },
+        'close_ups/igloo_prompt.swf': { en: fairRef('close_ups/ENCloseUpsIglooPrompt-TheFair2015.swf'), de: fairRef('close_ups/DECloseUpsIglooPrompt-TheFair2015.swf'), es: fairRef('close_ups/ESCloseUpsIglooPrompt-TheFair2015.swf'), fr: fairRef('close_ups/FRCloseUpsIglooPrompt-TheFair2015.swf'), pt: fairRef('close_ups/PTCloseUpsIglooPrompt-TheFair2015.swf') },
+        'close_ups/party_igloo_list.swf': { en: fairRef('close_ups/ENCloseUpsPartyIglooList-TheFair2015.swf'), de: fairRef('close_ups/DECloseUpsPartyIglooList-TheFair2015.swf'), es: fairRef('close_ups/ESCloseUpsPartyIglooList-TheFair2015.swf'), fr: fairRef('close_ups/FRCloseUpsPartyIglooList-TheFair2015.swf'), pt: fairRef('close_ups/PTCloseUpsPartyIglooList-TheFair2015.swf') },
         'close_ups/dialog_rookie_login.swf': { en: fairRef('close_ups/CloseUps-DialogueRookieLogin-TheFair2015.swf') },
         'close_ups/dialog_rookie_firstdailyspin_login.swf': { en: fairRef('close_ups/CloseUpsDialogRookieFirstdailyspinLogin-TheFair2015.swf') }
       }
