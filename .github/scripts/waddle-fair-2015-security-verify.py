@@ -43,7 +43,7 @@ for rel in (
     assert body[:matches[0]] == patched[:matches[0]]
     assert body[matches[0]+len(needle):] == patched[matches[0]+len(needle):]
 code = (root / "src/server/updates/2015.ts").read_text(encoding="utf-8")
-assert "'play/v2/content/global/content/map.swf': 'approximation:modern_map.swf'" in code
+assert "'play/v2/content/global/content/map.swf': fairRef('compat/FairIslandMap.swf')" in code
 assert (root / "media/default/approximation/modern_map.swf").is_file()
 assert code.count("'play/v2/games/cp_party_games/spin/spin.swf':") == 1
 server = (root / "src/server/file-server/index.ts").read_text(encoding="utf-8")
