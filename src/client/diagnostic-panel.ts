@@ -392,7 +392,7 @@ const sendPanelResult = (window: BrowserWindow, payload: unknown) => {
 // Record precisely which scene assets were served. A 200 response proves the
 // SWF loaded, not which display-list shapes or overlays Flash drew.
 const collectSceneAssetEvidence = (trace: WaddleLiveTraceEvent[]) => {
-  const relevant = /(?:^|\\/)(?:map|party_map|party_map_note|stage|plaza|party_icon)\\.swf$/i;
+  const relevant = /\/(?:map|party_map|party_map_note|stage|plaza|party_icon)\.swf$/i;
   const mediaRoot = path.resolve(process.cwd(), 'media', 'default');
   const seen = new Set<string>();
   const evidence: Array<Record<string, unknown>> = [];
@@ -401,11 +401,11 @@ const collectSceneAssetEvidence = (trace: WaddleLiveTraceEvent[]) => {
     const action = String(event.action || '');
     if (seen.has(action)) continue;
     seen.add(action);
-    const target = String(event.target).replace(/\\\\/g, '/');
+    const target = String(event.target).replace(/\\/g, '/');
     const item: Record<string, unknown> = {
       action, sequence: event.sequence, status: event.status, target
     };
-    if (!/^default\\/[A-Za-z0-9_.\\/-]+$/.test(target) || target.split('/').includes('..')) {
+    if (!target.startsWith('default/') || !target.split('/').every(part => /^[A-Za-z0-9_.-]+$/.test(part)) || target.split('/').includes('..')) {
       item.asset_status = 'unsafe-or-unavailable-target';
     } else {
       const filename = path.resolve(process.cwd(), 'media', target);
