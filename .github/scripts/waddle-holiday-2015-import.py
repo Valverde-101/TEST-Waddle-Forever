@@ -54,11 +54,17 @@ class ArchiveLinks(HTMLParser):
         self.heading = ''
         self.href = ''
         self.entries: list[dict[str, str]] = []
+        self.row: list[str] = []
+        self.in_row = False
+        self.room_music: list[dict[str, object]] = []
 
     def handle_starttag(self, tag, attrs):
         d = dict(attrs)
         if tag in ('h2', 'h3'):
             self.heading = tag
+        if tag == 'tr':
+            self.in_row = True
+            self.row = []
         if tag == 'span' and 'mw-headline' in str(d.get('class') or ''):
             name = re.sub(r'_\d+$', '', str(d.get('id') or '')).replace('_', ' ').lower()
             if self.heading == 'h2':
@@ -72,6 +78,14 @@ class ArchiveLinks(HTMLParser):
             self.href = str(d.get('href') or '')
 
     def handle_endtag(self, tag):
+        if tag == 'tr' and self.in_row:
+            room = [name for name in self.row if re.fullmatch(r'Rooms[A-Za-z0-9_]+-HolidayParty2015\\.swf', name, re.I)]
+            music = [name for name in self.row if re.fullmatch(r'Music\\d+(?:_\\d+)?\\.swf', name, re.I)]
+            if len(room) == 1 and len(music) == 1 and self.section == 'rooms':
+                self.room_music.append({'room': room[0], 'musicFile': music[0],
+                    'musicId': int(re.search(r'\\d+', music[0]).group()), 'phase': self.phase})
+            self.in_row = False
+            self.row = []
         if tag in ('h2', 'h3'):
             self.heading = ''
         if tag == 'a' and self.href:
@@ -80,6 +94,8 @@ class ArchiveLinks(HTMLParser):
             name = re.sub(r'\.html$', '', decoded, flags=re.I)
             name = re.sub(r'^File:', '', name, flags=re.I)
             if SWF_NAME.fullmatch(name) and self.section:
+                if self.in_row:
+                    self.row.append(name)
                 category = 'music' if re.fullmatch(r'Music\d+(?:_\d+)?\.swf', name, re.I) else self.section
                 self.entries.append({
                     'name': name, 'section': category,
@@ -211,7 +227,7 @@ def main() -> None:
     print('WADDLE_HOLIDAY2015_ARCHIVE_DISCOVERY=' +
           json.dumps({'total': len(unique), 'categories': categories,
                       'preparty': sum(e['phase'] == 'preparty' for e in unique.values()),
-                      'examples': list(unique)[:15]}, ensure_ascii=False), flush=True)
+                      'examples': list(unique)[:15], 'room_music':len(document.room_music)}, ensure_ascii=False), flush=True)
     if len(unique) < 30 or categories['rooms'] < 20 or categories['client'] < 2 or categories['close_ups'] < 2:
         raise RuntimeError('WADDLE_HOLIDAY2015_IMPORT=FAIL incomplete_archive_discovery')
     if options.inventory_only:
@@ -262,8 +278,17 @@ def main() -> None:
         target.write_bytes(blob)
         report.append(item)
         print('WADDLE_HOLIDAY2015_ASSET=PASS path=' + relative + ' sha256=' + item['sha256'], flush=True)
+    room_music = sorted(document.room_music, key=lambda item: (item['phase'], item['room']))
+    for item in room_music:
+        room_path = f"{item['phase']}/rooms/{item['room']}"
+        song_path = f"{item['phase']}/music/{item['musicFile']}"
+        if room_path not in seen or song_path not in seen:
+            raise RuntimeError('WADDLE_HOLIDAY2015_IMPORT=FAIL room_music_asset_unpinned=' + room_path)
+    if len({(v['phase'], v['room']) for v in room_music}) != len(room_music):
+        raise RuntimeError('WADDLE_HOLIDAY2015_IMPORT=FAIL ambiguous_room_music')
     manifest = {'schema': 'waddle-holiday-2015-original-assets/v1',
-                'sourcePage': SOURCE, 'count': len(report), 'assets': report}
+                'sourcePage': SOURCE, 'count': len(report),
+                'roomMusic': room_music, 'assets': report}
     out = DEST / 'manifest.json'
     if out.exists():
         previous = json.loads(out.read_text(encoding='utf-8'))
