@@ -30,8 +30,9 @@ require("id: 'holiday-2015'" in HOLIDAY and "id: 'halloween-2015'" not in HOLIDA
         'party_state_not_isolated')
 require('fair2015:' not in HOLIDAY and 'fair#' not in HOLIDAY and 'halloween#' not in HOLIDAY,
         'cross_party_protocol_or_media')
-require("ref('content/party-runtime-2015.swf')" in HOLIDAY and
-        "ref('client/QuestCommunicator.swf')" in HOLIDAY, 'shared_transport_missing')
+require("holidayRef('party/client/ClientParty-HolidayParty2015.swf')" in HOLIDAY and
+        "ref('client/QuestCommunicator.swf')" in HOLIDAY, 'holiday_runtime_or_shared_transport_missing')
+require("ref('content/party-runtime-2015.swf')" not in HOLIDAY, 'halloween_robot_runtime_leaked')
 paths = {a['relativePath'] for a in MANIFEST['assets']}
 refs = set(re.findall(r"""holidayRef\((?:'|")([^'"]+)(?:'|")\)""", HOLIDAY))
 missing = refs - paths
