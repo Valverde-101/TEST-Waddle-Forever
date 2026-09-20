@@ -1,10 +1,11 @@
 name: Waddle The Fair 2015 Daily Spin Loopback Compatibility
 
 on:
-  push:
-    branches: [feat/the-fair-2015]
+  pull_request:
+    branches: [dev]
     paths:
       - '.github/workflows/waddle-fair-2015-spin-compat.yml'
+      - '.github/scripts/waddle-fair-2015-spin-compat.py'
   workflow_dispatch:
 
 permissions:
@@ -16,7 +17,7 @@ concurrency:
 
 jobs:
   generate-derived-fair-spin-bootstrap:
-    if: github.repository == 'Valverde-101/TEST-Waddle-Forever' && github.ref == 'refs/heads/feat/the-fair-2015'
+    if: github.repository == 'Valverde-101/TEST-Waddle-Forever' && github.event_name == 'pull_request' && github.head_ref == 'feat/the-fair-2015'
     runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
     timeout-minutes: 15
     steps:
@@ -38,8 +39,6 @@ jobs:
           git status --short -- media/default/fair2015/compat
       - name: Commit only verified derived Fair media to existing PR branch
         shell: powershell
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $ErrorActionPreference = 'Stop'
           git config user.name "github-actions[bot]"
@@ -48,10 +47,11 @@ jobs:
           $manifest = 'media/default/fair2015/compat/spin_bootstrap_local.json'
           if (-not (Test-Path -LiteralPath $source -PathType Leaf) -or -not (Test-Path -LiteralPath $manifest -PathType Leaf)) { throw 'WADDLE_FAIR_SPIN_PATCH=FAIL derived_missing' }
           git add -- $source $manifest
-          if (-not (git diff --cached --quiet)) {
+          git diff --cached --quiet
+          if ($LASTEXITCODE -eq 1) {
             git commit -m "fix(fair2015): preserve patched Daily Spin bootstrap only for local runtime"
             if ($LASTEXITCODE -ne 0) { throw 'WADDLE_FAIR_SPIN_PATCH=FAIL commit' }
-            git -c credential.helper= -c http.extraheader="AUTHORIZATION: basic $([Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("x-access-token:$env:GH_TOKEN")))" push origin HEAD:refs/heads/feat/the-fair-2015
+            git push origin HEAD:refs/heads/feat/the-fair-2015
             if ($LASTEXITCODE -ne 0) { throw 'WADDLE_FAIR_SPIN_PATCH=FAIL branch_moved_or_push_failed' }
           }
           Write-Host 'WADDLE_FAIR_SPIN_PATCH=PASS same_pr=true canonical_unchanged=true'
