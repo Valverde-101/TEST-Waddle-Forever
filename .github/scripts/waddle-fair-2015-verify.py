@@ -53,7 +53,24 @@ for entry in cp_assets:
 # These three files are deliberately isolated from the 194 archive originals;
 # no Halloween asset is copied into the Fair namespace.
 assert not (seen & cp_seen), "Fair supplement collides with archive originals"
-assert len([file for file in assets.rglob("*.swf") if 'compat' not in file.relative_to(assets).parts]) == 197
+assert len([file for file in assets.rglob("*.swf") if not ({'compat','period'} & set(file.relative_to(assets).parts))]) == 197
+period_manifest_path = assets / 'period/manifest.json'
+assert period_manifest_path.is_file(), 'WADDLE_FAIR_PERIOD=FAIL original_source_manifest_missing'
+period_info = json.loads(period_manifest_path.read_text(encoding='utf-8'))
+assert period_info["schema"] == "waddle-fair-2015-period-assets/v1"
+period_expected = {
+    'period/ContentMap-03262015.swf': ('5cf40f5b683d19d646ca8a8dd9002173c91892c72efe7c8581f17e92f79135f5', 232822, 'b/b6/ContentMap-03262015.swf'),
+    'period/RoomsStage-May2015.swf': ('24108dc63baf4cea79be5877c17741dbf214d37aac161843d3467e0ec5bd6f58', 219674, '1/17/RoomsStage-May2015.swf')
+}
+assert {e['relativePath'] for e in period_info['assets']} == set(period_expected)
+for entry in period_info['assets']:
+    identity, length, url_suffix = period_expected[entry['relativePath']]
+    original = (assets / entry['relativePath']).read_bytes()
+    assert original[:3] in (b'FWS', b'CWS')
+    assert len(original) == entry['bytes'] == length
+    assert hashlib.sha256(original).hexdigest() == entry['sha256'] == identity
+    assert entry['url'] == 'https://toolbox.solero.me/cparchives/static/images/archives/' + url_suffix
+print("WADDLE_FAIR_PERIOD=PASS march_island=true may_theatre=true original_sha_pinned=true")
 # Derived Fair-only map is pinned separately and must not mutate the archived
 # 194 Fair SWFs, CPImagined's three supplemental SWFs, or the base island map.
 compat_manifest_file = assets / "compat/island_map_manifest.json"
@@ -65,7 +82,8 @@ compat_map_file = assets / "compat/FairIslandMap.swf"
 assert compat_map_file.is_file(), "WADDLE_FAIR_MAP_COMPAT=FAIL derived_asset_missing"
 assert compat_map_file.read_bytes()[:3] in (b"FWS", b"CWS")
 assert hashlib.sha256(compat_map_file.read_bytes()).hexdigest() == compat_map_info["derivedSha256"]
-assert hashlib.sha256((repo / "media/default/approximation/modern_map.swf").read_bytes()).hexdigest() == compat_map_info["originalSha256"]
+assert compat_map_info["originalMap"] == "fair2015/period/ContentMap-03262015.swf"
+assert hashlib.sha256((assets / "period/ContentMap-03262015.swf").read_bytes()).hexdigest() == compat_map_info["originalSha256"]
 assert hashlib.sha256((assets / "close_ups/ENCloseUpsPartyMapNote-TheFair2015.swf").read_bytes()).hexdigest() == compat_map_info["originalFairNoteSha256"]
 assert hashlib.sha256((assets / "close_ups/ENCloseUpsPartyMap-TheFair2015.swf").read_bytes()).hexdigest() == compat_map_info["originalFairPartyMapSha256"]
 print("WADDLE_FAIR_MAP_COMPAT=PASS derived_sha_pinned=true archived_swfs_unchanged=true")
@@ -79,7 +97,7 @@ assert "date:'2015-10-21'" in code and "partyName:'Halloween Party 2015'" in cod
 fair = code[code.index("date: '2015-05-20'"):code.index("date: '2015-06-11'")]
 assert "party2015:" not in fair and "halloween-2015" not in fair
 references = set(re.findall(r"fairRef\('([^']+)'\)", code))
-known_refs = seen | cp_seen | {"compat/FairIslandMap.swf"}
+known_refs = seen | cp_seen | {"compat/FairIslandMap.swf"} | set(period_expected)
 assert references and references.issubset(known_refs), f"missing refs {sorted(references - known_refs)}"
 rooms = re.search(r"const FAIR_2015_ROOMS = \{(.*?)\n\};", code, re.S).group(1)
 music = re.search(r"const FAIR_2015_MUSIC = \{(.*?)\n\};", code, re.S).group(1)
@@ -88,8 +106,8 @@ music_names = re.findall(r"^\s*'([^']+)': \d+", music, re.M)
 assert len(room_names) == 46 and len(set(room_names)) == 46, "original Fair room map invalid"
 # Stage is a separately archived pre-Mall room, not one of the 46 Fair SWFs;
 # retain the exact historical room count and verify this scoped supplement.
-assert "'stage': 'archives:RoomsStage-21Apr2015.swf'" in rooms, "Stage supplement unavailable"
-assert (repo / 'media/default/archives/RoomsStage-21Apr2015.swf').is_file(), "Stage original absent"
+assert "'stage': fairRef('period/RoomsStage-May2015.swf')" in rooms, "Original May theatre supplement unavailable"
+assert (assets / 'period/RoomsStage-May2015.swf').is_file(), "Original May theatre absent"
 assert set(room_names) | {'stage'} == set(music_names), "room / music divergence"
 assert set(range(1, 13)).issubset({int(x[5:]) for x in room_names if re.fullmatch(r"party\d+", x)}), "party rooms missing"
 # Static source-contract regression checks are not a substitute for a live
