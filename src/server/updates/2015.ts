@@ -343,10 +343,12 @@ export const UPDATES_2015: Update[] = [
       fileChanges: {
         // Mounted only in Fair's temporary update (May 20 to June 11, 2015).
         'play/v2/content/global/content/party.swf': fairRef('cpimagined/content/party.swf'),
-        // CPImagined's supplemental map is a snow-season bitmap, not the May 2015
-        // island map. Keep the modern island map independent of Fair's event
-        // close-up, which the preserved party_map + party_map_note SWFs open.
-        'play/v2/content/global/content/map.swf': 'approximation:modern_map.swf',
+        // The unmodified island map consumes the note's onPress before the
+        // original Fair note can open its party map onRelease. Mount the
+        // independently verified, Fair-only derived normal-island map: it
+        // preserves the original Fair note's onRelease and every other map
+        // action. Other timelines keep approximation:modern_map.swf intact.
+        'play/v2/content/global/content/map.swf': fairRef('compat/FairIslandMap.swf'),
         'play/v2/content/global/content/room_pin/7236.swf': fairRef('cpimagined/content/room_pin/7236.swf'),
         'play/v2/client/shell.swf': 'svanilla:media/play/v2/client/shell.swf',
         'play/v2/client/interface.swf': fairRef('client/ClientInterfaceFair2015.swf'),
