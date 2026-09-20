@@ -290,9 +290,9 @@ const HOLIDAY_2015_PARTY: CPUpdate = {
   rooms: HOLIDAY_2015_ROOMS,
   music: HOLIDAY_2015_MUSIC,
   fileChanges: {
-    // This is the late-AS3 shared runtime; the actual Holiday party client and
-    // all party-specific modules below remain pinned to their original SWFs.
-    'play/v2/content/global/content/party.swf': ref('content/party-runtime-2015.swf'),
+    // The Halloween runtime is patched for Robot Rampage and must NEVER
+    // bootstrap Holiday. Use the original archived Holiday party logic.
+    'play/v2/content/global/content/party.swf': holidayRef('party/client/ClientParty-HolidayParty2015.swf'),
     'play/v2/client/QuestCommunicator.swf': ref('client/QuestCommunicator.swf'),
     'play/v2/client/shell.swf': 'svanilla:media/play/v2/client/shell.swf',
     'play/v2/client/interface.swf': holidayRef('party/client/ClientInterface-HolidayParty2015.swf'),
