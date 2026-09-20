@@ -10,6 +10,7 @@ import { handleLeaveGame, handleRoomRefresh, isGameGuard } from "./handlers/game
 import { getIglooOld, handleAddFlooring, handleAddFurniture, handleAddIgloo, handleAddIglooLayout, handleAddIglooLocation, handleCloseIgloo, handleGetAllIglooLayouts, handleGetDj3kTracks, handleGetFurniture, handleGetFurnitureNew, handleGetIglooCpip, handleGetIglooItems, handleGetIglooLikes, handleGetIglooTypes, handleGetMusicTracks, handleGetOpenIgloos, handleOpenIgloo, handleUpdateIgloo, handleUpdateIglooLayout, handleUpdateIglooNew, handleUpdateIglooOld, handleUpdateIglooType, handleUpdateMusic } from "./handlers/igloo";
 import { handleBuyNinjaCards, handleGetFireLevel, handleGetNinjaCards, handleGetNinjaLevel, handleGetNinjaRanks, handleGetWaterLevel, handleJoinFromMatchmake, handleJoinMatchmaking, handleJoinSensei, handleLeaveMatchmake } from "./handlers/ninja";
 import { handleDonateCoins, handleGetBakeryState, handleGetCookieInventory, handleModernBitmapInteraction, handlePartyCommunicatorViewed, handlePartyMessageViewed, handlePartyTaskComplete, handlePartyTaskUpdate, handleRetrievePartyCookie, handleRetrieveMedieval2012, handleSendEnterHopper, handleViewedMedieval2012 } from "./handlers/party";
+import { handleFairAwardTicket, handleFairDailySpin, handleFairEndGame, handleFairSilverJoin, handleFairStartGame, handleFairUseTickets } from "./handlers/fair";
 import { handleAdoptPuffle, handleAdoptPuffleOld, handleEatPuffleItem, handleGetIglooPuffles, handleGetIglooPufflesOld, handleGetPuffleInventory, handlePuffleBackyardSwap, handlePuffleDigOnCommand, handlePuffleDigRandom, handlePuffleWalk, handleRevealGoldPuffle, isAfterPuffleCreatureGuard, isBeforePuffleCreatureGuard, sendModernPuffleCheck, sendPuffleCheck } from "./handlers/puffle";
 import { handlePuffleTrick } from "./handlers/puffle-trick";
 import { handleGetRainbowQuestData, handleSendRainbowQuestBonusCoins, handleSendRainbowQuestCollectCoins, handleSendRainbowQuestItemCollect, handleSendRainbowTaskComplete } from "./handlers/rainbow";
@@ -332,6 +333,14 @@ export const createWorldXtHandler = (): XtHandler => {
 
     p.xt('s', 'mdvl#retrieve', [], handleRetrieveMedieval2012),
     p.xt('s', 'mdvl#msgviewed', ['number'], handleViewedMedieval2012),
+
+    // Native Fair-only XT commands. Each callback rejects other active parties.
+    p.xt('s', 'fair#fstartgame', ['number'], handleFairStartGame),
+    p.xt('s', 'fair#fendgame', ['number'], handleFairEndGame),
+    p.xt('s', 'fair#fsilverjr', ['number', 'number', 'number'], handleFairSilverJoin),
+    p.xt('s', 'fair#fawardtickets', ['number'], handleFairAwardTicket),
+    p.xt('s', 'fair#fdailyspin', ['number'], handleFairDailySpin),
+    p.xt('s', 'fair#fusetickets', ['number'], handleFairUseTickets),
 
     p.xt('s', 'party#partycookie', [], handleRetrievePartyCookie),
     p.xt('s', 'party#msgviewed', ['number'], handlePartyMessageViewed),

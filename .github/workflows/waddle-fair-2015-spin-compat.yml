@@ -1,0 +1,48 @@
+name: Waddle The Fair 2015 Daily Spin Loopback Compatibility
+
+on:
+  pull_request:
+    branches: [dev]
+    paths:
+      - '.github/workflows/waddle-fair-2015-spin-compat.yml'
+      - '.github/scripts/waddle-fair-2015-security-verify.py'
+      - 'src/server/file-server/fair2015-security.ts'
+      - 'src/server/file-server/index.ts'
+      - 'src/server/updates/2015.ts'
+      - 'media/default/fair2015/minigames/daily_spin/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-served-fair-spin:
+    # The actual runtime serves the archived bootstrap and main SWFs through
+    # patchFair2015GameSecurity. The previous FFDec-derived bootstrap was
+    # never routed by the game and FFDec did not preserve its AS2 source
+    # exactly; building and pushing that unused asset was a false CI blocker.
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify original Daily Spin assets and actual isolated runtime compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          python .github/scripts/waddle-fair-2015-security-verify.py
+          python - <<'PY'
+          from pathlib import Path
+          root = Path('.')
+          updates = (root / 'src/server/updates/2015.ts').read_text(encoding='utf-8')
+          server = (root / 'src/server/file-server/index.ts').read_text(encoding='utf-8')
+          security = (root / 'src/server/file-server/fair2015-security.ts').read_text(encoding='utf-8')
+          assert "'play/v2/games/cp_party_games/spin/bootstrap.swf': fairRef('minigames/daily_spin/GamesSpinBootstrap.swf')" in updates
+          assert "'play/v2/games/cp_party_games/spin/spin.swf': fairRef('minigames/daily_spin/GamesSpinMain.swf')" in updates
+          assert "'play/v2/games/cp_party_games/spin/main.swf': fairRef('minigames/daily_spin/GamesSpinMain.swf')" in updates
+          assert "GamesSpinBootstrapLocal.swf" not in updates and "GamesSpinBootstrapLocal.swf" not in server
+          assert "patchFair2015GameSecurity(original, host)" in server
+          assert "minigames/daily_spin/GamesSpinBootstrap.swf" in server
+          assert "minigames/daily_spin/GamesSpinMain.swf" in server
+          assert "const LOCAL_HOST = /^(?:127" in security
+          print('WADDLE_FAIR_SPIN_RUNTIME=PASS original_files=true scoped_loopback_adaptation=true no_unused_derived_asset=true')
+          PY

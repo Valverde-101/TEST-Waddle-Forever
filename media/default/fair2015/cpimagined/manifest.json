@@ -1,0 +1,30 @@
+{
+  "schema": "waddle-fair-2015-cpimagined/v1",
+  "archive": "https://raw.githubusercontent.com/CPImagined/CPImagined-Archive/main/hadnlers/The%20Fair%202015%20Mediaserver.zip",
+  "archiveSha256": "0b29689a639b26f9c7fbfb23f0cd8c0f3f18136ebb79fbf4abab62994168b58d",
+  "assets": [
+    {
+      "relativePath": "cpimagined/content/party.swf",
+      "sourcePath": "The Fair 2015 Mediaserver/play/v2/content/global/content/party.swf",
+      "sha256": "3b104a8dfc44980e98d68e9a4e2b05988ddf0dca44e3ec719ec8d939855b99a0",
+      "bytes": 61387
+    },
+    {
+      "relativePath": "cpimagined/content/map.swf",
+      "sourcePath": "The Fair 2015 Mediaserver/play/v2/content/global/content/map.swf",
+      "sha256": "2e8c90fcd3243542b75441d64c9688b8e66975e7c7a62dd5dd70fbc7d4b5fd78",
+      "bytes": 231306
+    },
+    {
+      "relativePath": "cpimagined/content/room_pin/7236.swf",
+      "sourcePath": "The Fair 2015 Mediaserver/play/v2/content/global/content/room_pin/7236.swf",
+      "sha256": "293bed9433d7bbcb9858f8ac140157633b10169a7e0f42ed0537857cc928b216",
+      "bytes": 1653
+    }
+  ],
+  "sharedExistingAssets": {
+    "content/interface.swf": "d843ee914e6afb66a1061d3fc2757021c497234e78a8432de5707e24433fd2b8",
+    "content/party_icon.swf": "33b6907e4d1938e465a98a47edeb0f32da66692312507b39b5ece8c874b8b4dd",
+    "close_ups/quest_interface.swf": "6c8c8708ffe6174772efe4cb04ad7df3fdde8d771cb6f459169e043f84b9d44d"
+  }
+}

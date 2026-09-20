@@ -9,6 +9,7 @@ import { SettingsManager } from '@server/settings';
 import { FileOverrider, OVERRIDERS, REGEX_OVERRIDERS } from './overriders';
 import { getYellowString, logverbose } from '@server/logger';
 import { publishWaddleLiveTrace } from '@common/live-trace';
+import { patchFair2015GameSecurity } from './fair2015-security';
 
 const CLOTHING_ASSET_ROUTE = /^play\/v2\/content\/global\/clothing\/(?:icons|paper|sprites)\/[^/]+\.swf$/i;
 const CLOTHING_MEMORY_CACHE_MAX_BYTES = 96 * 1024 * 1024;
@@ -160,7 +161,7 @@ export class FileServer {
     }
   }
 
-  private async getFile(route: string): Promise<Buffer | string | undefined> {
+  private async getFile(route: string, host: string): Promise<Buffer | string | undefined> {
     let filePath: string | undefined;
     let resolvedTarget: string | undefined;
     const modName = this.modFiles.get(route);
@@ -210,7 +211,26 @@ export class FileServer {
       }
     } else {
       try {
-        return await this.readResolvedFile(route, filePath);
+        const original = await this.readResolvedFile(route, filePath);
+        // Fair's archived AS2 minigames reject Waddle's loopback origin and
+        // load /undefined before loading their own art. Patch the standalone
+        // domain comparison only in the HTTP response; disk assets/SHAs remain
+        // original and unrelated parties/mods are untouched.
+        if (modName === undefined &&
+            (resolvedTarget === 'default/fair2015/minigames/daily_spin/GamesSpinBootstrap.swf' ||
+             resolvedTarget === 'default/fair2015/minigames/daily_spin/GamesSpinMain.swf') &&
+            route.endsWith('.swf')) {
+          const adapted = patchFair2015GameSecurity(original, host);
+          if (adapted !== original) {
+            traceFileResolution(route, 'handled', 'fair2015-local-security-adapted', {
+              resolver: 'game-data',
+              target: resolvedTarget,
+              localOrigin: true
+            });
+          }
+          return adapted;
+        }
+        return original;
       } catch (error) {
         const code = (error as NodeJS.ErrnoException)?.code;
         if (code === 'ENOENT' || code === 'ENOTDIR') {
@@ -273,7 +293,7 @@ export class FileServer {
           return;
         }
 
-        const binary = await this.getFile(route);
+        const binary = await this.getFile(route, req.headers.host ?? '');
         if (binary === undefined) {
           next();
           return;

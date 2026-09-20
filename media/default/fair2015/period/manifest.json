@@ -1,0 +1,17 @@
+{
+    "schema":  "waddle-fair-2015-period-assets/v1",
+    "assets":  [
+                   {
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/b/b6/ContentMap-03262015.swf",
+                       "sha256":  "5cf40f5b683d19d646ca8a8dd9002173c91892c72efe7c8581f17e92f79135f5",
+                       "bytes":  232822,
+                       "relativePath":  "period/ContentMap-03262015.swf"
+                   },
+                   {
+                       "url":  "https://toolbox.solero.me/cparchives/static/images/archives/1/17/RoomsStage-May2015.swf",
+                       "sha256":  "24108dc63baf4cea79be5877c17741dbf214d37aac161843d3467e0ec5bd6f58",
+                       "bytes":  219674,
+                       "relativePath":  "period/RoomsStage-May2015.swf"
+                   }
+               ]
+}

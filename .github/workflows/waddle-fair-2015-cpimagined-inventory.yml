@@ -1,0 +1,27 @@
+name: Waddle The Fair 2015 CPImagined Archive Audit
+on:
+  push:
+    branches: [feat/the-fair-2015]
+    paths:
+      - '.github/scripts/waddle-fair-2015-cpimagined-inventory.py'
+      - '.github/workflows/waddle-fair-2015-cpimagined-inventory.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect-cpimagined-fair-mediaserver:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate read-only archive inventory script
+        run: python -m py_compile .github/scripts/waddle-fair-2015-cpimagined-inventory.py
+      - name: Inventory independent Fair 2015 archive
+        run: python .github/scripts/waddle-fair-2015-cpimagined-inventory.py
+      - name: Keep inventory as diagnostic artifact, not a global media override
+        uses: actions/upload-artifact@v4
+        with:
+          name: fair2015-cpimagined-inventory
+          path: .work/fair2015/cpimagined-inventory.json
+          if-no-files-found: error
+          retention-days: 7

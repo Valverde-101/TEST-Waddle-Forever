@@ -182,6 +182,23 @@ jobs:
             -AndroidBuildRoot $env:ANDROIDBUILD_ROOT
           if($LASTEXITCODE -ne 0){throw "WADDLE_CERT=FAIL certification_exit=$LASTEXITCODE"}
 
+      - name: Regression-test diagnostic triage and exact SWF resource correlation
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $repo=$env:WADDLE_CERT_REPO
+          $node=Join-Path $env:ANDROIDBUILD_ROOT 'Tools\Node\20.19.0\x64\node.exe'
+          $test=Join-Path $repo 'scripts\waddle-diagnostic-evidence-test.cjs'
+          $compiled=Join-Path $repo 'compiled\client\diagnostic-evidence.js'
+          if(-not(Test-Path -LiteralPath $node -PathType Leaf)){throw "WADDLE_DIAGNOSTIC_EVIDENCE=FAIL node_missing=$node"}
+          if(-not(Test-Path -LiteralPath $test -PathType Leaf)){throw "WADDLE_DIAGNOSTIC_EVIDENCE=FAIL test_missing=$test"}
+          if(-not(Test-Path -LiteralPath $compiled -PathType Leaf)){throw "WADDLE_DIAGNOSTIC_EVIDENCE=FAIL compiled_module_missing=$compiled"}
+          Push-Location $repo
+          try {
+            & $node $test
+            if($LASTEXITCODE -ne 0){throw "WADDLE_DIAGNOSTIC_EVIDENCE=FAIL exit=$LASTEXITCODE"}
+          } finally { Pop-Location }
+
       - name: Verify portable penguin storage recovery
         shell: powershell
         run: |

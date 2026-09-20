@@ -1,0 +1,38 @@
+name: Waddle The Fair 2015 Integrity
+on:
+  push:
+    branches: [feat/the-fair-2015]
+    paths:
+      - '.github/scripts/waddle-fair-2015-verify.py'
+      - '.github/scripts/waddle-fair-2015-security-verify.py'
+      - 'src/server/file-server/fair2015-security.ts'
+      - 'src/server/file-server/index.ts'
+      - '.github/workflows/waddle-fair-2015-verify.yml'
+      - 'media/default/fair2015/**'
+      - 'src/server/updates/2015.ts'
+      - 'src/server/game-data/files.ts'
+  pull_request:
+    branches: [dev]
+    paths:
+      - '.github/scripts/waddle-fair-2015-verify.py'
+      - '.github/scripts/waddle-fair-2015-security-verify.py'
+      - 'src/server/file-server/fair2015-security.ts'
+      - 'src/server/file-server/index.ts'
+      - '.github/workflows/waddle-fair-2015-verify.yml'
+      - 'media/default/fair2015/**'
+      - 'src/server/updates/2015.ts'
+      - 'src/server/game-data/files.ts'
+permissions:
+  contents: read
+jobs:
+  verify-historical-assets-and-party-separation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify SHA-256 assets and scoped Fair timeline
+        run: |
+          python .github/scripts/waddle-fair-2015-verify.py
+          python .github/scripts/waddle-fair-2015-security-verify.py

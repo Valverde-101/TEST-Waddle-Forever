@@ -1,0 +1,53 @@
+name: Waddle The Fair 2015 Exact Client Source
+on:
+  push:
+    branches: [feat/the-fair-2015]
+    paths:
+      - '.github/scripts/waddle-fair-2015-runtime-source.py'
+      - '.github/workflows/waddle-fair-2015-runtime-source.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: waddle-fair-2015-exact-client-source
+  cancel-in-progress: true
+jobs:
+  import-original-party-client:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - name: Check archival importer syntax
+        run: python -m py_compile .github/scripts/waddle-fair-2015-runtime-source.py
+      - name: Acquire May 2015 runtime and intro as binary SWF
+        run: python .github/scripts/waddle-fair-2015-runtime-source.py
+      - name: Verify pinned client media before any commit
+        run: |
+          python - <<'PY'
+          import hashlib,json
+          from pathlib import Path
+          root=Path("media/default/fair2015")
+          manifest=json.loads((root/"client-runtime-manifest.json").read_text())
+          assert manifest["schema"]=="waddle-fair-2015-client-runtime/v1"
+          assert {a["role"] for a in manifest["assets"]}=={"party","intro"}
+          for asset in manifest["assets"]:
+              path=root/asset["relativePath"]
+              raw=path.read_bytes()
+              assert len(raw)==asset["bytes"] and raw[:3] in (b"FWS",b"CWS",b"ZWS")
+              assert hashlib.sha256(raw).hexdigest()==asset["sha256"]
+          print("WADDLE_FAIR2015_CLIENT_SOURCE_VERIFIED=PASS")
+          PY
+      - name: Publish original assets only on Fair PR branch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- media/default/fair2015/client/ClientParty-Fair2015_2.swf media/default/fair2015/client/ClientIntro_to_cp-06102015.swf media/default/fair2015/client-runtime-manifest.json
+          if git diff --cached --quiet; then
+            echo "WADDLE_FAIR2015_CLIENT_PUBLISH=PASS mode=already_pinned"
+          else
+            git commit -m "Archive exact May 2015 Fair runtime and standalone intro"
+            git push origin HEAD:refs/heads/feat/the-fair-2015
+            echo "WADDLE_FAIR2015_CLIENT_PUBLISH=PASS mode=feature_branch_only"
+          fi

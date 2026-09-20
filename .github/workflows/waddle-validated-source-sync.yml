@@ -17,7 +17,9 @@ concurrency:
 jobs:
   wait-certification:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # Certification performs bounded physical startup plus a large incremental SWF
+    # scan. Its successful run can finish after the old 24-minute polling cutoff.
+    timeout-minutes: 52
     outputs:
       certification_run_id: ${{ steps.gate.outputs.run_id }}
     env:
@@ -37,7 +39,9 @@ jobs:
             'User-Agent'='waddle-validated-source-sync'
           }
           $sha=$env:WADDLE_EXPECTED_SHA.Trim().ToLowerInvariant()
-          $deadline=[DateTime]::UtcNow.AddMinutes(24)
+          # Leave a margin for the certified runner's slowest full SWF analysis.
+          # Never accept a different SHA or bypass the exact certification gate.
+          $deadline=[DateTime]::UtcNow.AddMinutes(50)
           while([DateTime]::UtcNow -lt $deadline){
             $uri="https://api.github.com/repos/${{ github.repository }}/actions/runs?head_sha=$sha&per_page=100"
             $response=Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -TimeoutSec 30

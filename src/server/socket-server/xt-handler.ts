@@ -28,6 +28,10 @@ const XT_ACTION_ALIASES = new Map<string, string>([
   ['s%fair#fair', 's%party#partycookie'],
   ['s%fair#partycookie', 's%party#partycookie'],
   ['s%fair#msgviewed', 's%party#msgviewed'],
+  // Original MayPartyConstants.MESSAGE_VIEWED_COMMAND is fmsgviewed, not msgviewed.
+  // The first-login prompt is the only way to set msgViewedArray[0], after which
+  // MayParty.partyIconVisible can become true. Delegate to the persisted cookie.
+  ['s%fair#fmsgviewed', 's%party#msgviewed'],
   ['s%fair#ftransform', 's%pt#spts'],
   ['s%party#transform', 's%pt#spts'],
   // The preserved late-2015 templated runtime has the transform call path but

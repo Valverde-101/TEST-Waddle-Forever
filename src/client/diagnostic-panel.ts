@@ -1,8 +1,10 @@
 import fs from 'fs';
 import path from 'path';
+import { createHash } from 'crypto';
 import { BrowserWindow, shell } from 'electron';
 import type { WaddleLiveTraceEvent } from '@common/live-trace';
 import { writeRuntimeDiagnostic } from './runtime-diagnostics';
+import { isDiagnosticFailure, summarizeDiagnosticIncidents, traceResourceChain } from './diagnostic-evidence';
 
 const workRoot = path.join(process.cwd(), '.work');
 const swfAnalysisRoot = path.join(workRoot, 'swf-analysis');
@@ -39,6 +41,7 @@ type FailureAnalysis = {
   recommended_action?: string;
   failure?: WaddleLiveTraceEvent;
   request_chain?: WaddleLiveTraceEvent[];
+  correlation_note?: string;
   context?: WaddleLiveTraceEvent[];
   preceding_protocol_event?: WaddleLiveTraceEvent | null;
   static?: FailureStaticEvidence;
@@ -138,19 +141,24 @@ const sanitizeValue = <T>(
     const objectValue = value as object;
     if (seen.has(objectValue)) return '[circular]' as unknown as T;
     seen.add(objectValue);
-
-    if (Array.isArray(value)) {
-      return value
-        .slice(0, maxSanitizeArrayLength)
-        .map(item => sanitizeValue(item, '', depth + 1, seen)) as unknown as T;
+    // Track only ancestors, not every object ever visited. The old global
+    // WeakSet falsely replaced shared failure/request-chain events with
+    // "[circular]", deleting exactly the evidence needed for correlation.
+    try {
+      if (Array.isArray(value)) {
+        return value
+          .slice(0, maxSanitizeArrayLength)
+          .map(item => sanitizeValue(item, '', depth + 1, seen)) as unknown as T;
+      }
+      const out = Object.create(null) as JsonRecord;
+      for (const [key, child] of Object.entries(value as JsonRecord)) {
+        if (unsafeObjectKey.test(key)) continue;
+        out[key] = sanitizeValue(child, key, depth + 1, seen);
+      }
+      return out as unknown as T;
+    } finally {
+      seen.delete(objectValue);
     }
-
-    const out = Object.create(null) as JsonRecord;
-    for (const [key, child] of Object.entries(value as JsonRecord)) {
-      if (unsafeObjectKey.test(key)) continue;
-      out[key] = sanitizeValue(child, key, depth + 1, seen);
-    }
-    return out as unknown as T;
   }
 
   return sanitizeDiagnosticText(String(value)) as unknown as T;
@@ -173,24 +181,7 @@ const findLatestRuntimeLog = () => {
   }
 };
 
-const isFailureEvent = (event: WaddleLiveTraceEvent) => {
-  const phase = event.phase.toLowerCase();
-  const statusCode = Number(event.statusCode || 0);
-  const status = String(event.status || '').toLowerCase();
-  const error = String(event.error || '').toUpperCase();
-  if (event.benign === true) return false;
-  if (status === 'aborted' || error.includes('ERR_ABORTED')) return false;
-  if (phase === 'error' || statusCode >= 400) return true;
-  return [
-    'unhandled-action',
-    'unhandled-context',
-    'invalid-signature',
-    'send-failed',
-    'handler-threw',
-    'network-error',
-    'http-error'
-  ].includes(status);
-};
+const isFailureEvent = isDiagnosticFailure;
 
 const findLastFailure = (trace: WaddleLiveTraceEvent[]) => {
   for (let i = trace.length - 1; i >= 0; i -= 1) {
@@ -246,10 +237,7 @@ const buildFailureAnalysis = (
   const foundIndex = trace.findIndex(event => Number(event.sequence || 0) === sequence);
   const index = foundIndex < 0 ? trace.length - 1 : foundIndex;
   const context = trace.slice(Math.max(0, index - 18), Math.min(trace.length, index + 9));
-  const requestId = failure.requestId;
-  const requestChain = requestId === undefined
-    ? []
-    : trace.filter(event => String(event.requestId ?? '') === String(requestId)).slice(-20);
+  const requestChain = traceResourceChain(failure, trace);
   const precedingProtocol = context.slice(0, Math.max(0, context.length - 1)).reverse().find(event => {
     const category = event.category.toUpperCase();
     return category === 'XT' || category === 'XML';
@@ -360,6 +348,7 @@ const buildFailureAnalysis = (
     recommended_action: recommendedAction,
     failure,
     request_chain: requestChain,
+    correlation_note: 'Solo se correlacionan rutas completas dentro de 10 segundos. La cercanía temporal XT/XML no demuestra qué SWF provocó una solicitud.',
     context,
     preceding_protocol_event: precedingProtocol,
     static: {
@@ -400,12 +389,139 @@ const sendPanelResult = (window: BrowserWindow, payload: unknown) => {
   ).catch(() => undefined);
 };
 
+// TypeScript 7's Node declarations distinguish Buffer<ArrayBufferLike> from
+// NodeJS.ArrayBufferView backed by an owned ArrayBuffer. Copy only bounded
+// diagnostics payloads; do not alter SWF originals or Electron's image.
+const ownedDiagnosticBytes = (source: ArrayLike<number>): Uint8Array<ArrayBuffer> => {
+  const result = new Uint8Array(new ArrayBuffer(source.length));
+  for (let i = 0; i < source.length; i += 1) result[i] = source[i];
+  return result;
+};
+
+// Record precisely which scene assets were served. A 200 response proves the
+// SWF loaded, not which display-list shapes or overlays Flash drew.
+const collectSceneAssetEvidence = (trace: WaddleLiveTraceEvent[]) => {
+  const relevant = /\/(?:map|party_map|party_map_note|stage|plaza|party_icon)\.swf$/i;
+  const mediaRoot = path.resolve(process.cwd(), 'media', 'default');
+  const seen = new Set<string>();
+  const evidence: Array<Record<string, unknown>> = [];
+  for (const event of [...trace].reverse()) {
+    if (event.category.toUpperCase() !== 'FILE' || !event.target || !relevant.test(String(event.action || ''))) continue;
+    const action = String(event.action || '');
+    if (seen.has(action)) continue;
+    seen.add(action);
+    const target = String(event.target).replace(/\\/g, '/');
+    const item: Record<string, unknown> = {
+      action, sequence: event.sequence, status: event.status, target
+    };
+    if (!target.startsWith('default/') || !target.split('/').every(part => /^[A-Za-z0-9_.-]+$/.test(part)) || target.split('/').includes('..')) {
+      item.asset_status = 'unsafe-or-unavailable-target';
+    } else {
+      const filename = path.resolve(process.cwd(), 'media', target);
+      if (!filename.startsWith(mediaRoot + path.sep)) {
+        item.asset_status = 'outside-media-root';
+      } else {
+        try {
+          const stat = fs.statSync(filename);
+          if (!stat.isFile()) throw new Error('not a regular file');
+          item.asset_status = 'present';
+          item.bytes = stat.size;
+          item.sha256 = stat.size <= 32 * 1024 * 1024
+            ? createHash('sha256').update(ownedDiagnosticBytes(fs.readFileSync(filename))).digest('hex')
+            : null;
+          if (item.sha256 === null) item.asset_status = 'too-large-to-hash';
+        } catch {
+          item.asset_status = 'missing-or-unreadable';
+        }
+      }
+    }
+    evidence.push(item);
+    if (evidence.length >= 18) break;
+  }
+  return evidence.reverse();
+};
+
+type VisualCapture = {
+  status: 'captured' | 'unavailable';
+  file?: string;
+  sha256?: string;
+  bytes?: number;
+  width?: number;
+  height?: number;
+  captured_utc?: string;
+  reason?: string;
+  note: string;
+};
+
+const capturePlayfieldScreenshot = async (
+  window: BrowserWindow, filename: string
+): Promise<VisualCapture> => {
+  const note = 'Captura de pantalla solicitada al pulsar RECOPILAR. La captura puede mostrar nombres y datos visibles: revisar antes de compartir. No identifica objetos internos del SWF ni demuestra qué código los dibujó.';
+  if (window.isDestroyed() || window.webContents.isDestroyed()) {
+    return { status: 'unavailable', reason: 'renderer-destroyed', note };
+  }
+  let previouslyVisible: Array<{ id: string; visibility: string }> = [];
+  try {
+    // Do not hide or resize the game itself. Hide only our own overlay for two
+    // animation frames so the screenshot can show the actual map underneath.
+    previouslyVisible = await window.webContents.executeJavaScript(
+      `new Promise(resolve => {
+        const ids = ['waddle-diagnostic-toggle', 'waddle-diagnostic-panel'];
+        const visibility = ids.map(id => {
+          const element = document.getElementById(id);
+          const oldVisibility = element ? element.style.visibility : '';
+          if (element) element.style.visibility = 'hidden';
+          return { id, visibility: oldVisibility };
+        });
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve(visibility)));
+      })`,
+      true
+    ) as Array<{ id: string; visibility: string }>;
+    const image = await window.webContents.capturePage();
+    if (image.isEmpty()) throw new Error('empty-renderer-capture');
+    const png = ownedDiagnosticBytes(image.toPNG());
+    if (!png.length) throw new Error('empty-png');
+    fs.writeFileSync(filename, png);
+    const size = image.getSize();
+    return {
+      status: 'captured',
+      file: path.basename(filename),
+      sha256: createHash('sha256').update(png).digest('hex'),
+      bytes: png.length, width: size.width, height: size.height,
+      captured_utc: new Date().toISOString(), note
+    };
+  } catch (error) {
+    return { status: 'unavailable', reason: sanitizeDiagnosticText(error), note };
+  } finally {
+    if (!window.isDestroyed() && !window.webContents.isDestroyed() && previouslyVisible.length) {
+      const prior = JSON.stringify(previouslyVisible);
+      await window.webContents.executeJavaScript(
+        `(() => {
+          for (const item of ${prior}) {
+            const element = document.getElementById(item.id);
+            if (element) element.style.visibility = item.visibility;
+          }
+        })()`,
+        true
+      ).catch(() => undefined);
+    }
+  }
+};
+
 const collectShareBundle = async (window: BrowserWindow) => {
   const trace = await getRendererTrace(window);
   const failure = findLastFailure(trace);
-  const failureAnalysis = buildFailureAnalysis(failure, trace);
+  const incidents = summarizeDiagnosticIncidents(trace);
+  const priorityFailure = incidents.find(item => item.severity !== 'background')?.latest || failure;
+  const failureAnalysis = buildFailureAnalysis(priorityFailure, trace);
+  const lastFailureAnalysis = buildFailureAnalysis(failure, trace);
   const runtimeLog = findLatestRuntimeLog();
   const fileResolutionEvents = trace.filter(event => event.category.toUpperCase() === 'FILE').slice(-300);
+  const sceneAssets = collectSceneAssetEvidence(trace);
+  fs.mkdirSync(shareRoot, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  const pngPath = path.join(shareRoot, `waddle-share-${stamp}.png`);
+  const screenshot = await capturePlayfieldScreenshot(window, pngPath);
 
   const bundle = sanitizeValue({
     schema: 'waddle-share-diagnostics/v2',
@@ -416,7 +532,27 @@ const collectShareBundle = async (window: BrowserWindow) => {
       node: process.versions.node || null
     },
     current_url: window.webContents.getURL(),
-    last_failure_analysis: failureAnalysis,
+    last_failure_analysis: lastFailureAnalysis,
+    primary_failure_analysis: failureAnalysis,
+    incident_summary: {
+      schema: 'waddle-incident-summary/v1',
+      ranked: incidents,
+      actionable_count: incidents.filter(item => item.severity !== 'background').length,
+      background_count: incidents.filter(item => item.severity === 'background').length,
+      priority_rule: 'Errores SWF/FILE/XT/XML comprobados antes de sondas HTTP 404 auxiliares; todos los errores permanecen en live_trace.',
+      trace_window: {
+        first_sequence: trace[0]?.sequence || null,
+        last_sequence: trace[trace.length - 1]?.sequence || null,
+        max_events: 1500,
+        may_be_truncated: trace.length >= 1500,
+        replayed: trace.filter(item => item.replayed === true).length
+      }
+    },
+    visual_evidence: {
+      screenshot,
+      scene_assets: sceneAssets,
+      interpretation: 'La captura identifica defectos visuales. Una respuesta HTTP 200 y un SHA válido no demuestran que las capas internas Flash sean correctas: contrastar captura y SWF original en FFDec.'
+    },
     live_trace: trace,
     file_resolution: fileResolutionEvents,
     renderer_console: recentConsoleMessages.slice(-500),
@@ -439,18 +575,17 @@ const collectShareBundle = async (window: BrowserWindow) => {
     }
   });
 
-  fs.mkdirSync(shareRoot, { recursive: true });
-  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
   const jsonPath = path.join(shareRoot, `waddle-share-${stamp}.json`);
   const txtPath = path.join(shareRoot, `waddle-share-${stamp}.txt`);
   const latestJson = path.join(shareRoot, 'waddle-share-latest.json');
   const latestTxt = path.join(shareRoot, 'waddle-share-latest.txt');
 
-  const analysis = bundle.last_failure_analysis;
+  const analysis = bundle.primary_failure_analysis;
   const summaryLines = [
     'WADDLE DIAGNOSTIC SHARE',
     `Generated UTC: ${bundle.generated_utc}`,
-    `Classification: ${analysis.classification || 'NO_FAILURE_OBSERVED'}`,
+    `Classification (prioritized): ${analysis.classification || 'NO_FAILURE_OBSERVED'}`,
+    `Last observed error: ${bundle.last_failure_analysis?.classification || 'NO_FAILURE_OBSERVED'}`,
     `Confidence: ${analysis.confidence || 'n/a'}`,
     `Failure: ${analysis.failure?.category || ''} ${analysis.failure?.action || ''} status=${analysis.failure?.statusCode || analysis.failure?.status || ''}`.trim(),
     `Local resolver: ${analysis.file_resolution?.status || 'n/a'} ${analysis.file_resolution?.resolver || ''} ${analysis.file_resolution?.target || ''}`.trim(),
@@ -458,26 +593,33 @@ const collectShareBundle = async (window: BrowserWindow) => {
     `Explanation: ${analysis.explanation || analysis.message || ''}`,
     `Recommended action: ${analysis.recommended_action || ''}`,
     `Live trace events: ${trace.length}`,
+    `Incident groups: ${incidents.length}; actionable: ${bundle.incident_summary.actionable_count}; background: ${bundle.incident_summary.background_count}`,
+    `Scene assets fingerprinted: ${sceneAssets.length}`,
+    `Scene capture: ${screenshot.status === 'captured' ? screenshot.file : 'unavailable'}`,
     `File resolution events: ${fileResolutionEvents.length}`,
     `Renderer console events: ${recentConsoleMessages.length}`,
     '',
-    'Share the JSON file for full evidence. The TXT file is a compact summary.'
+    'Share JSON and PNG for a visual defect. PNG may show usernames or other visible personal information: review before sharing.'
   ];
 
   fs.writeFileSync(jsonPath, JSON.stringify(bundle, null, 2), 'utf8');
   fs.writeFileSync(txtPath, summaryLines.join('\r\n'), 'utf8');
   fs.copyFileSync(jsonPath, latestJson);
   fs.copyFileSync(txtPath, latestTxt);
+  if (screenshot.status === 'captured') fs.copyFileSync(pngPath, path.join(shareRoot, 'waddle-share-latest.png'));
 
   try {
     const timestamped = fs.readdirSync(shareRoot)
-      .filter(name => /^waddle-share-\d.*\.(?:json|txt)$/i.test(name))
+      .filter(name => /^waddle-share-\d.*\.(?:json|txt|png)$/i.test(name))
       .map(name => {
         const fullPath = path.join(shareRoot, name);
         return { fullPath, mtime: fs.statSync(fullPath).mtimeMs };
       })
       .sort((a, b) => b.mtime - a.mtime);
-    for (const stale of timestamped.slice(6)) {
+    // Keep three complete sets of JSON, TXT and optional PNG together.
+    const basename = (name: string) => name.replace(/\.(?:json|txt|png)$/i, '');
+    const keep = new Set(Array.from(new Set(timestamped.map(entry => basename(path.basename(entry.fullPath))))).slice(0, 3));
+    for (const stale of timestamped.filter(entry => !keep.has(basename(path.basename(entry.fullPath))))) {
       try {
         fs.unlinkSync(stale.fullPath);
       } catch {
@@ -496,8 +638,11 @@ const collectShareBundle = async (window: BrowserWindow) => {
     confidence: analysis.confidence || 'n/a',
     latest_json: path.relative(process.cwd(), latestJson),
     latest_txt: path.relative(process.cwd(), latestTxt),
+    latest_png: screenshot.status === 'captured' ? path.relative(process.cwd(), path.join(shareRoot, 'waddle-share-latest.png')) : null,
     timestamped_json: path.relative(process.cwd(), jsonPath),
-    message: 'Diagnóstico recopilado. Se abrió la carpeta; comparte waddle-share-latest.json para analizar el problema completo.'
+    message: screenshot.status === 'captured'
+      ? 'Diagnóstico con captura. Comparte waddle-share-latest.json y waddle-share-latest.png (revisa datos visibles antes de enviar).'
+      : 'Diagnóstico recopilado. Comparte waddle-share-latest.json y una captura manual del mapa: no se pudo capturar la pantalla automáticamente.'
   };
 };
 
@@ -539,10 +684,10 @@ const installPanelIntoRenderer = (window: BrowserWindow): Promise<DiagnosticPane
     const panel = document.createElement('div');
     panel.id = 'waddle-diagnostic-panel';
     panel.innerHTML = '<div class="wd-head"><div class="wd-title">Waddle - Diagnóstico en vivo</div><button class="wd-close" title="Cerrar">×</button></div>' +
-      '<div class="wd-help">Rastrea errores SWF/HTTP/FILE/XT/XML y genera un paquete sanitizado con consola, live trace y análisis para compartir.</div>' +
+      '<div class="wd-help">Rastrea fallas de protocolo y SWF. Al pulsar RECOPILAR guarda JSON y una captura de la pantalla sin este panel. La imagen puede mostrar nombres: revísala antes de compartir.</div>' +
       '<div class="wd-stats"><div class="wd-stat"><span id="wd-errors" class="wd-num wd-error">0</span><span class="wd-label">FALLAS</span></div><div class="wd-stat"><span id="wd-swf" class="wd-num">0</span><span class="wd-label">SWF</span></div><div class="wd-stat"><span id="wd-events" class="wd-num">0</span><span class="wd-label">EVENTOS</span></div></div>' +
-      '<button id="wd-collect" class="wd-primary">RECOPILAR PARA COMPARTIR</button>' +
-      '<button id="wd-trace" class="wd-secondary">RASTREAR ÚLTIMA FALLA</button>' +
+      '<button id="wd-collect" class="wd-primary">RECOPILAR JSON + CAPTURA PNG</button>' +
+      '<button id="wd-trace" class="wd-secondary">RASTREAR FALLA PRIORITARIA</button>' +
       '<div id="wd-result" class="wd-result">Sin análisis todavía.</div>';
     document.body.appendChild(panel);
 
@@ -550,7 +695,7 @@ const installPanelIntoRenderer = (window: BrowserWindow): Promise<DiagnosticPane
     const renderResult = (payload) => {
       if (!payload) { result.textContent = 'Sin resultado.'; return; }
       if (payload.schema === 'waddle-share-result/v1') {
-        result.textContent = payload.message + NL + NL + 'JSON: ' + payload.latest_json + NL + 'TXT: ' + payload.latest_txt + NL + 'Clasificación: ' + payload.classification + ' (' + payload.confidence + ')';
+        result.textContent = payload.message + NL + NL + 'JSON: ' + payload.latest_json + NL + 'PNG: ' + (payload.latest_png || 'captura no disponible') + NL + 'TXT: ' + payload.latest_txt + NL + 'Clasificación: ' + payload.classification + ' (' + payload.confidence + ')';
         return;
       }
       const lines = [];
@@ -581,8 +726,8 @@ const installPanelIntoRenderer = (window: BrowserWindow): Promise<DiagnosticPane
 
     toggle.addEventListener('click', () => { panel.style.display = panel.style.display === 'block' ? 'none' : 'block'; updateStats(); });
     panel.querySelector('.wd-close').addEventListener('click', () => { panel.style.display = 'none'; });
-    panel.querySelector('#wd-trace').addEventListener('click', () => { result.textContent = 'Rastreando última falla...'; console.log('[WADDLE-DIAG-ACTION]trace-last'); });
-    panel.querySelector('#wd-collect').addEventListener('click', () => { result.textContent = 'Recopilando consola, live trace, resolución local, runtime logs y análisis SWF...'; console.log('[WADDLE-DIAG-ACTION]collect-share'); });
+    panel.querySelector('#wd-trace').addEventListener('click', () => { result.textContent = 'Rastreando fallas por prioridad (manteniendo los errores auxiliares)...'; console.log('[WADDLE-DIAG-ACTION]trace-last'); });
+    panel.querySelector('#wd-collect').addEventListener('click', () => { result.textContent = 'Recopilando errores priorizados, fuentes SWF y una captura del juego (el panel se ocultará brevemente)...'; console.log('[WADDLE-DIAG-ACTION]collect-share'); });
     console.log('[WADDLE-DIAG][READY] Diagnostic panel installed');
     return verify();
   })()`;
@@ -652,7 +797,8 @@ export const installWaddleDiagnosticPanel = (window: BrowserWindow): Promise<Dia
 
     if (text === '[WADDLE-DIAG-ACTION]trace-last') {
       void getRendererTrace(window).then(trace => {
-        const failure = findLastFailure(trace);
+        const incidents = summarizeDiagnosticIncidents(trace);
+        const failure = incidents.find(item => item.severity !== 'background')?.latest || findLastFailure(trace);
         sendPanelResult(window, buildFailureAnalysis(failure, trace));
       }).catch(error => sendPanelResult(window, {
         schema: 'waddle-failure-analysis/v1',
