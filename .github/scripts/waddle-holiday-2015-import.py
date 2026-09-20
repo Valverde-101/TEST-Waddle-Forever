@@ -184,7 +184,36 @@ def download(entry: dict[str, str]) -> tuple[dict[str, str], bytes]:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument('--inventory-only', action='store_true')
+    parser.add_argument('--verify-local', action='store_true',
+                        help='Offline, read-only validation of every pinned SWF')
     options = parser.parse_args()
+    if options.verify_local:
+        manifest_path = DEST / 'manifest.json'
+        data = json.loads(manifest_path.read_text(encoding='utf-8'))
+        assets = data.get('assets', [])
+        if (data.get('schema') != 'waddle-holiday-2015-original-assets/v1'
+                or data.get('count') != len(assets) or len(assets) < 100):
+            raise RuntimeError('WADDLE_HOLIDAY2015_VERIFY=FAIL invalid_manifest')
+        known = set()
+        for asset in assets:
+            rel = asset['relativePath']
+            path = (DEST / rel).resolve()
+            if not path.is_relative_to(DEST.resolve()) or path.suffix.lower() != '.swf':
+                raise RuntimeError('WADDLE_HOLIDAY2015_VERIFY=FAIL unsafe_path=' + rel)
+            if rel in known or rel != f"{asset['phase']}/{asset['section']}/{asset['name']}":
+                raise RuntimeError('WADDLE_HOLIDAY2015_VERIFY=FAIL duplicate_or_misaligned=' + rel)
+            known.add(rel)
+            blob = path.read_bytes()
+            if blob[:3] not in HEADERS or len(blob) != asset['bytes'] or sha(blob) != asset['sha256']:
+                raise RuntimeError('WADDLE_HOLIDAY2015_VERIFY=FAIL corrupt_or_missing=' + rel)
+        for entry in data.get('roomMusic', []):
+            room = f"{entry['phase']}/rooms/{entry['room']}"
+            music = f"{entry['phase']}/music/{entry['musicFile']}"
+            if room not in known or music not in known:
+                raise RuntimeError('WADDLE_HOLIDAY2015_VERIFY=FAIL missing_room_or_music=' + room)
+        print('WADDLE_HOLIDAY2015_VERIFY=PASS count=' + str(len(known))
+              + ' room_music=' + str(len(data.get('roomMusic', []))), flush=True)
+        return
     page, effective = read(SOURCE, 3 * 1024 * 1024)
     if effective != SOURCE:
         raise RuntimeError('WADDLE_HOLIDAY2015_IMPORT=FAIL archive_redirected')
