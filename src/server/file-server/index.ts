@@ -217,7 +217,8 @@ export class FileServer {
         // domain comparison only in the HTTP response; disk assets/SHAs remain
         // original and unrelated parties/mods are untouched.
         if (modName === undefined &&
-            resolvedTarget?.startsWith('default/fair2015/minigames/') &&
+            (resolvedTarget === 'default/fair2015/minigames/daily_spin/GamesSpinBootstrap.swf' ||
+             resolvedTarget === 'default/fair2015/minigames/daily_spin/GamesSpinMain.swf') &&
             route.endsWith('.swf')) {
           const adapted = patchFair2015GameSecurity(original, host);
           if (adapted !== original) {
