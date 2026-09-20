@@ -72,7 +72,7 @@ def inspect(path):
     # Print only bounded byte-neighborhoods of relevant constants as evidence,
     # without mutating or decompiling original SWFs into the game runtime.
     if path.name in ('ClientParty-HolidayParty2015.swf', 'ClientInterface-HolidayParty2015.swf'):
-        for token in (b'QUEST_UI_PATH', b'LOGIN_PROMPT_PATH', b'CFC_UI_PATH', b'PARTY_ICON_PATH', b'PARTY_ID_2015_DECEMBERPARTY'):
+        for token in (b'QUEST_UI_PATH', b'LOGIN_PROMPT_PATH', b'PARTY_MAP_PATH', b'ITEM_COLLECT_UI_PATH', b'CFC_UI_PATH', b'PARTY_ICON_PATH', b'PARTY_ID_2015_DECEMBERPARTY'):
             for match in list(re.finditer(re.escape(token), data))[:2]:
                 nearby = data[max(0,match.start()-105):match.end()+180]
                 visible = [(m.group().decode('latin1')) for m in re.finditer(rb'[ -~]{3,110}',nearby)]
