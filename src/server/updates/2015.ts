@@ -30,6 +30,9 @@ const FAIR_2015_ROOMS = {
   'pet': fairRef('rooms/RoomsPet-TheFair2015.swf'),
   'pizza': fairRef('rooms/RoomsPizza-TheFair2015.swf'),
   'plaza': fairRef('rooms/RoomsPlaza-TheFair2015.swf'),
+  // The Fair's Plaza retains the theatre doorway (room 340). 2015 Stage
+  // has no Fair-specific room SWF, so reuse the separately archived Stage.
+  'stage': 'archives:RoomsStage-21Apr2015.swf',
   'pufflepark': fairRef('rooms/RoomsPark-TheFair2015.swf'),
   'pufflewild': fairRef('rooms/RoomsPufflewild-TheFair2015.swf'),
   'eco': fairRef('rooms/RoomsSchool-TheFair2015.swf'),
@@ -79,6 +82,7 @@ const FAIR_2015_MUSIC = {
   'pet': 659,
   'pizza': 676,
   'plaza': 677,
+  'stage': 41,
   'pufflepark': 658,
   'pufflewild': 897,
   'eco': 436,
