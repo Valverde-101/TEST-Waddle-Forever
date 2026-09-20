@@ -257,8 +257,6 @@ const musicFileChanges = Object.fromEntries(HALLOWEEN_2015_MUSIC_IDS.map(id=>[`p
 const FAIR_2015_MINIGAME_FILES = {
   'play/v2/games/cp_party_games/spin/bootstrap.swf': fairRef('minigames/daily_spin/GamesSpinBootstrap.swf'),
   'play/v2/games/cp_party_games/spin/main.swf': fairRef('minigames/daily_spin/GamesSpinMain.swf'),
-  // The archived bootstrap explicitly requests spin.swf (not main.swf).
-  'play/v2/games/cp_party_games/spin/spin.swf': fairRef('minigames/daily_spin/GamesSpinMain.swf'),
   // Archived bootstrap requests spin.swf directly, not main.swf.
   'play/v2/games/cp_party_games/spin/spin.swf': fairRef('minigames/daily_spin/GamesSpinMain.swf'),
   'play/v2/games/cp_party_games/spin/lang/en/locale.swf': fairRef('minigames/daily_spin/GamesSpinLangENLocale.swf'),
