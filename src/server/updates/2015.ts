@@ -257,6 +257,8 @@ const musicFileChanges = Object.fromEntries(HALLOWEEN_2015_MUSIC_IDS.map(id=>[`p
 const FAIR_2015_MINIGAME_FILES = {
   'play/v2/games/cp_party_games/spin/bootstrap.swf': fairRef('minigames/daily_spin/GamesSpinBootstrap.swf'),
   'play/v2/games/cp_party_games/spin/main.swf': fairRef('minigames/daily_spin/GamesSpinMain.swf'),
+  // The archived bootstrap explicitly requests spin.swf (not main.swf).
+  'play/v2/games/cp_party_games/spin/spin.swf': fairRef('minigames/daily_spin/GamesSpinMain.swf'),
   // Archived bootstrap requests spin.swf directly, not main.swf.
   'play/v2/games/cp_party_games/spin/spin.swf': fairRef('minigames/daily_spin/GamesSpinMain.swf'),
   'play/v2/games/cp_party_games/spin/lang/en/locale.swf': fairRef('minigames/daily_spin/GamesSpinLangENLocale.swf'),
@@ -341,7 +343,7 @@ export const UPDATES_2015: Update[] = [
         // CPImagined's supplemental map is a snow-season bitmap, not the May 2015
         // island map. Keep the modern island map independent of Fair's event
         // close-up, which the preserved party_map + party_map_note SWFs open.
-        'play/v2/content/global/content/map.swf': 'svanilla:media/play/v2/content/global/content/map.swf',
+        'play/v2/content/global/content/map.swf': 'approximation:modern_map.swf',
         'play/v2/content/global/content/room_pin/7236.swf': fairRef('cpimagined/content/room_pin/7236.swf'),
         'play/v2/client/shell.swf': 'svanilla:media/play/v2/client/shell.swf',
         'play/v2/client/interface.swf': fairRef('client/ClientInterfaceFair2015.swf'),
