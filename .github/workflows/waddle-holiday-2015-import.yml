@@ -13,12 +13,12 @@ permissions:
 
 concurrency:
   group: waddle-holiday-2015-import
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   import-originals:
     if: github.repository == 'Valverde-101/TEST-Waddle-Forever' && github.event_name == 'pull_request' && github.head_ref == 'feat/holiday-party-2015'
-    runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -29,19 +29,19 @@ jobs:
         with:
           python-version: '3.11'
       - name: Archive discovery contract
-        shell: powershell
+        shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
           python .github/scripts/waddle-holiday-2015-import.py --inventory-only
           if($LASTEXITCODE -ne 0){throw 'WADDLE_HOLIDAY2015=FAIL archive_inventory'}
       - name: Download and SHA-256 verify Holiday-only original assets
-        shell: powershell
+        shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
           python .github/scripts/waddle-holiday-2015-import.py
           if($LASTEXITCODE -ne 0){throw 'WADDLE_HOLIDAY2015=FAIL archive_import'}
       - name: Publish verified originals only to the separate Holiday PR
-        shell: powershell
+        shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
           $manifest='media/default/holiday2015/manifest.json'
