@@ -33,16 +33,15 @@ require('fair2015:' not in HOLIDAY and 'fair#' not in HOLIDAY and 'halloween#' n
 require("ref('content/party-runtime-2015.swf')" in HOLIDAY and
         "ref('client/QuestCommunicator.swf')" in HOLIDAY, 'shared_transport_missing')
 paths = {a['relativePath'] for a in MANIFEST['assets']}
-refs = set(re.findall(r"holidayRef\('([^']+)'\)", HOLIDAY))
+refs = set(re.findall(r"""holidayRef\((?:'|")([^'"]+)(?:'|")\)""", HOLIDAY))
 missing = refs - paths
 require(not missing, 'untracked_holiday_refs=' + ','.join(sorted(missing)))
 rooms = [a for a in MANIFEST['assets'] if a['section'] == 'rooms' and a['phase'] == 'party']
 require(len(rooms) >= 40, 'room_inventory_incomplete')
 for asset in rooms:
-    require("holidayRef('" + asset['relativePath'] + "')" in HOLIDAY, 'room_unmapped=' + asset['name'])
+    require(asset['relativePath'] in refs, 'room_unmapped=' + asset['name'])
 for pair in MANIFEST['roomMusic']:
     require(str(pair['musicId']) in HOLIDAY, 'room_music_unmapped=' + pair['room'])
-require('December' not in SOURCE or True, 'unreachable')
 print('WADDLE_HOLIDAY2015_TIMELINE=PASS advent=2015-12-02 party=2015-12-17'
       ' last_active=2016-01-06 exclusive_end=2016-01-07'
       ' rooms=' + str(len(rooms)) + ' mapped_assets=' + str(len(refs))
