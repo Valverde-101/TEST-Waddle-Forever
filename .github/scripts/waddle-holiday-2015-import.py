@@ -34,7 +34,7 @@ CATEGORIES = {
     'other': 'other',
 }
 OTHER_DIRS = ('party2015', 'fair2015')
-SWF_NAME = re.compile(r'^[A-Za-z0-9_().&+,% -]{1,160}\\.swf$', re.I)
+SWF_NAME = re.compile(r'^[A-Za-z0-9_().&+,% -]{1,160}\.swf$', re.I)
 
 
 def read(url: str, maximum: int = MAX_BYTES) -> tuple[bytes, str]:
@@ -81,7 +81,7 @@ class ArchiveLinks(HTMLParser):
         if tag == 'a' and self.href:
             href = urljoin(SOURCE, self.href)
             decoded = unquote(urlparse(href).path.rsplit('/', 1)[-1])
-            name = re.sub(r'\\.html$', '', decoded, flags=re.I)
+            name = re.sub(r'\.html$', '', decoded, flags=re.I)
             name = re.sub(r'^File:', '', name, flags=re.I)
             if SWF_NAME.fullmatch(name) and self.section:
                 self.entries.append({
@@ -127,7 +127,7 @@ def image_candidates(name: str, file_page: str):
             raw, _ = read(file_page, 1200000)
             html = raw.decode('utf-8', errors='replace')
             # Archive file pages include a direct original media URL.
-            for href in re.findall(r'(?:href|src)\\s*=\\s*["\\']([^"\\']+\\.swf(?:\\?[^"\\']*)?)', html, re.I):
+            for href in re.findall(r"""(?:href|src)\s*=\s*["']([^"']+\.swf(?:\?[^"']*)?)""", html, re.I):
                 url = urljoin(file_page, href.replace('&amp;', '&'))
                 if allowed_file_url(url, name):
                     yield url
@@ -223,7 +223,7 @@ def main() -> None:
     out = DEST / 'manifest.json'
     if out.exists() and json.loads(out.read_text(encoding='utf-8')) != manifest:
         raise RuntimeError('WADDLE_HOLIDAY2015_IMPORT=FAIL existing_manifest_drift')
-    out.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + '\\n', encoding='utf-8')
+    out.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
     print('WADDLE_HOLIDAY2015_IMPORT=PASS count=' + str(len(report)) +
           ' shared_sha=' + str(sum(bool(x['sameBytesAs']) for x in report)), flush=True)
 
