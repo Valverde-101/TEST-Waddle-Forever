@@ -254,10 +254,32 @@ const holidayMusicFiles = Object.fromEntries(Object.entries(HOLIDAY_2015_MUSIC_F
 
 // The original Advent Calendar opens before the decorated party. Its icon and
 // close-up must not replace the full penguin interface or persist after 16 Dec.
+// The archived Holiday interface and dialogue SWFs reference these exact string
+// keys. Content is isolated to Holiday dates; no Halloween generic labels leak
+// into the December party. The December UI labels are compatibility copy where
+// the complete original 2015 game_strings bundle is not archived.
+const HOLIDAY_2015_DIALOGUE_STRINGS: Record<string, string> = {
+  'w.app.p2015.december.login1': 'Hello. You can collect free gifts from this calendar. New ones unlock every day until Dec. 25. Happy holidays!',
+  'w.app.p2015.december.login2': 'The Holiday Party is here! Open the Calendar to collect gifts and help with Coins for Change.',
+  'w.app.generic.questui.header': 'Holiday Party',
+  'w.app.generic.questui.subheader1': 'Collect your holiday gifts in the Calendar.',
+  'w.app.questui.subheader2': 'Help Coins for Change by earning and donating coins.',
+  'w.app.december2015.ui.calendar': 'December',
+  'w.app.december2015.ui.calendarbtn': 'Open Calendar',
+  'w.app.december2015.ui.donate': 'Donate',
+  'w.app.december2015.ui.donations': 'Donations',
+  'w.app.december2015.ui.beach': 'Beach',
+  'w.app.december2015.ui.forest': 'Forest',
+  'w.app.december2015.ui.plaza': 'Plaza',
+  'w.app.december2015.ui.furnigloobtn': 'Furniture & Igloo',
+  'w.app.december2015.ui.penguinstylebtn': 'Penguin Style'
+};
+
 const HOLIDAY_2015_ADVENT: CPUpdate = {
   partyName: 'Advent Calendar 2015',
   decorated: false as const,
   roomComment: 'The 2015 Advent Calendar opens in the Snow Forts',
+  gameStringChanges: { 'w.app.p2015.december.login1': HOLIDAY_2015_DIALOGUE_STRINGS['w.app.p2015.december.login1'] },
   rooms: { forts: holidayRef('preparty/rooms/2015AdventCalendarforts.swf') },
   music: { forts: 587 },
   fileChanges: {
@@ -276,10 +298,19 @@ const HOLIDAY_2015_ADVENT: CPUpdate = {
 };
 const HOLIDAY_2015_PARTY: CPUpdate = {
   partyName: 'Holiday Party 2015',
+  // The original ClientParty SWF defines PARTY_ID_2015_DECEMBERPARTY=20151100.
+  // Without an explicit feature ID, Waddle inherits 20141002 from an old party
+  // and DecemberParty refuses to activate its icon, map, rooms and dialogues.
+  activeFeatures: '20151100',
+  gameStringChanges: HOLIDAY_2015_DIALOGUE_STRINGS,
+  migrator: true,
+  coinsForChange: true,
   // Party cookie uses an independent ID, not Halloween's quest/task state.
   partyProgress: {
     id: 'holiday-2015', messageCount: 3, communicatorMessageCount: 0,
-    taskCount: 25, maxCoinUpdate: 10,
+    // ContentFeatures-HolidayParty2015.swf declares numOfQuests=4. The
+    // 25 calendar dates are service days, not 25 questTaskStatus entries.
+    taskCount: 4, maxCoinUpdate: 10,
     service: {
       partyStartDate: '2015-12-17 00:00:00',
       partyEndDate: '2016-01-07 00:00:00',
