@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/waddle-fair-2015-spin-compat.yml'
       - '.github/scripts/waddle-fair-2015-spin-compat.py'
+      - 'src/server/updates/2015.ts'
   workflow_dispatch:
 
 permissions:
