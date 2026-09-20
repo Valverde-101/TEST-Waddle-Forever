@@ -57,9 +57,11 @@ def inspect(path):
     pos = rect + 4  # frame rate and count
     strings = []
     abc = 0
+    tags = {}
     while pos + 2 <= len(data):
         header = struct.unpack_from('<H', data, pos)[0]; pos += 2
         tag = header >> 6; length = header & 63
+        tags[tag] = tags.get(tag, 0) + 1
         if length == 63:
             if pos + 4 > len(data): raise ValueError('truncated tag length')
             length = struct.unpack_from('<I', data, pos)[0]; pos += 4
@@ -72,14 +74,17 @@ def inspect(path):
                 abc += 1
         pos += length
         if tag == 0: break
-    return abc, strings
+    # Most 2015 room/content SWFs are AVM1 bytecode, not DoABC. Surface their
+    # embedded printable identifiers, not just AS3 constant pools.
+    raw_strings = [m.group().decode('ascii', 'replace') for m in re.finditer(rb'[ -~]{6,160}', data)]
+    return abc, strings, tags, raw_strings, buf[:4].hex()
 
 for rel in FILES:
     path = ROOT / rel
     if not path.is_file(): raise FileNotFoundError(rel)
-    abc, strings = inspect(path)
-    selected = sorted({s for s in strings if len(s) <= 180 and IMPORTANT.search(s)}, key=lambda x:(x.lower(),x))
-    print('HOLIDAY2015_ABC file=' + rel + ' blocks=' + str(abc) + ' strings=' + str(len(strings)) + ' relevant=' + str(len(selected)))
+    abc, strings, tags, raw_strings, swf_header = inspect(path)
+    selected = sorted({s for s in strings + raw_strings if len(s) <= 180 and IMPORTANT.search(s)}, key=lambda x:(x.lower(),x))
+    print('HOLIDAY2015_ABC file=' + rel + ' header=' + swf_header + ' blocks=' + str(abc) + ' strings=' + str(len(strings)) + ' raw_strings=' + str(len(raw_strings)) + ' tags=' + json.dumps(tags,sort_keys=True) + ' relevant=' + str(len(selected)))
     for s in selected[:120]:
         print('HOLIDAY2015_STRING ' + json.dumps({'file':rel,'s':s},ensure_ascii=True,separators=(',',':')))
     if len(selected)>120: print('HOLIDAY2015_STRING truncated=' + str(len(selected)-120) + ' file=' + rel)
