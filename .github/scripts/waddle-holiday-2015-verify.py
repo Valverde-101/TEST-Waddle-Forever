@@ -37,6 +37,7 @@ paths = {a['relativePath'] for a in MANIFEST['assets']}
 refs = set(re.findall(r"""holidayRef\((?:'|")([^'"]+)(?:'|")\)""", HOLIDAY))
 missing = refs - paths
 require(not missing, 'untracked_holiday_refs=' + ','.join(sorted(missing)))
+require(not (paths - refs), 'originals_not_mapped=' + ','.join(sorted(paths - refs)))
 rooms = [a for a in MANIFEST['assets'] if a['section'] == 'rooms' and a['phase'] == 'party']
 require(len(rooms) >= 40, 'room_inventory_incomplete')
 for asset in rooms:
