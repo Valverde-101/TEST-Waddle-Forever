@@ -389,6 +389,15 @@ const sendPanelResult = (window: BrowserWindow, payload: unknown) => {
   ).catch(() => undefined);
 };
 
+// TypeScript 7's Node declarations distinguish Buffer<ArrayBufferLike> from
+// NodeJS.ArrayBufferView backed by an owned ArrayBuffer. Copy only bounded
+// diagnostics payloads; do not alter SWF originals or Electron's image.
+const ownedDiagnosticBytes = (source: ArrayLike<number>): Uint8Array<ArrayBuffer> => {
+  const result = new Uint8Array(new ArrayBuffer(source.length));
+  for (let i = 0; i < source.length; i += 1) result[i] = source[i];
+  return result;
+};
+
 // Record precisely which scene assets were served. A 200 response proves the
 // SWF loaded, not which display-list shapes or overlays Flash drew.
 const collectSceneAssetEvidence = (trace: WaddleLiveTraceEvent[]) => {
@@ -418,7 +427,7 @@ const collectSceneAssetEvidence = (trace: WaddleLiveTraceEvent[]) => {
           item.asset_status = 'present';
           item.bytes = stat.size;
           item.sha256 = stat.size <= 32 * 1024 * 1024
-            ? createHash('sha256').update(fs.readFileSync(filename)).digest('hex')
+            ? createHash('sha256').update(ownedDiagnosticBytes(fs.readFileSync(filename))).digest('hex')
             : null;
           if (item.sha256 === null) item.asset_status = 'too-large-to-hash';
         } catch {
@@ -470,7 +479,7 @@ const capturePlayfieldScreenshot = async (
     ) as Array<{ id: string; visibility: string }>;
     const image = await window.webContents.capturePage();
     if (image.isEmpty()) throw new Error('empty-renderer-capture');
-    const png = image.toPNG();
+    const png = ownedDiagnosticBytes(image.toPNG());
     if (!png.length) throw new Error('empty-png');
     fs.writeFileSync(filename, png);
     const size = image.getSize();
