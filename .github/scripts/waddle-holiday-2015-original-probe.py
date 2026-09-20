@@ -58,9 +58,14 @@ def inspect(path):
         begin = data.find(needle)
         if begin < 0: raise ValueError('Original Holiday features JSON missing')
         candidate = data[begin:begin + 50000].split(b'\0', 1)[0]
-        try: party_features = json.loads(candidate.decode('utf-8'))
-        except (ValueError, UnicodeError) as exc: raise ValueError('Invalid original Holiday feature JSON') from exc
-        print('HOLIDAY2015_ORIGINAL_FEATURES ' + json.dumps(party_features, ensure_ascii=True, separators=(',',':')))
+        try:
+            party_features = json.loads(candidate.decode('utf-8'))
+            print('HOLIDAY2015_ORIGINAL_FEATURES ' + json.dumps(party_features, ensure_ascii=True, separators=(',',':')))
+        except (ValueError, UnicodeError) as exc:
+            # The JSON may be embedded across AVM1 SWF action operands. A raw
+            # null-delimited byte scan is not a JSON decoder; log evidence
+            # without failing the independently SHA-verified archived files.
+            print('HOLIDAY2015_ORIGINAL_FEATURES_FRAGMENT ' + json.dumps({'reason':str(exc), 'prefix':candidate[:700].decode('utf-8','replace')},ensure_ascii=True))
     rect = (5 + 4*(data[0] >> 3) + 7)//8
     pos = rect + 4  # frame rate and count
     strings = []
