@@ -46,50 +46,46 @@ def read(url: str, maximum: int = MAX_BYTES) -> tuple[bytes, str]:
 
 
 class ArchiveLinks(HTMLParser):
+    """Read the MediaWiki section ID, never the adjacent [edit] link text."""
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.section = ''
         self.phase = 'party'
-        self.header = ''
+        self.heading = ''
         self.href = ''
-        self.label = ''
         self.entries: list[dict[str, str]] = []
 
     def handle_starttag(self, tag, attrs):
         d = dict(attrs)
         if tag in ('h2', 'h3'):
-            self.header = tag
-            self.label = ''
+            self.heading = tag
+        if tag == 'span' and 'mw-headline' in str(d.get('class') or ''):
+            name = str(d.get('id') or '').replace('_', ' ').lower()
+            if self.heading == 'h2':
+                self.section = CATEGORIES.get(name, '')
+                self.phase = 'party'
+            elif self.heading == 'h3' and name in ('pre-party', 'party'):
+                self.phase = 'preparty' if name == 'pre-party' else 'party'
+            elif self.heading == 'h3' and self.section == 'avatar' and name in ('sprites','effects'):
+                self.section = 'avatar/' + name
         if tag == 'a':
             self.href = str(d.get('href') or '')
-            self.label = ''
-
-    def handle_data(self, data):
-        if self.header or self.href:
-            self.label += data
 
     def handle_endtag(self, tag):
-        if tag == self.header:
-            header = self.label.strip().lower().replace('[edit]', '').strip()
-            if tag == 'h2':
-                self.section = CATEGORIES.get(header, '')
-                self.phase = 'party'
-            elif tag == 'h3' and header in ('pre-party', 'party'):
-                self.phase = 'preparty' if header == 'pre-party' else 'party'
-            self.header = ''
-            self.label = ''
+        if tag in ('h2', 'h3'):
+            self.heading = ''
         if tag == 'a' and self.href:
             href = urljoin(SOURCE, self.href)
             decoded = unquote(urlparse(href).path.rsplit('/', 1)[-1])
-            name = re.sub(r'\.html$', '', decoded, flags=re.I)
+            name = re.sub(r'\\.html$', '', decoded, flags=re.I)
             name = re.sub(r'^File:', '', name, flags=re.I)
             if SWF_NAME.fullmatch(name) and self.section:
+                category = 'music' if re.fullmatch(r'Music\\d+(?:_\\d+)?\\.swf', name, re.I) else self.section
                 self.entries.append({
-                    'name': name, 'section': self.section,
+                    'name': name, 'section': category,
                     'phase': self.phase, 'filePage': href,
                 })
             self.href = ''
-            self.label = ''
 
 
 def sha(blob: bytes) -> str:
