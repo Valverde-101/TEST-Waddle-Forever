@@ -90,15 +90,31 @@ export const sendCurrentPartyCookie: PenguinHandler<[]> = async (ctx) => {
   await ctx.msg.send(ctx.penguin, 'partycookie', JSON.stringify(getCurrentPartyCookie(ctx)));
 };
 
-const sendCurrentPartyService: PenguinHandler<[]> = async ({ penguin, msg, data }) => {
-  const service = getPartyServiceConfig(data.getPartyProgress());
+const sendCurrentPartyService: PenguinHandler<[]> = async ({ penguin, msg, data, settings }) => {
+  const partyConfig = data.getPartyProgress();
+  const service = getPartyServiceConfig(partyConfig);
   if (service === undefined) {
     return;
   }
 
+  // Original DecemberParty measures elapsed party days using a zero-based
+  // unlockDayIndex. The initial Holiday integration hard-coded 21 even on
+  // December 17, outside its 21-day range (0..20), so the original login,
+  // calendar and quest gates saw the final/out-of-range day at every date.
+  // Use Waddle's selected historical day, NOT the computer's current date.
+  // Other parties retain their already-validated service protocol untouched.
+  let unlockDayIndex = service.unlockDayIndex;
+  if (partyConfig?.id === 'holiday-2015') {
+    const selected = settings.getVirtualDate(0);
+    const selectedDayUtc = Date.UTC(selected.getFullYear(), selected.getMonth(), selected.getDate());
+    const partyStartUtc = Date.UTC(2015, 11, 17);
+    const elapsedDays = Math.floor((selectedDayUtc - partyStartUtc) / 86400000);
+    unlockDayIndex = Math.min(Math.max(0, elapsedDays), Math.max(0, service.numOfDaysInParty - 1));
+  }
+
   await msg.send(penguin, 'partyservice', JSON.stringify({
     partySettings: {
-      unlockDayIndex: service.unlockDayIndex,
+      unlockDayIndex,
       numOfDaysInParty: service.numOfDaysInParty
     },
     contestSettings: service.contestSettings ?? {},
