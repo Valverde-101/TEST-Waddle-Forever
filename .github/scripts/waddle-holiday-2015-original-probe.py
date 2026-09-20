@@ -53,6 +53,14 @@ def inspect(path):
     data = buf[8:] if buf[:3] == b'FWS' else zlib.decompress(buf[8:])
     if len(data) != struct.unpack_from('<I', buf, 4)[0] - 8:
         raise ValueError('SWF expanded length mismatch: ' + str(path))
+    if path.name == 'ContentFeatures-HolidayParty2015.swf':
+        needle = b'{"featureSettings":'
+        begin = data.find(needle)
+        if begin < 0: raise ValueError('Original Holiday features JSON missing')
+        candidate = data[begin:begin + 50000].split(b'\0', 1)[0]
+        try: party_features = json.loads(candidate.decode('utf-8'))
+        except (ValueError, UnicodeError) as exc: raise ValueError('Invalid original Holiday feature JSON') from exc
+        print('HOLIDAY2015_ORIGINAL_FEATURES ' + json.dumps(party_features, ensure_ascii=True, separators=(',',':')))
     rect = (5 + 4*(data[0] >> 3) + 7)//8
     pos = rect + 4  # frame rate and count
     strings = []
