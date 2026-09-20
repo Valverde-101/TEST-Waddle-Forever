@@ -1,0 +1,54 @@
+name: Waddle The Fair 2015 Native Map Note Compatibility
+
+on:
+  pull_request:
+    branches: [dev]
+    paths:
+      - '.github/workflows/waddle-fair-2015-island-map-compat.yml'
+      - '.github/scripts/waddle-fair-2015-island-map-compat.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: waddle-fair-2015-island-map-compat
+  cancel-in-progress: false
+
+jobs:
+  derive-fair-only-map:
+    if: github.repository == 'Valverde-101/TEST-Waddle-Forever' && github.event_name == 'pull_request' && github.head_ref == 'feat/the-fair-2015'
+    runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/the-fair-2015
+          persist-credentials: true
+      - name: Derive and verify original Fair map-note onRelease
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ffdec=Get-ChildItem -LiteralPath 'V:\AndroidBuild\Tools\FFDec' -Filter 'ffdec-cli.exe' -Recurse -File | Sort-Object FullName -Descending | Select-Object -First 1
+          if(-not $ffdec){throw 'WADDLE_FAIR_MAP_COMPAT=FAIL missing_ffdec'}
+          python .github/scripts/waddle-fair-2015-island-map-compat.py --ffdec $ffdec.FullName
+          if($LASTEXITCODE -ne 0){throw 'WADDLE_FAIR_MAP_COMPAT=FAIL python'}
+          git status --short -- media/default/fair2015/compat
+      - name: Publish only verified Fair-only derived map to existing PR
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          $map='media/default/fair2015/compat/FairIslandMap.swf'
+          $proof='media/default/fair2015/compat/island_map_manifest.json'
+          if(-not(Test-Path -LiteralPath $map -PathType Leaf) -or -not(Test-Path -LiteralPath $proof -PathType Leaf)){throw 'WADDLE_FAIR_MAP_COMPAT=FAIL derived_missing'}
+          git add -- $map $proof
+          git diff --cached --quiet
+          if($LASTEXITCODE -eq 1){
+            git commit -m "fix(fair2015): preserve original party-map-note click in isolated island map"
+            if($LASTEXITCODE -ne 0){throw 'WADDLE_FAIR_MAP_COMPAT=FAIL commit'}
+            git push origin HEAD:refs/heads/feat/the-fair-2015
+            if($LASTEXITCODE -ne 0){throw 'WADDLE_FAIR_MAP_COMPAT=FAIL push'}
+          }
+          Write-Host 'WADDLE_FAIR_MAP_COMPAT=PASS original_maps_unchanged=true halloween_unchanged=true same_pr=true'
