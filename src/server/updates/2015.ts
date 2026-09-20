@@ -288,7 +288,8 @@ const HOLIDAY_2015_ADVENT: CPUpdate = {
   },
   globalChanges: {
     'content/party_icon.swf': [holidayRef('preparty/content/2015AdventCalendarpartyicon.swf'), 'party_icon'],
-    'close_ups/advent_calendar.swf': [holidayRef('preparty/close_ups/2015AdventCalendarinterface.swf'), 'advent_calendar']
+    'close_ups/advent_calendar.swf': [holidayRef('preparty/close_ups/2015AdventCalendarinterface.swf'), 'advent_calendar'],
+    'close_ups/advent_calendar_login.swf': [holidayRef('preparty/close_ups/2015AdventCalendarlogin.swf'), 'w.app.december1.loginprompt']
   },
   localChanges: {
     'close_ups/advent_calendar.swf': { en: holidayRef('preparty/close_ups/2015AdventCalendarinterface.swf') },
@@ -349,15 +350,19 @@ const HOLIDAY_2015_PARTY: CPUpdate = {
     'content/party_icon.swf': [holidayRef('party/content/ContentParty_icon-HolidayParty2015.swf'), 'party_icon', 'scavenger_hunt_icon'],
     'close_ups/quest_interface.swf': [holidayRef('party/close_ups/Close_upsQuest_interface-HolidayParty2015.swf'), 'w.app.generic.partyinterface'],
     'close_ups/item_calendar_web.swf': [holidayRef('party/close_ups/Close_upsItem_calendar_web-HolidayParty2015.swf'), 'advent_calendar'],
-    'close_ups/dialogue_december_login.swf': [holidayRef('party/close_ups/Close_upsCharacter_dialogue_december_login-HolidayParty2015.swf'), 'w.app.loginprompt'],
-    'close_ups/dialogue_december_congrats.swf': holidayRef('party/close_ups/Close_upsCharacter_dialogue_december_congrats-HolidayParty2015.swf'),
-    'close_ups/dialogue_walrus_collect.swf': holidayRef('party/close_ups/Close_upsCharacter_dialogue_walrus_collect-HolidayParty2015.swf'),
+    'close_ups/advent_calendar_login.swf': [holidayRef('preparty/close_ups/2015AdventCalendarlogin.swf'), 'w.app.december1.loginprompt'],
+    // The ORIGINAL DecemberParty has four distinct date-specific path keys.
+    // The generic w.app.loginprompt alias alone is not read by that party.
+    'close_ups/dialogue_december_login.swf': [holidayRef('party/close_ups/Close_upsCharacter_dialogue_december_login-HolidayParty2015.swf'), 'w.app.loginprompt', 'w.app.december2.loginprompt'],
+    'close_ups/dialogue_december_congrats.swf': [holidayRef('party/close_ups/Close_upsCharacter_dialogue_december_congrats-HolidayParty2015.swf'), 'w.app.december4.loginprompt'],
+    'close_ups/dialogue_walrus_collect.swf': [holidayRef('party/close_ups/Close_upsCharacter_dialogue_walrus_collect-HolidayParty2015.swf'), 'w.app.december3.loginprompt'],
     'avatar/sprites/frostbite.swf': holidayRef('party/avatar/sprites/AvatarPenguinFrostbite-HolidayParty2015.swf'),
     'avatar/sprites/rooms_effects_avatar.swf': holidayRef('party/avatar/sprites/RoomsEffectsAvatar-HolidayParty2015.swf')
   },
   localChanges: {
     'close_ups/quest_interface.swf': { en: holidayRef('party/close_ups/Close_upsQuest_interface-HolidayParty2015.swf') },
     'close_ups/item_calendar_web.swf': { en: holidayRef('party/close_ups/Close_upsItem_calendar_web-HolidayParty2015.swf') },
+    'close_ups/advent_calendar_login.swf': { en: holidayRef('preparty/close_ups/2015AdventCalendarlogin.swf') },
     'close_ups/dialogue_december_login.swf': { en: holidayRef('party/close_ups/Close_upsCharacter_dialogue_december_login-HolidayParty2015.swf') },
     'close_ups/dialogue_december_congrats.swf': { en: holidayRef('party/close_ups/Close_upsCharacter_dialogue_december_congrats-HolidayParty2015.swf') },
     'close_ups/dialogue_walrus_collect.swf': { en: holidayRef('party/close_ups/Close_upsCharacter_dialogue_walrus_collect-HolidayParty2015.swf') },
