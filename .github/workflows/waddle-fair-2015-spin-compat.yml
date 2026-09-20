@@ -13,7 +13,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: waddle-fair-2015-spin-compat
+  group: waddle-fair-2015-spin-compat-pr-${{ github.event_name }}
   cancel-in-progress: false
 
 jobs:
