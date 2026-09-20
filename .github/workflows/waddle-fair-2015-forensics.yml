@@ -43,6 +43,9 @@ jobs:
             fair_spin_bootstrap='media/default/fair2015/minigames/daily_spin/GamesSpinBootstrap.swf'
             fair_spin_main='media/default/fair2015/minigames/daily_spin/GamesSpinMain.swf'
             fair_paddle_bootstrap='media/default/fair2015/minigames/puffle_paddle/GamesPufflePaddle-Bootstrap-TheFair2015.swf'
+            fair_map_note='media/default/fair2015/close_ups/ENCloseUpsPartyMapNote-TheFair2015.swf'
+            fair_party_map='media/default/fair2015/close_ups/ENCloseUpsPartyMap-TheFair2015.swf'
+            vanilla_map='media/default/approximation/modern_map.swf'
             generic_party='media/default/svanilla/media/play/v2/content/global/content/party.swf'
             ghost_party='media/default/unknown/ghosts/party.swf'
             late2015_party='media/default/party2015/content/party-runtime-2015-base.swf'
@@ -65,6 +68,13 @@ jobs:
             })
             Write-Host "WADDLE_FAIR_FORENSICS=PASS sample=$($sample.Key) bytes=$((Get-Item $path).Length) scripts=$($scriptFiles.Count) matches=$($matches.Count)"
             foreach($line in $matches){Write-Host "WADDLE_FAIR_CONTRACT sample=$($sample.Key) $line"}
+            if($sample.Key -in @('fair_map_note','fair_party_map','vanilla_map')) {
+              $mapSource = @($scriptFiles | Select-String -Pattern 'party_map_note|party_map|w\\.party\\.map|mapNote|goThereBtn|showContent|showMap|mapBtn|loadMovie|addEventListener|onRelease|onPress|openMap|switch' -CaseSensitive:$false | Select-Object -First 150 | ForEach-Object {
+                '{0}:{1} {2}' -f $_.Path.Substring($out.Length+1),$_.LineNumber,$_.Line.Trim()
+              })
+              Write-Host "WADDLE_FAIR_MAP_SOURCE sample=$($sample.Key) matches=$($mapSource.Count)"
+              foreach($line in $mapSource){Write-Host "WADDLE_FAIR_MAP_SOURCE sample=$($sample.Key) $line"}
+            }
             if($sample.Key -eq 'fair_spin_bootstrap'){
               foreach($script in $scriptFiles){
                 $relative=$script.FullName.Substring($out.Length+1)
