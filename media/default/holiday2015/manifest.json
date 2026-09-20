@@ -2,7 +2,266 @@
   "schema": "waddle-holiday-2015-original-assets/v1",
   "sourcePage": "https://toolbox.solero.me/cparchives/wiki/Holiday_Party_2015.html",
   "count": 109,
-  "roomMusic": [],
+  "roomMusic": [
+    {
+      "room": "RoomsAgentlobbymulti-HolidayParty2015.swf",
+      "musicFile": "Music922.swf",
+      "musicId": 922,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsAttic-HolidayParty2015.swf",
+      "musicFile": "Music884.swf",
+      "musicId": 884,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsBeach-HolidayParty2015.swf",
+      "musicFile": "Music1068_2.swf",
+      "musicId": 1068,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsBeacon-HolidayParty2015.swf",
+      "musicFile": "Music583.swf",
+      "musicId": 583,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsBerg-HolidayParty2015.swf",
+      "musicFile": "Music1069.swf",
+      "musicId": 1069,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsBook-HolidayParty2015.swf",
+      "musicFile": "Music1070.swf",
+      "musicId": 1070,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsCloudforest-HolidayParty2015.swf",
+      "musicFile": "Music363.swf",
+      "musicId": 363,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsCoffee-HolidayParty2015.swf",
+      "musicFile": "Music1070.swf",
+      "musicId": 1070,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsCove-HolidayParty2015.swf",
+      "musicFile": "Music1071.swf",
+      "musicId": 1071,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsDance-HolidayParty2015.swf",
+      "musicFile": "Music1087.swf",
+      "musicId": 1087,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsDock-HolidayParty2015.swf",
+      "musicFile": "Music1072.swf",
+      "musicId": 1072,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsDojo-HolidayParty2015.swf",
+      "musicFile": "Music403.swf",
+      "musicId": 403,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsDojoext-HolidayParty2015.swf",
+      "musicFile": "Music404.swf",
+      "musicId": 404,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsDojofire-HolidayParty2015.swf",
+      "musicFile": "Music405.swf",
+      "musicId": 405,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsDojosnow-HolidayParty2015.swf",
+      "musicFile": "Music407.swf",
+      "musicId": 407,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsForest-HolidayParty2015.swf",
+      "musicFile": "Music1088.swf",
+      "musicId": 1088,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsForts-HolidayParty2015.swf",
+      "musicFile": "Music1073.swf",
+      "musicId": 1073,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsHotellobby-HolidayParty2015.swf",
+      "musicFile": "Music362.swf",
+      "musicId": 362,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsHotelroof-HolidayParty2015.swf",
+      "musicFile": "Music360.swf",
+      "musicId": 360,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsHotelspa-HolidayParty2015.swf",
+      "musicFile": "Music361.swf",
+      "musicId": 361,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsLight-HolidayParty2015.swf",
+      "musicFile": "Music588.swf",
+      "musicId": 588,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsLodge-HolidayParty2015.swf",
+      "musicFile": "Music1074.swf",
+      "musicId": 1074,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsLounge-HolidayParty2015.swf",
+      "musicFile": "Music1075.swf",
+      "musicId": 1075,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsMall-HolidayParty2015.swf",
+      "musicFile": "Music1076.swf",
+      "musicId": 1076,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsMtn-HolidayParty2015.swf",
+      "musicFile": "Music1077.swf",
+      "musicId": 1077,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsPark-HolidayParty2015.swf",
+      "musicFile": "Music658.swf",
+      "musicId": 658,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsParty13-HolidayParty2015.swf",
+      "musicFile": "Music1091.swf",
+      "musicId": 1091,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsParty14-HolidayParty2015.swf",
+      "musicFile": "Music1080.swf",
+      "musicId": 1080,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsPet-HolidayParty2015.swf",
+      "musicFile": "Music659.swf",
+      "musicId": 659,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsPizza-HolidayParty2015.swf",
+      "musicFile": "Music1081.swf",
+      "musicId": 1081,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsPlaza-HolidayParty2015.swf",
+      "musicFile": "Music1089.swf",
+      "musicId": 1089,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsPufflewild-HolidayParty2015.swf",
+      "musicFile": "Music897.swf",
+      "musicId": 897,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsRink-HolidayParty2015.swf",
+      "musicFile": "Music592.swf",
+      "musicId": 592,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsSchool-HolidayParty2015.swf",
+      "musicFile": "Music1085.swf",
+      "musicId": 1085,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsShack-HolidayParty2015.swf",
+      "musicFile": "Music1090.swf",
+      "musicId": 1090,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsShip-HolidayParty2015.swf",
+      "musicFile": "Music1082.swf",
+      "musicId": 1082,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsShiphold-HolidayParty2015.swf",
+      "musicFile": "Music1083.swf",
+      "musicId": 1083,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsShipnest-HolidayParty2015.swf",
+      "musicFile": "Music1082.swf",
+      "musicId": 1082,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsShipquarters-HolidayParty2015.swf",
+      "musicFile": "Music1083.swf",
+      "musicId": 1083,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsShop-HolidayParty2015.swf",
+      "musicFile": "Music1086.swf",
+      "musicId": 1086,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsSkatepark-HolidayParty2015.swf",
+      "musicFile": "Music754.swf",
+      "musicId": 754,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsTown-HolidayParty2015.swf",
+      "musicFile": "Music1084.swf",
+      "musicId": 1084,
+      "phase": "party"
+    },
+    {
+      "room": "RoomsVillage-HolidayParty2015.swf",
+      "musicFile": "Music1077.swf",
+      "musicId": 1077,
+      "phase": "party"
+    }
+  ],
   "assets": [
     {
       "name": "AvatarPenguinFrostbite-HolidayParty2015.swf",
