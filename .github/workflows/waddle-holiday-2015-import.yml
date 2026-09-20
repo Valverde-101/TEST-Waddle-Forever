@@ -1,0 +1,59 @@
+name: Waddle Holiday Party 2015 Archived Media Import
+
+on:
+  pull_request:
+    branches: [dev]
+    paths:
+      - '.github/workflows/waddle-holiday-2015-import.yml'
+      - '.github/scripts/waddle-holiday-2015-import.py'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: waddle-holiday-2015-import
+  cancel-in-progress: false
+
+jobs:
+  import-originals:
+    if: github.repository == 'Valverde-101/TEST-Waddle-Forever' && github.event_name == 'pull_request' && github.head_ref == 'feat/holiday-party-2015'
+    runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/holiday-party-2015
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Archive discovery contract
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          python .github/scripts/waddle-holiday-2015-import.py --inventory-only
+          if($LASTEXITCODE -ne 0){throw 'WADDLE_HOLIDAY2015=FAIL archive_inventory'}
+      - name: Download and SHA-256 verify Holiday-only original assets
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          python .github/scripts/waddle-holiday-2015-import.py
+          if($LASTEXITCODE -ne 0){throw 'WADDLE_HOLIDAY2015=FAIL archive_import'}
+      - name: Publish verified originals only to the separate Holiday PR
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $manifest='media/default/holiday2015/manifest.json'
+          if(-not(Test-Path -LiteralPath $manifest -PathType Leaf)){throw 'WADDLE_HOLIDAY2015=FAIL manifest_absent'}
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- media/default/holiday2015
+          git diff --cached --quiet
+          if($LASTEXITCODE -eq 1){
+            git commit -m 'feat(holiday2015): pin complete original SWF archive by source SHA'
+            if($LASTEXITCODE -ne 0){throw 'WADDLE_HOLIDAY2015=FAIL commit'}
+            git push origin HEAD:refs/heads/feat/holiday-party-2015
+            if($LASTEXITCODE -ne 0){throw 'WADDLE_HOLIDAY2015=FAIL branch_advanced'}
+          }
+          Write-Host 'WADDLE_HOLIDAY2015_ARCHIVE=PASS independent=true halloween_unchanged=true fair_unchanged=true'
