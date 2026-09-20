@@ -17,7 +17,12 @@ concurrency:
 jobs:
   wait-certification:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # Exact-SHA AndroidBuild certification can consume up to 30 minutes after its
+    # self-hosted runner becomes available. A 25-minute preview gate expired
+    # seconds before a successful certification and wrongly blocked publication.
+    # Allow runner queue time, full certification, and GitHub API propagation;
+    # never treat a timeout or an unfinished certification as a PASS.
+    timeout-minutes: 90
     outputs:
       certification_run_id: ${{ steps.gate.outputs.run_id }}
     env:
@@ -37,7 +42,10 @@ jobs:
             'User-Agent'='waddle-validated-source-sync'
           }
           $sha=$env:WADDLE_EXPECTED_SHA.Trim().ToLowerInvariant()
-          $deadline=[DateTime]::UtcNow.AddMinutes(24)
+          # Certification is a separate, fully gated 30-minute job and may queue
+          # on a busy physical runner. The gate must outlive that job, including
+          # resource contention and API propagation, without bypassing success.
+          $deadline=[DateTime]::UtcNow.AddMinutes(85)
           while([DateTime]::UtcNow -lt $deadline){
             $uri="https://api.github.com/repos/${{ github.repository }}/actions/runs?head_sha=$sha&per_page=100"
             $response=Invoke-RestMethod -Method Get -Uri $uri -Headers $headers -TimeoutSec 30
