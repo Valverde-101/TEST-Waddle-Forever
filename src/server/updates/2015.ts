@@ -254,6 +254,26 @@ const musicFileChanges = Object.fromEntries(HALLOWEEN_2015_MUSIC_IDS.map(id=>[`p
 
 // Original Fair 2015 minigame archive assets, mounted at the URLs requested
 // by the late-AS3 game launchers. This is separate from Halloween's game runtime.
+// Waddle's localChanges type is intentionally English-only. Keep its native
+// crumb index unchanged and expose the remaining original Fair translations as
+// direct, party-scoped file routes instead of weakening global timeline types.
+const FAIR_2015_UI_CLOSEUPS = {
+  'party_map.swf': 'PartyMap',
+  'party_map_note.swf': 'PartyMapNote',
+  'ride_prompt.swf': 'RidePrompt',
+  'igloo_prompt.swf': 'IglooPrompt',
+  'party_igloo_list.swf': 'PartyIglooList'
+} as const;
+const FAIR_2015_TRANSLATED_UI_FILES: Record<string, string> = {};
+for (const language of ['de', 'es', 'fr', 'pt', 'ru'] as const) {
+  for (const [name, stem] of Object.entries(FAIR_2015_UI_CLOSEUPS)) {
+    // The historical archive does not include Russian igloo prompts/lists.
+    if (language === 'ru' && (name === 'igloo_prompt.swf' || name === 'party_igloo_list.swf')) continue;
+    FAIR_2015_TRANSLATED_UI_FILES[`play/v2/content/local/${language}/close_ups/${name}`] =
+      fairRef(`close_ups/${language.toUpperCase()}CloseUps${stem}-TheFair2015.swf`);
+  }
+}
+
 const FAIR_2015_MINIGAME_FILES = {
   'play/v2/games/cp_party_games/spin/bootstrap.swf': fairRef('minigames/daily_spin/GamesSpinBootstrap.swf'),
   'play/v2/games/cp_party_games/spin/main.swf': fairRef('minigames/daily_spin/GamesSpinMain.swf'),
@@ -368,6 +388,7 @@ export const UPDATES_2015: Update[] = [
         'play/v2/content/global/avatar/sprites/robotcgrey.swf': fairRef('avatar/AvatarSpritesRobotCGrey.swf'),
         'play/v2/content/global/avatar/sprites/werewolf.swf': fairRef('avatar/AvatarSpritesWerewolf.swf'),
         ...FAIR_2015_MUSIC_FILES,
+        ...FAIR_2015_TRANSLATED_UI_FILES,
         ...FAIR_2015_MINIGAME_FILES
       },
       globalChanges: {
@@ -392,11 +413,11 @@ export const UPDATES_2015: Update[] = [
       },
       localChanges: {
         'close_ups/quest_interface.swf': { en: fairRef('close_ups/CloseUpsEN-QuestInterface-TheFair2015.swf') },
-        'close_ups/party_map.swf': { en: fairRef('close_ups/ENCloseUpsPartyMap-TheFair2015.swf'), de: fairRef('close_ups/DECloseUpsPartyMap-TheFair2015.swf'), es: fairRef('close_ups/ESCloseUpsPartyMap-TheFair2015.swf'), fr: fairRef('close_ups/FRCloseUpsPartyMap-TheFair2015.swf'), pt: fairRef('close_ups/PTCloseUpsPartyMap-TheFair2015.swf'), ru: fairRef('close_ups/RUCloseUpsPartyMap-TheFair2015.swf') },
-        'close_ups/party_map_note.swf': { en: fairRef('close_ups/ENCloseUpsPartyMapNote-TheFair2015.swf'), de: fairRef('close_ups/DECloseUpsPartyMapNote-TheFair2015.swf'), es: fairRef('close_ups/ESCloseUpsPartyMapNote-TheFair2015.swf'), fr: fairRef('close_ups/FRCloseUpsPartyMapNote-TheFair2015.swf'), pt: fairRef('close_ups/PTCloseUpsPartyMapNote-TheFair2015.swf'), ru: fairRef('close_ups/RUCloseUpsPartyMapNote-TheFair2015.swf') },
-        'close_ups/ride_prompt.swf': { en: fairRef('close_ups/ENCloseUpsRidePrompt-TheFair2015.swf'), de: fairRef('close_ups/DECloseUpsRidePrompt-TheFair2015.swf'), es: fairRef('close_ups/ESCloseUpsRidePrompt-TheFair2015.swf'), fr: fairRef('close_ups/FRCloseUpsRidePrompt-TheFair2015.swf'), pt: fairRef('close_ups/PTCloseUpsRidePrompt-TheFair2015.swf'), ru: fairRef('close_ups/RUCloseUpsRidePrompt-TheFair2015.swf') },
-        'close_ups/igloo_prompt.swf': { en: fairRef('close_ups/ENCloseUpsIglooPrompt-TheFair2015.swf'), de: fairRef('close_ups/DECloseUpsIglooPrompt-TheFair2015.swf'), es: fairRef('close_ups/ESCloseUpsIglooPrompt-TheFair2015.swf'), fr: fairRef('close_ups/FRCloseUpsIglooPrompt-TheFair2015.swf'), pt: fairRef('close_ups/PTCloseUpsIglooPrompt-TheFair2015.swf') },
-        'close_ups/party_igloo_list.swf': { en: fairRef('close_ups/ENCloseUpsPartyIglooList-TheFair2015.swf'), de: fairRef('close_ups/DECloseUpsPartyIglooList-TheFair2015.swf'), es: fairRef('close_ups/ESCloseUpsPartyIglooList-TheFair2015.swf'), fr: fairRef('close_ups/FRCloseUpsPartyIglooList-TheFair2015.swf'), pt: fairRef('close_ups/PTCloseUpsPartyIglooList-TheFair2015.swf') },
+        'close_ups/party_map.swf': { en: fairRef('close_ups/ENCloseUpsPartyMap-TheFair2015.swf') },
+        'close_ups/party_map_note.swf': { en: fairRef('close_ups/ENCloseUpsPartyMapNote-TheFair2015.swf') },
+        'close_ups/ride_prompt.swf': { en: fairRef('close_ups/ENCloseUpsRidePrompt-TheFair2015.swf') },
+        'close_ups/igloo_prompt.swf': { en: fairRef('close_ups/ENCloseUpsIglooPrompt-TheFair2015.swf') },
+        'close_ups/party_igloo_list.swf': { en: fairRef('close_ups/ENCloseUpsPartyIglooList-TheFair2015.swf') },
         'close_ups/dialog_rookie_login.swf': { en: fairRef('close_ups/CloseUps-DialogueRookieLogin-TheFair2015.swf') },
         'close_ups/dialog_rookie_firstdailyspin_login.swf': { en: fairRef('close_ups/CloseUpsDialogRookieFirstdailyspinLogin-TheFair2015.swf') }
       }
