@@ -47,5 +47,5 @@ assert "'play/v2/content/global/content/map.swf': 'approximation:modern_map.swf'
 assert (root / "media/default/approximation/modern_map.swf").is_file()
 assert code.count("'play/v2/games/cp_party_games/spin/spin.swf':") == 1
 server = (root / "src/server/file-server/index.ts").read_text(encoding="utf-8")
-assert "patchFair2015GameSecurity" in server and "default/fair2015/minigames/" in server
+assert "patchFair2015GameSecurity" in server and "default/fair2015/minigames/daily_spin/" in server
 print("WADDLE_FAIR2015_MAP_SPIN_SOURCE=PASS map_exists=true routes=unique fair_runtime=isolated")
