@@ -92,6 +92,19 @@ function Export-Scripts([string]$FFDec,[string]$Swf,[string]$SafeName,[string]$W
           }
         }
       }
+      if ($files.Count -eq 0) {
+        # FFDec can exit successfully but emit no scripts under concurrent SWF
+        # exports on the shared Windows runner. Do not misclassify an archived
+        # scripted SWF as broken; retry the exact same immutable input and keep
+        # the hard failure if the final export is still empty.
+        if ($attempt -lt $maxAttempts) {
+          Write-Host "WADDLE_PARTY2015_PROTOCOL_FFDEC=RETRY reason=empty_export attempt=$attempt next=$($attempt + 1) swf=$Swf"
+          Start-Sleep -Seconds 3
+          continue
+        }
+        $errPreview = if (Test-Path -LiteralPath $stderr) { (Get-Content -LiteralPath $stderr -Tail 8 -ErrorAction SilentlyContinue) -join ' ' } else { '' }
+        throw "WADDLE_PARTY2015_PROTOCOL=FAIL ffdec_empty_export attempts=$maxAttempts swf=$Swf stderr=$errPreview"
+      }
       return [pscustomobject]@{ files=$files.Count; text=($chunks -join "`n`n"); entries=$entries; exit=$exitText; attempts=$attempt }
     } finally {
       if ($null -ne $proc -and -not $proc.HasExited) { Stop-FFDecTree $proc }
