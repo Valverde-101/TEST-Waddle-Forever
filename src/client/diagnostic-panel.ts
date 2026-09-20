@@ -675,10 +675,10 @@ const installPanelIntoRenderer = (window: BrowserWindow): Promise<DiagnosticPane
     const panel = document.createElement('div');
     panel.id = 'waddle-diagnostic-panel';
     panel.innerHTML = '<div class="wd-head"><div class="wd-title">Waddle - Diagnóstico en vivo</div><button class="wd-close" title="Cerrar">×</button></div>' +
-      '<div class="wd-help">Rastrea errores SWF/HTTP/FILE/XT/XML y genera un paquete sanitizado con consola, live trace y análisis para compartir.</div>' +
+      '<div class="wd-help">Rastrea fallas de protocolo y SWF. Al pulsar RECOPILAR guarda JSON y una captura de la pantalla sin este panel. La imagen puede mostrar nombres: revísala antes de compartir.</div>' +
       '<div class="wd-stats"><div class="wd-stat"><span id="wd-errors" class="wd-num wd-error">0</span><span class="wd-label">FALLAS</span></div><div class="wd-stat"><span id="wd-swf" class="wd-num">0</span><span class="wd-label">SWF</span></div><div class="wd-stat"><span id="wd-events" class="wd-num">0</span><span class="wd-label">EVENTOS</span></div></div>' +
-      '<button id="wd-collect" class="wd-primary">RECOPILAR PARA COMPARTIR</button>' +
-      '<button id="wd-trace" class="wd-secondary">RASTREAR ÚLTIMA FALLA</button>' +
+      '<button id="wd-collect" class="wd-primary">RECOPILAR JSON + CAPTURA PNG</button>' +
+      '<button id="wd-trace" class="wd-secondary">RASTREAR FALLA PRIORITARIA</button>' +
       '<div id="wd-result" class="wd-result">Sin análisis todavía.</div>';
     document.body.appendChild(panel);
 
@@ -686,7 +686,7 @@ const installPanelIntoRenderer = (window: BrowserWindow): Promise<DiagnosticPane
     const renderResult = (payload) => {
       if (!payload) { result.textContent = 'Sin resultado.'; return; }
       if (payload.schema === 'waddle-share-result/v1') {
-        result.textContent = payload.message + NL + NL + 'JSON: ' + payload.latest_json + NL + 'TXT: ' + payload.latest_txt + NL + 'Clasificación: ' + payload.classification + ' (' + payload.confidence + ')';
+        result.textContent = payload.message + NL + NL + 'JSON: ' + payload.latest_json + NL + 'PNG: ' + (payload.latest_png || 'captura no disponible') + NL + 'TXT: ' + payload.latest_txt + NL + 'Clasificación: ' + payload.classification + ' (' + payload.confidence + ')';
         return;
       }
       const lines = [];
@@ -717,8 +717,8 @@ const installPanelIntoRenderer = (window: BrowserWindow): Promise<DiagnosticPane
 
     toggle.addEventListener('click', () => { panel.style.display = panel.style.display === 'block' ? 'none' : 'block'; updateStats(); });
     panel.querySelector('.wd-close').addEventListener('click', () => { panel.style.display = 'none'; });
-    panel.querySelector('#wd-trace').addEventListener('click', () => { result.textContent = 'Rastreando última falla...'; console.log('[WADDLE-DIAG-ACTION]trace-last'); });
-    panel.querySelector('#wd-collect').addEventListener('click', () => { result.textContent = 'Recopilando consola, live trace, resolución local, runtime logs y análisis SWF...'; console.log('[WADDLE-DIAG-ACTION]collect-share'); });
+    panel.querySelector('#wd-trace').addEventListener('click', () => { result.textContent = 'Rastreando fallas por prioridad (manteniendo los errores auxiliares)...'; console.log('[WADDLE-DIAG-ACTION]trace-last'); });
+    panel.querySelector('#wd-collect').addEventListener('click', () => { result.textContent = 'Recopilando errores priorizados, fuentes SWF y una captura del juego (el panel se ocultará brevemente)...'; console.log('[WADDLE-DIAG-ACTION]collect-share'); });
     console.log('[WADDLE-DIAG][READY] Diagnostic panel installed');
     return verify();
   })()`;
@@ -788,7 +788,8 @@ export const installWaddleDiagnosticPanel = (window: BrowserWindow): Promise<Dia
 
     if (text === '[WADDLE-DIAG-ACTION]trace-last') {
       void getRendererTrace(window).then(trace => {
-        const failure = findLastFailure(trace);
+        const incidents = summarizeDiagnosticIncidents(trace);
+        const failure = incidents.find(item => item.severity !== 'background')?.latest || findLastFailure(trace);
         sendPanelResult(window, buildFailureAnalysis(failure, trace));
       }).catch(error => sendPanelResult(window, {
         schema: 'waddle-failure-analysis/v1',
