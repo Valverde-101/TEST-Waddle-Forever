@@ -144,7 +144,17 @@ for closeup,source,languages in (
     for lang in languages:
         f = f"close_ups/{lang}CloseUps{source}-TheFair2015.swf"
         assert f in seen, f"Fair UI original not pinned: {f}"
-        assert f"fairRef('{f}')" in fair, f"Fair UI original not mounted: {f}"
+        if lang == 'EN':
+            assert f"fairRef('{f}')" in fair, f"English Fair UI original not mounted: {f}"
+        else:
+            # Non-English routes are explicit party-scoped fileChanges because
+            # Waddle's localChanges support English only.
+            assert "FAIR_2015_TRANSLATED_UI_FILES" in fair
+            translated = code[code.index("const FAIR_2015_UI_CLOSEUPS"):code.index("const FAIR_2015_MINIGAME_FILES")]
+            assert f"'{closeup}': '{source}'" in translated
+            assert "play/v2/content/local/${language}/close_ups/${name}" in translated
+            assert "close_ups/${language.toUpperCase()}CloseUps${stem}-TheFair2015.swf" in translated
+            assert lang.lower() in ('de', 'es', 'fr', 'pt', 'ru')
 assert (repo / 'media/default/approximation/modern_map.swf').is_file()
 assert "NOTE.noteContainer.goThereBtn.onPress" in (repo / '.github/scripts/waddle-fair-2015-island-map-compat.py').read_text(encoding='utf-8')
 assert "'play/v2/content/global/content/map.swf': 'approximation:modern_map.swf'" not in code[code.index("date:'2015-10-21'"):]
