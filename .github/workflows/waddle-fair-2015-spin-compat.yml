@@ -5,54 +5,44 @@ on:
     branches: [dev]
     paths:
       - '.github/workflows/waddle-fair-2015-spin-compat.yml'
-      - '.github/scripts/waddle-fair-2015-spin-compat.py'
+      - '.github/scripts/waddle-fair-2015-security-verify.py'
+      - 'src/server/file-server/fair2015-security.ts'
+      - 'src/server/file-server/index.ts'
       - 'src/server/updates/2015.ts'
+      - 'media/default/fair2015/minigames/daily_spin/**'
   workflow_dispatch:
 
 permissions:
-  contents: write
-
-concurrency:
-  group: waddle-fair-2015-spin-compat-pr-${{ github.event_name }}
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  generate-derived-fair-spin-bootstrap:
-    if: github.repository == 'Valverde-101/TEST-Waddle-Forever' && github.event_name == 'pull_request' && github.head_ref == 'feat/the-fair-2015'
-    runs-on: [self-hosted, Windows, X64, windows-build, android-parallel, pc-willthom, general]
-    timeout-minutes: 15
+  verify-served-fair-spin:
+    # The actual runtime serves the archived bootstrap and main SWFs through
+    # patchFair2015GameSecurity. The previous FFDec-derived bootstrap was
+    # never routed by the game and FFDec did not preserve its AS2 source
+    # exactly; building and pushing that unused asset was a false CI blocker.
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: feat/the-fair-2015
-          persist-credentials: true
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Derive and verify isolated, loopback-compatible Daily Spin SWF
-        shell: powershell
+      - name: Verify original Daily Spin assets and actual isolated runtime compatibility
+        shell: bash
         run: |
-          $ErrorActionPreference = 'Stop'
-          $ffdec = Get-ChildItem -LiteralPath 'V:\AndroidBuild\Tools\FFDec' -Filter 'ffdec-cli.exe' -Recurse -File | Sort-Object FullName -Descending | Select-Object -First 1
-          if (-not $ffdec) { throw 'WADDLE_FAIR_SPIN_PATCH=FAIL ffdec_missing' }
-          python .github/scripts/waddle-fair-2015-spin-compat.py --ffdec $ffdec.FullName
-          if ($LASTEXITCODE -ne 0) { throw 'WADDLE_FAIR_SPIN_PATCH=FAIL python_failed' }
-          git status --short -- media/default/fair2015/compat
-      - name: Commit only verified derived Fair media to existing PR branch
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          $source = 'media/default/fair2015/compat/GamesSpinBootstrapLocal.swf'
-          $manifest = 'media/default/fair2015/compat/spin_bootstrap_local.json'
-          if (-not (Test-Path -LiteralPath $source -PathType Leaf) -or -not (Test-Path -LiteralPath $manifest -PathType Leaf)) { throw 'WADDLE_FAIR_SPIN_PATCH=FAIL derived_missing' }
-          git add -- $source $manifest
-          git diff --cached --quiet
-          if ($LASTEXITCODE -eq 1) {
-            git commit -m "fix(fair2015): preserve patched Daily Spin bootstrap only for local runtime"
-            if ($LASTEXITCODE -ne 0) { throw 'WADDLE_FAIR_SPIN_PATCH=FAIL commit' }
-            git push origin HEAD:refs/heads/feat/the-fair-2015
-            if ($LASTEXITCODE -ne 0) { throw 'WADDLE_FAIR_SPIN_PATCH=FAIL branch_moved_or_push_failed' }
-          }
-          Write-Host 'WADDLE_FAIR_SPIN_PATCH=PASS same_pr=true canonical_unchanged=true'
+          set -euo pipefail
+          python .github/scripts/waddle-fair-2015-security-verify.py
+          python - <<'PY'
+          from pathlib import Path
+          root = Path('.')
+          updates = (root / 'src/server/updates/2015.ts').read_text(encoding='utf-8')
+          server = (root / 'src/server/file-server/index.ts').read_text(encoding='utf-8')
+          security = (root / 'src/server/file-server/fair2015-security.ts').read_text(encoding='utf-8')
+          assert "'play/v2/games/cp_party_games/spin/bootstrap.swf': fairRef('minigames/daily_spin/GamesSpinBootstrap.swf')" in updates
+          assert "'play/v2/games/cp_party_games/spin/spin.swf': fairRef('minigames/daily_spin/GamesSpinMain.swf')" in updates
+          assert "'play/v2/games/cp_party_games/spin/main.swf': fairRef('minigames/daily_spin/GamesSpinMain.swf')" in updates
+          assert "GamesSpinBootstrapLocal.swf" not in updates and "GamesSpinBootstrapLocal.swf" not in server
+          assert "patchFair2015GameSecurity(original, host)" in server
+          assert "minigames/daily_spin/GamesSpinBootstrap.swf" in server
+          assert "minigames/daily_spin/GamesSpinMain.swf" in server
+          assert "const LOCAL_HOST = /^(?:127" in security
+          print('WADDLE_FAIR_SPIN_RUNTIME=PASS original_files=true scoped_loopback_adaptation=true no_unused_derived_asset=true')
+          PY
