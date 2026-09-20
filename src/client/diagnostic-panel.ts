@@ -1,8 +1,10 @@
 import fs from 'fs';
 import path from 'path';
+import { createHash } from 'crypto';
 import { BrowserWindow, shell } from 'electron';
 import type { WaddleLiveTraceEvent } from '@common/live-trace';
 import { writeRuntimeDiagnostic } from './runtime-diagnostics';
+import { isDiagnosticFailure, summarizeDiagnosticIncidents, traceResourceChain } from './diagnostic-evidence';
 
 const workRoot = path.join(process.cwd(), '.work');
 const swfAnalysisRoot = path.join(workRoot, 'swf-analysis');
@@ -39,6 +41,7 @@ type FailureAnalysis = {
   recommended_action?: string;
   failure?: WaddleLiveTraceEvent;
   request_chain?: WaddleLiveTraceEvent[];
+  correlation_note?: string;
   context?: WaddleLiveTraceEvent[];
   preceding_protocol_event?: WaddleLiveTraceEvent | null;
   static?: FailureStaticEvidence;
@@ -138,19 +141,24 @@ const sanitizeValue = <T>(
     const objectValue = value as object;
     if (seen.has(objectValue)) return '[circular]' as unknown as T;
     seen.add(objectValue);
-
-    if (Array.isArray(value)) {
-      return value
-        .slice(0, maxSanitizeArrayLength)
-        .map(item => sanitizeValue(item, '', depth + 1, seen)) as unknown as T;
+    // Track only ancestors, not every object ever visited. The old global
+    // WeakSet falsely replaced shared failure/request-chain events with
+    // "[circular]", deleting exactly the evidence needed for correlation.
+    try {
+      if (Array.isArray(value)) {
+        return value
+          .slice(0, maxSanitizeArrayLength)
+          .map(item => sanitizeValue(item, '', depth + 1, seen)) as unknown as T;
+      }
+      const out = Object.create(null) as JsonRecord;
+      for (const [key, child] of Object.entries(value as JsonRecord)) {
+        if (unsafeObjectKey.test(key)) continue;
+        out[key] = sanitizeValue(child, key, depth + 1, seen);
+      }
+      return out as unknown as T;
+    } finally {
+      seen.delete(objectValue);
     }
-
-    const out = Object.create(null) as JsonRecord;
-    for (const [key, child] of Object.entries(value as JsonRecord)) {
-      if (unsafeObjectKey.test(key)) continue;
-      out[key] = sanitizeValue(child, key, depth + 1, seen);
-    }
-    return out as unknown as T;
   }
 
   return sanitizeDiagnosticText(String(value)) as unknown as T;
@@ -173,24 +181,7 @@ const findLatestRuntimeLog = () => {
   }
 };
 
-const isFailureEvent = (event: WaddleLiveTraceEvent) => {
-  const phase = event.phase.toLowerCase();
-  const statusCode = Number(event.statusCode || 0);
-  const status = String(event.status || '').toLowerCase();
-  const error = String(event.error || '').toUpperCase();
-  if (event.benign === true) return false;
-  if (status === 'aborted' || error.includes('ERR_ABORTED')) return false;
-  if (phase === 'error' || statusCode >= 400) return true;
-  return [
-    'unhandled-action',
-    'unhandled-context',
-    'invalid-signature',
-    'send-failed',
-    'handler-threw',
-    'network-error',
-    'http-error'
-  ].includes(status);
-};
+const isFailureEvent = isDiagnosticFailure;
 
 const findLastFailure = (trace: WaddleLiveTraceEvent[]) => {
   for (let i = trace.length - 1; i >= 0; i -= 1) {
@@ -246,10 +237,7 @@ const buildFailureAnalysis = (
   const foundIndex = trace.findIndex(event => Number(event.sequence || 0) === sequence);
   const index = foundIndex < 0 ? trace.length - 1 : foundIndex;
   const context = trace.slice(Math.max(0, index - 18), Math.min(trace.length, index + 9));
-  const requestId = failure.requestId;
-  const requestChain = requestId === undefined
-    ? []
-    : trace.filter(event => String(event.requestId ?? '') === String(requestId)).slice(-20);
+  const requestChain = traceResourceChain(failure, trace);
   const precedingProtocol = context.slice(0, Math.max(0, context.length - 1)).reverse().find(event => {
     const category = event.category.toUpperCase();
     return category === 'XT' || category === 'XML';
@@ -360,6 +348,7 @@ const buildFailureAnalysis = (
     recommended_action: recommendedAction,
     failure,
     request_chain: requestChain,
+    correlation_note: 'Solo se correlacionan rutas completas dentro de 10 segundos. La cercanía temporal XT/XML no demuestra qué SWF provocó una solicitud.',
     context,
     preceding_protocol_event: precedingProtocol,
     static: {
