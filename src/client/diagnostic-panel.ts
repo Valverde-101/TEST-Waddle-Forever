@@ -389,6 +389,116 @@ const sendPanelResult = (window: BrowserWindow, payload: unknown) => {
   ).catch(() => undefined);
 };
 
+// Record precisely which scene assets were served. A 200 response proves the
+// SWF loaded, not which display-list shapes or overlays Flash drew.
+const collectSceneAssetEvidence = (trace: WaddleLiveTraceEvent[]) => {
+  const relevant = /(?:^|\\/)(?:map|party_map|party_map_note|stage|plaza|party_icon)\\.swf$/i;
+  const mediaRoot = path.resolve(process.cwd(), 'media', 'default');
+  const seen = new Set<string>();
+  const evidence: Array<Record<string, unknown>> = [];
+  for (const event of [...trace].reverse()) {
+    if (event.category.toUpperCase() !== 'FILE' || !event.target || !relevant.test(String(event.action || ''))) continue;
+    const action = String(event.action || '');
+    if (seen.has(action)) continue;
+    seen.add(action);
+    const target = String(event.target).replace(/\\\\/g, '/');
+    const item: Record<string, unknown> = {
+      action, sequence: event.sequence, status: event.status, target
+    };
+    if (!/^default\\/[A-Za-z0-9_.\\/-]+$/.test(target) || target.split('/').includes('..')) {
+      item.asset_status = 'unsafe-or-unavailable-target';
+    } else {
+      const filename = path.resolve(process.cwd(), 'media', target);
+      if (!filename.startsWith(mediaRoot + path.sep)) {
+        item.asset_status = 'outside-media-root';
+      } else {
+        try {
+          const stat = fs.statSync(filename);
+          if (!stat.isFile()) throw new Error('not a regular file');
+          item.asset_status = 'present';
+          item.bytes = stat.size;
+          item.sha256 = stat.size <= 32 * 1024 * 1024
+            ? createHash('sha256').update(fs.readFileSync(filename)).digest('hex')
+            : null;
+          if (item.sha256 === null) item.asset_status = 'too-large-to-hash';
+        } catch {
+          item.asset_status = 'missing-or-unreadable';
+        }
+      }
+    }
+    evidence.push(item);
+    if (evidence.length >= 18) break;
+  }
+  return evidence.reverse();
+};
+
+type VisualCapture = {
+  status: 'captured' | 'unavailable';
+  file?: string;
+  sha256?: string;
+  bytes?: number;
+  width?: number;
+  height?: number;
+  captured_utc?: string;
+  reason?: string;
+  note: string;
+};
+
+const capturePlayfieldScreenshot = async (
+  window: BrowserWindow, filename: string
+): Promise<VisualCapture> => {
+  const note = 'Captura de pantalla solicitada al pulsar RECOPILAR. La captura puede mostrar nombres y datos visibles: revisar antes de compartir. No identifica objetos internos del SWF ni demuestra qué código los dibujó.';
+  if (window.isDestroyed() || window.webContents.isDestroyed()) {
+    return { status: 'unavailable', reason: 'renderer-destroyed', note };
+  }
+  let previouslyVisible: Array<{ id: string; visibility: string }> = [];
+  try {
+    // Do not hide or resize the game itself. Hide only our own overlay for two
+    // animation frames so the screenshot can show the actual map underneath.
+    previouslyVisible = await window.webContents.executeJavaScript(
+      `new Promise(resolve => {
+        const ids = ['waddle-diagnostic-toggle', 'waddle-diagnostic-panel'];
+        const visibility = ids.map(id => {
+          const element = document.getElementById(id);
+          const oldVisibility = element ? element.style.visibility : '';
+          if (element) element.style.visibility = 'hidden';
+          return { id, visibility: oldVisibility };
+        });
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve(visibility)));
+      })`,
+      true
+    ) as Array<{ id: string; visibility: string }>;
+    const image = await window.webContents.capturePage();
+    if (image.isEmpty()) throw new Error('empty-renderer-capture');
+    const png = image.toPNG();
+    if (!png.length) throw new Error('empty-png');
+    fs.writeFileSync(filename, png);
+    const size = image.getSize();
+    return {
+      status: 'captured',
+      file: path.basename(filename),
+      sha256: createHash('sha256').update(png).digest('hex'),
+      bytes: png.length, width: size.width, height: size.height,
+      captured_utc: new Date().toISOString(), note
+    };
+  } catch (error) {
+    return { status: 'unavailable', reason: sanitizeDiagnosticText(error), note };
+  } finally {
+    if (!window.isDestroyed() && !window.webContents.isDestroyed() && previouslyVisible.length) {
+      const prior = JSON.stringify(previouslyVisible);
+      await window.webContents.executeJavaScript(
+        `(() => {
+          for (const item of ${prior}) {
+            const element = document.getElementById(item.id);
+            if (element) element.style.visibility = item.visibility;
+          }
+        })()`,
+        true
+      ).catch(() => undefined);
+    }
+  }
+};
+
 const collectShareBundle = async (window: BrowserWindow) => {
   const trace = await getRendererTrace(window);
   const failure = findLastFailure(trace);
