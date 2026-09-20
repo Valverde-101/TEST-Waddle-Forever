@@ -502,9 +502,17 @@ const capturePlayfieldScreenshot = async (
 const collectShareBundle = async (window: BrowserWindow) => {
   const trace = await getRendererTrace(window);
   const failure = findLastFailure(trace);
-  const failureAnalysis = buildFailureAnalysis(failure, trace);
+  const incidents = summarizeDiagnosticIncidents(trace);
+  const priorityFailure = incidents.find(item => item.severity !== 'background')?.latest || failure;
+  const failureAnalysis = buildFailureAnalysis(priorityFailure, trace);
+  const lastFailureAnalysis = buildFailureAnalysis(failure, trace);
   const runtimeLog = findLatestRuntimeLog();
   const fileResolutionEvents = trace.filter(event => event.category.toUpperCase() === 'FILE').slice(-300);
+  const sceneAssets = collectSceneAssetEvidence(trace);
+  fs.mkdirSync(shareRoot, { recursive: true });
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
+  const pngPath = path.join(shareRoot, `waddle-share-${stamp}.png`);
+  const screenshot = await capturePlayfieldScreenshot(window, pngPath);
 
   const bundle = sanitizeValue({
     schema: 'waddle-share-diagnostics/v2',
@@ -515,7 +523,27 @@ const collectShareBundle = async (window: BrowserWindow) => {
       node: process.versions.node || null
     },
     current_url: window.webContents.getURL(),
-    last_failure_analysis: failureAnalysis,
+    last_failure_analysis: lastFailureAnalysis,
+    primary_failure_analysis: failureAnalysis,
+    incident_summary: {
+      schema: 'waddle-incident-summary/v1',
+      ranked: incidents,
+      actionable_count: incidents.filter(item => item.severity !== 'background').length,
+      background_count: incidents.filter(item => item.severity === 'background').length,
+      priority_rule: 'Errores SWF/FILE/XT/XML comprobados antes de sondas HTTP 404 auxiliares; todos los errores permanecen en live_trace.',
+      trace_window: {
+        first_sequence: trace[0]?.sequence || null,
+        last_sequence: trace[trace.length - 1]?.sequence || null,
+        max_events: 1500,
+        may_be_truncated: trace.length >= 1500,
+        replayed: trace.filter(item => item.replayed === true).length
+      }
+    },
+    visual_evidence: {
+      screenshot,
+      scene_assets: sceneAssets,
+      interpretation: 'La captura identifica defectos visuales. Una respuesta HTTP 200 y un SHA válido no demuestran que las capas internas Flash sean correctas: contrastar captura y SWF original en FFDec.'
+    },
     live_trace: trace,
     file_resolution: fileResolutionEvents,
     renderer_console: recentConsoleMessages.slice(-500),
@@ -538,14 +566,12 @@ const collectShareBundle = async (window: BrowserWindow) => {
     }
   });
 
-  fs.mkdirSync(shareRoot, { recursive: true });
-  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
   const jsonPath = path.join(shareRoot, `waddle-share-${stamp}.json`);
   const txtPath = path.join(shareRoot, `waddle-share-${stamp}.txt`);
   const latestJson = path.join(shareRoot, 'waddle-share-latest.json');
   const latestTxt = path.join(shareRoot, 'waddle-share-latest.txt');
 
-  const analysis = bundle.last_failure_analysis;
+  const analysis = bundle.primary_failure_analysis;
   const summaryLines = [
     'WADDLE DIAGNOSTIC SHARE',
     `Generated UTC: ${bundle.generated_utc}`,
