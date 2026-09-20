@@ -288,7 +288,7 @@ const HOLIDAY_2015_ADVENT: CPUpdate = {
   },
   globalChanges: {
     'content/party_icon.swf': [holidayRef('preparty/content/2015AdventCalendarpartyicon.swf'), 'party_icon'],
-    'close_ups/advent_calendar.swf': [holidayRef('preparty/close_ups/2015AdventCalendarinterface.swf'), 'advent_calendar'],
+    'close_ups/advent_calendar.swf': [holidayRef('preparty/close_ups/2015AdventCalendarinterface.swf'), 'advent_calendar', 'w.app.itemcollect.partyinterface'],
     'close_ups/advent_calendar_login.swf': [holidayRef('preparty/close_ups/2015AdventCalendarlogin.swf'), 'w.app.december1.loginprompt']
   },
   localChanges: {
@@ -349,7 +349,9 @@ const HOLIDAY_2015_PARTY: CPUpdate = {
   globalChanges: {
     'content/party_icon.swf': [holidayRef('party/content/ContentParty_icon-HolidayParty2015.swf'), 'party_icon', 'scavenger_hunt_icon'],
     'close_ups/quest_interface.swf': [holidayRef('party/close_ups/Close_upsQuest_interface-HolidayParty2015.swf'), 'w.app.generic.partyinterface'],
-    'close_ups/item_calendar_web.swf': [holidayRef('party/close_ups/Close_upsItem_calendar_web-HolidayParty2015.swf'), 'advent_calendar'],
+    // The original ClientParty.ITEM_COLLECT_UI_PATH resolves this exact
+    // global crumb; advent_calendar alone is a legacy alias unused by it.
+    'close_ups/item_calendar_web.swf': [holidayRef('party/close_ups/Close_upsItem_calendar_web-HolidayParty2015.swf'), 'advent_calendar', 'w.app.itemcollect.partyinterface'],
     'close_ups/advent_calendar_login.swf': [holidayRef('preparty/close_ups/2015AdventCalendarlogin.swf'), 'w.app.december1.loginprompt'],
     // The ORIGINAL DecemberParty has four distinct date-specific path keys.
     // The generic w.app.loginprompt alias alone is not read by that party.
