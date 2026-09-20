@@ -181,7 +181,13 @@ for closeup,source,languages in (
             assert "close_ups/${language.toUpperCase()}CloseUps${stem}-TheFair2015.swf" in translated
             assert lang.lower() in ('de', 'es', 'fr', 'pt', 'ru')
 assert (repo / 'media/default/approximation/modern_map.swf').is_file()
-assert "NOTE.noteContainer.goThereBtn.onPress" in (repo / '.github/scripts/waddle-fair-2015-island-map-compat.py').read_text(encoding='utf-8')
+map_compat_source = (repo / '.github/scripts/waddle-fair-2015-island-map-compat.py').read_text(encoding='utf-8')
+# The archived March 2015 island map has only NOTE.goThereBtn.onPress;
+# the older modern map has an extra noteContainer handler which is not in
+# the correct historical SWF. Verify the actual original-map contract.
+assert 'NOTE.goThereBtn.onPress = mapButtonDelegate;' in map_compat_source
+assert 'NOTE.goThereBtn.onPress = null;' in map_compat_source
+assert 'period/ContentMap-03262015.swf' in map_compat_source
 assert "'play/v2/content/global/content/map.swf': 'approximation:modern_map.swf'" not in code[code.index("date:'2015-10-21'"):]
 print("WADDLE_FAIR2015_MAP_NOTE=PASS native_marker=true map_scoped=true six_locales=true notes_and_maps_pinned=true")
 print("WADDLE_FAIR2015_CONTRACT=PASS first_login=fmsgviewed interactive_keys=8 silver_join=fsilverjr game_routes=9")
