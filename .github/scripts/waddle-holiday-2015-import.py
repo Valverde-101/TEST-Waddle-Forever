@@ -79,11 +79,11 @@ class ArchiveLinks(HTMLParser):
 
     def handle_endtag(self, tag):
         if tag == 'tr' and self.in_row:
-            room = [name for name in self.row if re.fullmatch(r'Rooms[A-Za-z0-9_]+-HolidayParty2015\\.swf', name, re.I)]
-            music = [name for name in self.row if re.fullmatch(r'Music\\d+(?:_\\d+)?\\.swf', name, re.I)]
+            room = [name for name in self.row if re.fullmatch(r'Rooms[A-Za-z0-9_]+-HolidayParty2015\.swf', name, re.I)]
+            music = [name for name in self.row if re.fullmatch(r'Music\d+(?:_\d+)?\.swf', name, re.I)]
             if len(room) == 1 and len(music) == 1 and self.section == 'rooms':
                 self.room_music.append({'room': room[0], 'musicFile': music[0],
-                    'musicId': int(re.search(r'\\d+', music[0]).group()), 'phase': self.phase})
+                    'musicId': int(re.search(r'\d+', music[0]).group()), 'phase': self.phase})
             self.in_row = False
             self.row = []
         if tag in ('h2', 'h3'):
