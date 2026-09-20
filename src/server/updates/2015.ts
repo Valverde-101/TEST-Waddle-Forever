@@ -320,7 +320,9 @@ const HOLIDAY_2015_PARTY: CPUpdate = {
     service: {
       partyStartDate: '2015-12-17 00:00:00',
       partyEndDate: '2016-01-07 00:00:00',
-      unlockDayIndex: 21,
+      // Exclusive end is 2016-01-07: 21 days with 0-based indices 0..20.
+      // The server computes the active unlock index from the selected date.
+      unlockDayIndex: 20,
       numOfDaysInParty: 21
     }
   },
