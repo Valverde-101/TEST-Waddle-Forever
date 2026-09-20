@@ -43,6 +43,10 @@ jobs:
             fair_spin_bootstrap='media/default/fair2015/minigames/daily_spin/GamesSpinBootstrap.swf'
             fair_spin_main='media/default/fair2015/minigames/daily_spin/GamesSpinMain.swf'
             fair_paddle_bootstrap='media/default/fair2015/minigames/puffle_paddle/GamesPufflePaddle-Bootstrap-TheFair2015.swf'
+            fair_plaza='media/default/fair2015/rooms/RoomsPlaza-TheFair2015.swf'
+            fair_plaza_mall='media/default/fair2015/rooms/RoomsPlaza-TheFair2015Mall.swf'
+            fair_map_derived='media/default/fair2015/compat/FairIslandMap.swf'
+            archived_stage_may='media/default/archives/RoomsStage-21Apr2015.swf'
             fair_map_note='media/default/fair2015/close_ups/ENCloseUpsPartyMapNote-TheFair2015.swf'
             fair_party_map='media/default/fair2015/close_ups/ENCloseUpsPartyMap-TheFair2015.swf'
             vanilla_map='media/default/approximation/modern_map.swf'
@@ -87,6 +91,23 @@ jobs:
                 $detail=@(Get-Content -LiteralPath $file)
                 for($idx=$segment.Start-1;$idx -lt [Math]::Min($segment.End,$detail.Count);$idx++){
                   Write-Host ("WADDLE_FAIR_MAP_DETAIL sample={0} path={1}:{2} {3}" -f $sample.Key,$segment.Path,($idx+1),$detail[$idx])
+                }
+              }
+            }
+            if($sample.Key -in @('fair_plaza','fair_plaza_mall','archived_stage_may','fair_map_derived')){
+              $source=@($scriptFiles | Select-String -Pattern 'stage|mall|340|gotoroom|joinRoom|joinroom|puffle|hotel|pet|pufflepark|pufflewild|puffle_shop|puffleShop|\.onRelease|\.onPress|clickMap|goThereBtn' -CaseSensitive:$false | Select-Object -First 185 | ForEach-Object {
+                '{0}:{1} {2}' -f $_.Path.Substring($out.Length+1),$_.LineNumber,$_.Line.Trim()
+              })
+              Write-Host "WADDLE_FAIR_STAGE_MAP_AUDIT sample=$($sample.Key) matches=$($source.Count)"
+              foreach($entry in $source){Write-Host "WADDLE_FAIR_STAGE_MAP_AUDIT sample=$($sample.Key) $entry"}
+              if($sample.Key -eq 'fair_plaza' -or $sample.Key -eq 'fair_map_derived'){
+                foreach($candidate in @('scripts/frame_1/DoAction.as','scripts/frame_2/DoAction.as')){
+                  $srcFile=Join-Path $out $candidate
+                  if(-not(Test-Path -LiteralPath $srcFile)){continue}
+                  $text=@(Get-Content -LiteralPath $srcFile)
+                  for($n=0;$n -lt [Math]::Min($text.Count,850);$n++){
+                    Write-Host ("WADDLE_FAIR_STAGE_MAP_CODE sample={0} path={1}:{2} {3}" -f $sample.Key,$candidate,($n+1),$text[$n])
+                  }
                 }
               }
             }
