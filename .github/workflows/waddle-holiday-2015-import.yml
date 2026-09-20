@@ -7,6 +7,7 @@ on:
       - '.github/workflows/waddle-holiday-2015-import.yml'
       - '.github/scripts/waddle-holiday-2015-import.py'
       - '.github/scripts/waddle-holiday-2015-original-probe.py'
+      - '.github/scripts/waddle-holiday-2015-ffdec-probe.py'
       - 'media/default/holiday2015/**'
       - 'src/server/updates/2015.ts'
       - 'src/server/updates/2016.ts'
@@ -40,3 +41,10 @@ jobs:
         run: python .github/scripts/waddle-holiday-2015-verify.py
       - name: Inspect ORIGINAL Holiday ABC references (read-only protocol evidence)
         run: python .github/scripts/waddle-holiday-2015-original-probe.py
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Decode ORIGINAL Holiday AS2 party icon lifecycle (read-only, verified tool)
+        continue-on-error: true
+        run: python .github/scripts/waddle-holiday-2015-ffdec-probe.py
