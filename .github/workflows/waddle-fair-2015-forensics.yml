@@ -94,6 +94,132 @@ jobs:
                 }
               }
             }
+            if($sample.Key -in @('fair_plaza','fair_plaza_mall')){
+              $plazaCode=@($scriptFiles | Where-Object {$_.FullName -match '[\\/]world[\\/]rooms[\\/]Plaza\\.as
+              $source=@($scriptFiles | Select-String -Pattern 'stage|mall|340|gotoroom|joinRoom|joinroom|puffle|hotel|pet|pufflepark|pufflewild|puffle_shop|puffleShop|\.onRelease|\.onPress|clickMap|goThereBtn' -CaseSensitive:$false | Select-Object -First 185 | ForEach-Object {
+                '{0}:{1} {2}' -f $_.Path.Substring($out.Length+1),$_.LineNumber,$_.Line.Trim()
+              })
+              Write-Host "WADDLE_FAIR_STAGE_MAP_AUDIT sample=$($sample.Key) matches=$($source.Count)"
+              foreach($entry in $source){Write-Host "WADDLE_FAIR_STAGE_MAP_AUDIT sample=$($sample.Key) $entry"}
+              if($sample.Key -eq 'fair_plaza' -or $sample.Key -eq 'fair_map_derived'){
+                foreach($candidate in @('scripts/frame_1/DoAction.as','scripts/frame_2/DoAction.as')){
+                  $srcFile=Join-Path $out $candidate
+                  if(-not(Test-Path -LiteralPath $srcFile)){continue}
+                  $text=@(Get-Content -LiteralPath $srcFile)
+                  for($n=0;$n -lt [Math]::Min($text.Count,850);$n++){
+                    Write-Host ("WADDLE_FAIR_STAGE_MAP_CODE sample={0} path={1}:{2} {3}" -f $sample.Key,$candidate,($n+1),$text[$n])
+                  }
+                }
+              }
+            }
+            if($sample.Key -eq 'fair_spin_bootstrap'){
+              foreach($script in $scriptFiles){
+                $relative=$script.FullName.Substring($out.Length+1)
+                $lines=@(Get-Content -LiteralPath $script.FullName)
+                Write-Host "WADDLE_FAIR_SPIN_BOOTSTRAP_SOURCE_BEGIN path=$relative total=$($lines.Count)"
+                for($idx=0;$idx -lt [Math]::Min($lines.Count,200);$idx++){
+                  Write-Host ("WADDLE_FAIR_SPIN_BOOTSTRAP_SOURCE {0}:{1} {2}" -f $relative,($idx+1),$lines[$idx])
+                }
+                Write-Host "WADDLE_FAIR_SPIN_BOOTSTRAP_SOURCE_END path=$relative"
+              }
+            }
+            if($sample.Key -eq 'fair_spin_main'){
+              $found=@($scriptFiles | Select-String -Pattern 'undefined|main.swf|bootstrap.swf|game_configs|spin\\/|getPath|gameURL|GameURL|send.*Game|loadMovie|loadBytes|getGame|showGame' -CaseSensitive:$false | Select-Object -First 180 | ForEach-Object {
+                '{0}:{1} {2}' -f $_.Path.Substring($out.Length+1),$_.LineNumber,$_.Line.Trim()
+              })
+              Write-Host "WADDLE_FAIR_SPIN_MAIN_REFERENCES=$($found.Count)"
+              foreach($line in $found){Write-Host "WADDLE_FAIR_SPIN_MAIN_REFERENCE $line"}
+            }
+          $fairScripts=Join-Path $work 'fair_spin_main\scripts'
+          $primary=@(
+            'frame_1\DoAction.as',
+            '__Packages\com\clubpenguin\world\rooms2015\may\party\MayParty.as',
+            '__Packages\com\clubpenguin\world\rooms2015\may\vo\MayPartyCookieVO.as',
+            '__Packages\com\clubpenguin\world\rooms2015\may\party\MayPartyConstants.as',
+            '__Packages\com\clubpenguin\spin\Game.as'
+          )
+          foreach($relative in $primary){
+            $file=Join-Path $fairScripts $relative
+            if(-not(Test-Path -LiteralPath $file -PathType Leaf)){
+              Write-Host "WADDLE_FAIR_SOURCE_MISSING=$relative"
+              continue
+            }
+            $lines=@(Get-Content -LiteralPath $file)
+            $limit=if($relative -like '*MayParty.as') {340} elseif($relative -like '*Game.as') {125} else {190}
+            Write-Host "WADDLE_FAIR_SOURCE_BEGIN file=$relative lines=$($lines.Count) shown=$([Math]::Min($limit,$lines.Count))"
+            for($idx=0;$idx -lt [Math]::Min($limit,$lines.Count);$idx++){
+              Write-Host ("WADDLE_FAIR_SOURCE {0}:{1} {2}" -f $relative,($idx+1),$lines[$idx])
+            }
+            Write-Host "WADDLE_FAIR_SOURCE_END file=$relative"
+          }
+          }
+ -or $_.FullName -match 'frame_1[\\/]DoAction\\.as
+              $source=@($scriptFiles | Select-String -Pattern 'stage|mall|340|gotoroom|joinRoom|joinroom|puffle|hotel|pet|pufflepark|pufflewild|puffle_shop|puffleShop|\.onRelease|\.onPress|clickMap|goThereBtn' -CaseSensitive:$false | Select-Object -First 185 | ForEach-Object {
+                '{0}:{1} {2}' -f $_.Path.Substring($out.Length+1),$_.LineNumber,$_.Line.Trim()
+              })
+              Write-Host "WADDLE_FAIR_STAGE_MAP_AUDIT sample=$($sample.Key) matches=$($source.Count)"
+              foreach($entry in $source){Write-Host "WADDLE_FAIR_STAGE_MAP_AUDIT sample=$($sample.Key) $entry"}
+              if($sample.Key -eq 'fair_plaza' -or $sample.Key -eq 'fair_map_derived'){
+                foreach($candidate in @('scripts/frame_1/DoAction.as','scripts/frame_2/DoAction.as')){
+                  $srcFile=Join-Path $out $candidate
+                  if(-not(Test-Path -LiteralPath $srcFile)){continue}
+                  $text=@(Get-Content -LiteralPath $srcFile)
+                  for($n=0;$n -lt [Math]::Min($text.Count,850);$n++){
+                    Write-Host ("WADDLE_FAIR_STAGE_MAP_CODE sample={0} path={1}:{2} {3}" -f $sample.Key,$candidate,($n+1),$text[$n])
+                  }
+                }
+              }
+            }
+            if($sample.Key -eq 'fair_spin_bootstrap'){
+              foreach($script in $scriptFiles){
+                $relative=$script.FullName.Substring($out.Length+1)
+                $lines=@(Get-Content -LiteralPath $script.FullName)
+                Write-Host "WADDLE_FAIR_SPIN_BOOTSTRAP_SOURCE_BEGIN path=$relative total=$($lines.Count)"
+                for($idx=0;$idx -lt [Math]::Min($lines.Count,200);$idx++){
+                  Write-Host ("WADDLE_FAIR_SPIN_BOOTSTRAP_SOURCE {0}:{1} {2}" -f $relative,($idx+1),$lines[$idx])
+                }
+                Write-Host "WADDLE_FAIR_SPIN_BOOTSTRAP_SOURCE_END path=$relative"
+              }
+            }
+            if($sample.Key -eq 'fair_spin_main'){
+              $found=@($scriptFiles | Select-String -Pattern 'undefined|main.swf|bootstrap.swf|game_configs|spin\\/|getPath|gameURL|GameURL|send.*Game|loadMovie|loadBytes|getGame|showGame' -CaseSensitive:$false | Select-Object -First 180 | ForEach-Object {
+                '{0}:{1} {2}' -f $_.Path.Substring($out.Length+1),$_.LineNumber,$_.Line.Trim()
+              })
+              Write-Host "WADDLE_FAIR_SPIN_MAIN_REFERENCES=$($found.Count)"
+              foreach($line in $found){Write-Host "WADDLE_FAIR_SPIN_MAIN_REFERENCE $line"}
+            }
+          $fairScripts=Join-Path $work 'fair_spin_main\scripts'
+          $primary=@(
+            'frame_1\DoAction.as',
+            '__Packages\com\clubpenguin\world\rooms2015\may\party\MayParty.as',
+            '__Packages\com\clubpenguin\world\rooms2015\may\vo\MayPartyCookieVO.as',
+            '__Packages\com\clubpenguin\world\rooms2015\may\party\MayPartyConstants.as',
+            '__Packages\com\clubpenguin\spin\Game.as'
+          )
+          foreach($relative in $primary){
+            $file=Join-Path $fairScripts $relative
+            if(-not(Test-Path -LiteralPath $file -PathType Leaf)){
+              Write-Host "WADDLE_FAIR_SOURCE_MISSING=$relative"
+              continue
+            }
+            $lines=@(Get-Content -LiteralPath $file)
+            $limit=if($relative -like '*MayParty.as') {340} elseif($relative -like '*Game.as') {125} else {190}
+            Write-Host "WADDLE_FAIR_SOURCE_BEGIN file=$relative lines=$($lines.Count) shown=$([Math]::Min($limit,$lines.Count))"
+            for($idx=0;$idx -lt [Math]::Min($limit,$lines.Count);$idx++){
+              Write-Host ("WADDLE_FAIR_SOURCE {0}:{1} {2}" -f $relative,($idx+1),$lines[$idx])
+            }
+            Write-Host "WADDLE_FAIR_SOURCE_END file=$relative"
+          }
+          }
+})
+              foreach($file in $plazaCode){
+                $lines=@(Get-Content -LiteralPath $file.FullName)
+                Write-Host "WADDLE_FAIR_PLAZA_SOURCE_BEGIN sample=$($sample.Key) path=$($file.FullName.Substring($out.Length+1)) count=$($lines.Count)"
+                for($n=0;$n -lt [Math]::Min($lines.Count,560);$n++){
+                  Write-Host ("WADDLE_FAIR_PLAZA_SOURCE sample={0} path={1}:{2} {3}" -f $sample.Key,$file.FullName.Substring($out.Length+1),($n+1),$lines[$n])
+                }
+              }
+            }
             if($sample.Key -in @('fair_plaza','fair_plaza_mall','archived_stage_may','fair_map_derived')){
               $source=@($scriptFiles | Select-String -Pattern 'stage|mall|340|gotoroom|joinRoom|joinroom|puffle|hotel|pet|pufflepark|pufflewild|puffle_shop|puffleShop|\.onRelease|\.onPress|clickMap|goThereBtn' -CaseSensitive:$false | Select-Object -First 185 | ForEach-Object {
                 '{0}:{1} {2}' -f $_.Path.Substring($out.Length+1),$_.LineNumber,$_.Line.Trim()
