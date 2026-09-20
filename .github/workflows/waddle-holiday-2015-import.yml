@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/waddle-holiday-2015-import.yml'
       - '.github/scripts/waddle-holiday-2015-import.py'
+      - '.github/scripts/waddle-holiday-2015-original-probe.py'
       - 'media/default/holiday2015/**'
       - 'src/server/updates/2015.ts'
       - 'src/server/updates/2016.ts'
@@ -37,3 +38,5 @@ jobs:
         run: python .github/scripts/waddle-holiday-2015-import.py --verify-local
       - name: Verify Holiday timeline and isolation
         run: python .github/scripts/waddle-holiday-2015-verify.py
+      - name: Inspect ORIGINAL Holiday ABC references (read-only protocol evidence)
+        run: python .github/scripts/waddle-holiday-2015-original-probe.py
