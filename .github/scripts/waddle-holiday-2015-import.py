@@ -60,7 +60,7 @@ class ArchiveLinks(HTMLParser):
         if tag in ('h2', 'h3'):
             self.heading = tag
         if tag == 'span' and 'mw-headline' in str(d.get('class') or ''):
-            name = str(d.get('id') or '').replace('_', ' ').lower()
+            name = re.sub(r'_\d+$', '', str(d.get('id') or '')).replace('_', ' ').lower()
             if self.heading == 'h2':
                 self.section = CATEGORIES.get(name, '')
                 self.phase = 'party'
@@ -77,10 +77,10 @@ class ArchiveLinks(HTMLParser):
         if tag == 'a' and self.href:
             href = urljoin(SOURCE, self.href)
             decoded = unquote(urlparse(href).path.rsplit('/', 1)[-1])
-            name = re.sub(r'\\.html$', '', decoded, flags=re.I)
+            name = re.sub(r'\.html$', '', decoded, flags=re.I)
             name = re.sub(r'^File:', '', name, flags=re.I)
             if SWF_NAME.fullmatch(name) and self.section:
-                category = 'music' if re.fullmatch(r'Music\\d+(?:_\\d+)?\\.swf', name, re.I) else self.section
+                category = 'music' if re.fullmatch(r'Music\d+(?:_\d+)?\.swf', name, re.I) else self.section
                 self.entries.append({
                     'name': name, 'section': category,
                     'phase': self.phase, 'filePage': href,
@@ -137,6 +137,17 @@ def image_candidates(name: str, file_page: str):
 
 def download(entry: dict[str, str]) -> tuple[dict[str, str], bytes]:
     name = entry['name']
+    cached_manifest = DEST / 'manifest.json'
+    if cached_manifest.is_file():
+        for prior in json.loads(cached_manifest.read_text(encoding='utf-8')).get('assets', []):
+            if prior.get('name') != name or prior.get('filePage') != entry['filePage']:
+                continue
+            cached = DEST / prior['relativePath']
+            if cached.is_file():
+                blob = cached.read_bytes()
+                if blob[:3] in HEADERS and len(blob) == prior['bytes'] and sha(blob) == prior['sha256']:
+                    return ({**entry, 'url': prior['url'], 'sha256': prior['sha256'],
+                             'bytes': len(blob), 'relativePath': f"{entry['phase']}/{entry['section']}/{name}"}, blob)
     tried = 0
     for url in dict.fromkeys(image_candidates(name, entry['filePage'])):
         if not allowed_file_url(url, name):
@@ -213,6 +224,18 @@ def main() -> None:
             item, blob = future.result()
             originals.append((item, blob))
     originals.sort(key=lambda v: v[0]['relativePath'])
+    obsolete = []
+    previous_manifest = DEST / 'manifest.json'
+    if previous_manifest.is_file():
+        previous = json.loads(previous_manifest.read_text(encoding='utf-8'))
+        expected = {item['relativePath'] for item, _ in originals}
+        for old in previous.get('assets', []):
+            if old['relativePath'] not in expected:
+                candidate = DEST / old['relativePath']
+                if candidate.is_file():
+                    if sha(candidate.read_bytes()) != old['sha256']:
+                        raise RuntimeError('WADDLE_HOLIDAY2015_IMPORT=FAIL obsolete_source_modified')
+                    obsolete.append((candidate, old['sha256']))
     matches: dict[str, list[str]] = {}
     for origin in OTHER_DIRS:
         base = ROOT / 'media/default' / origin
@@ -242,8 +265,16 @@ def main() -> None:
     manifest = {'schema': 'waddle-holiday-2015-original-assets/v1',
                 'sourcePage': SOURCE, 'count': len(report), 'assets': report}
     out = DEST / 'manifest.json'
-    if out.exists() and json.loads(out.read_text(encoding='utf-8')) != manifest:
-        raise RuntimeError('WADDLE_HOLIDAY2015_IMPORT=FAIL existing_manifest_drift')
+    if out.exists():
+        previous = json.loads(out.read_text(encoding='utf-8'))
+        prev_sources = {(i['name'], i['filePage'], i['sha256']) for i in previous['assets']}
+        current_sources = {(i['name'], i['filePage'], i['sha256']) for i in report}
+        if not prev_sources.issubset(current_sources):
+            raise RuntimeError('WADDLE_HOLIDAY2015_IMPORT=FAIL source_changed_not_just_reorganized')
+    for candidate, expected_sha in obsolete:
+        if sha(candidate.read_bytes()) != expected_sha:
+            raise RuntimeError('WADDLE_HOLIDAY2015_IMPORT=FAIL obsolete_source_modified')
+        candidate.unlink()
     out.write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
     print('WADDLE_HOLIDAY2015_IMPORT=PASS count=' + str(len(report)) +
           ' shared_sha=' + str(sum(bool(x['sameBytesAs']) for x in report)), flush=True)
