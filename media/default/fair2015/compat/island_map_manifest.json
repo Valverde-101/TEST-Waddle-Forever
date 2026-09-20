@@ -1,10 +1,10 @@
 {
   "schema": "waddle-fair2015-derived-island-map/v1",
-  "originalMap": "approximation/modern_map.swf",
-  "originalSha256": "9cc4fbe71ee75e34d0d37b7ca3abfc8359e030b6622f09d680879e37e76f88fd",
+  "originalMap": "fair2015/period/ContentMap-03262015.swf",
+  "originalSha256": "5cf40f5b683d19d646ca8a8dd9002173c91892c72efe7c8581f17e92f79135f5",
   "originalFairNoteSha256": "e32045bd2fd4703f2e6e4776489b0226aa8d18680eb36f164efa9e4226212eb6",
   "originalFairPartyMapSha256": "088ed4dbd44c34f1290772861bd11dd50718d818062df5e10de33887bcd12a6b",
   "derivedPath": "fair2015/compat/FairIslandMap.swf",
-  "derivedSha256": "71381dab468fc4eed0326a51c4ed97f5e61e3f0fc400ac99b61713b244503b0f",
+  "derivedSha256": "f09981938115ac3cc64f406f5a6ae035ba9acbf5c9b9d305de704d72cf313d40",
   "scope": "May 2015 only; original onRelease opens Fair party map"
 }
