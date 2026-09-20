@@ -314,7 +314,9 @@ const HOLIDAY_2015_PARTY: CPUpdate = {
   coinsForChange: true,
   // Party cookie uses an independent ID, not Halloween's quest/task state.
   partyProgress: {
-    id: 'holiday-2015', messageCount: 3, communicatorMessageCount: 0,
+    // DecemberParty defines four date-specific login prompts; preserve a
+    // separate viewed slot for each without touching other party cookies.
+    id: 'holiday-2015', messageCount: 4, communicatorMessageCount: 0,
     // ContentFeatures-HolidayParty2015.swf declares numOfQuests=4. The
     // 25 calendar dates are service days, not 25 questTaskStatus entries.
     taskCount: 4, maxCoinUpdate: 10,
