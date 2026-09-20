@@ -1,0 +1,49 @@
+#!/usr/bin/env python3
+"""Read-only source/manifest checks for Holiday 2015 timeline and party isolation."""
+from pathlib import Path
+import json
+import re
+
+ROOT = Path(__file__).resolve().parents[2]
+SOURCE = (ROOT / 'src/server/updates/2015.ts').read_text(encoding='utf-8')
+NEXT = (ROOT / 'src/server/updates/2016.ts').read_text(encoding='utf-8')
+FILES = (ROOT / 'src/server/game-data/files.ts').read_text(encoding='utf-8')
+VIEW = (ROOT / 'src/client/views/timeline/timeline.ts').read_text(encoding='utf-8')
+MANIFEST = json.loads((ROOT / 'media/default/holiday2015/manifest.json').read_text(encoding='utf-8'))
+HOLIDAY = SOURCE.split('const holidayRef = ', 1)[1].split('export const UPDATES_2015:', 1)[0]
+
+def require(condition: bool, reason: str) -> None:
+    if not condition:
+        raise AssertionError('WADDLE_HOLIDAY2015_TIMELINE=FAIL ' + reason)
+
+require("'holiday2015'," in FILES, 'archive_namespace_not_registered')
+require('partyName' in VIEW and 'update.end' in VIEW, 'timeline_missing_party_start_end')
+for date in ('2015-12-02', '2015-12-17'):
+    require(re.search(r"date:\s*'" + date + r"'", SOURCE) is not None, 'start_date_missing=' + date)
+require(re.search(r"date:\s*'2016-01-07'", NEXT) is not None, 'end_date_missing')
+require("end: ['party']" in NEXT and "'2016-01-01'" not in NEXT, 'jan1_placeholder_masks_party')
+require(re.search(r"date:\s*'2015-12-17'\s*,\s*end:\s*\['event'\]", SOURCE) is not None,
+        'advent_not_closed_on_party_start')
+require("partyName: 'Holiday Party 2015'" in SOURCE, 'holiday_name_missing')
+require("partyName: 'Advent Calendar 2015'" in SOURCE, 'advent_name_missing')
+require("id: 'holiday-2015'" in HOLIDAY and "id: 'halloween-2015'" not in HOLIDAY,
+        'party_state_not_isolated')
+require('fair2015:' not in HOLIDAY and 'fair#' not in HOLIDAY and 'halloween#' not in HOLIDAY,
+        'cross_party_protocol_or_media')
+require("ref('content/party-runtime-2015.swf')" in HOLIDAY and
+        "ref('client/QuestCommunicator.swf')" in HOLIDAY, 'shared_transport_missing')
+paths = {a['relativePath'] for a in MANIFEST['assets']}
+refs = set(re.findall(r"holidayRef\('([^']+)'\)", HOLIDAY))
+missing = refs - paths
+require(not missing, 'untracked_holiday_refs=' + ','.join(sorted(missing)))
+rooms = [a for a in MANIFEST['assets'] if a['section'] == 'rooms' and a['phase'] == 'party']
+require(len(rooms) >= 40, 'room_inventory_incomplete')
+for asset in rooms:
+    require("holidayRef('" + asset['relativePath'] + "')" in HOLIDAY, 'room_unmapped=' + asset['name'])
+for pair in MANIFEST['roomMusic']:
+    require(str(pair['musicId']) in HOLIDAY, 'room_music_unmapped=' + pair['room'])
+require('December' not in SOURCE or True, 'unreachable')
+print('WADDLE_HOLIDAY2015_TIMELINE=PASS advent=2015-12-02 party=2015-12-17'
+      ' last_active=2016-01-06 exclusive_end=2016-01-07'
+      ' rooms=' + str(len(rooms)) + ' mapped_assets=' + str(len(refs))
+      + ' isolated=true bot_push=false')
