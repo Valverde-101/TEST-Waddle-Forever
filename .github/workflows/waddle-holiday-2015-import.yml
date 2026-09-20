@@ -25,6 +25,11 @@ jobs:
         with:
           ref: feat/holiday-party-2015
           persist-credentials: true
+          sparse-checkout: |
+            .github/scripts
+            media/default/holiday2015
+            media/default/party2015
+          sparse-checkout-cone-mode: true
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
