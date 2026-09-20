@@ -110,5 +110,28 @@ for game_path in (
     assert game_path in runtime_generators, "Fair games.json route not scoped: " + game_path
 assert "'play/v2/content/global/content/party.swf': fairRef('cpimagined/content/party.swf')" in fair
 assert "intro_to_cp.swf': 'svanilla:media/play/v2/client/world.swf" not in fair
+# A Fair close-up route alone does not activate the native map marker. The
+# timeline must enable mapNote, retain the normal island map and mount the
+# archived party map/note in every available Fair locale. All mapped files
+# must be genuine pinned Fair assets and must disappear outside this party.
+assert "mapNote: fairRef('close_ups/ENCloseUpsPartyMapNote-TheFair2015.swf')" in fair
+assert "'play/v2/content/global/content/map.swf': 'approximation:modern_map.swf'" in fair
+assert "'w.p2015.may.partymap', 'w.party.map', 'party_map'" in fair
+assert "'party_map_note', 'w.p2015.may.partymapnote'" in fair
+for closeup,source,languages in (
+    ('party_map.swf','PartyMap',('EN','DE','ES','FR','PT','RU')),
+    ('party_map_note.swf','PartyMapNote',('EN','DE','ES','FR','PT','RU')),
+    ('ride_prompt.swf','RidePrompt',('EN','DE','ES','FR','PT','RU')),
+    ('igloo_prompt.swf','IglooPrompt',('EN','DE','ES','FR','PT')),
+    ('party_igloo_list.swf','PartyIglooList',('EN','DE','ES','FR','PT')),
+):
+    assert f"'close_ups/{closeup}':" in fair, f"Fair UI not routed: {closeup}"
+    for lang in languages:
+        f = f"close_ups/{lang}CloseUps{source}-TheFair2015.swf"
+        assert f in seen, f"Fair UI original not pinned: {f}"
+        assert f"fairRef('{f}')" in fair, f"Fair UI original not mounted: {f}"
+assert (repo / 'media/default/approximation/modern_map.swf').is_file()
+assert "'play/v2/content/global/content/map.swf': 'approximation:modern_map.swf'" not in code[code.index("date:'2015-10-21'"):]
+print("WADDLE_FAIR2015_MAP_NOTE=PASS native_marker=true map_scoped=true six_locales=true notes_and_maps_pinned=true")
 print("WADDLE_FAIR2015_CONTRACT=PASS first_login=fmsgviewed interactive_keys=8 silver_join=fsilverjr game_routes=9")
 print(f"WADDLE_FAIR2015_VERIFY=PASS main=141 minigames=53 total={len(seen)} rooms={len(room_names)} music={len(music_names)} paths={len(references)} halloween=preserved timeline=scoped")
