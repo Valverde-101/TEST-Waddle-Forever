@@ -16,6 +16,7 @@ def require(condition: bool, reason: str) -> None:
     if not condition:
         raise AssertionError('WADDLE_HOLIDAY2015_TIMELINE=FAIL ' + reason)
 
+PARTY_HANDLER = (ROOT / 'src/server/socket-server/handlers/party.ts').read_text(encoding='utf-8')
 require("'holiday2015'," in FILES, 'archive_namespace_not_registered')
 require('partyName' in VIEW and 'update.end' in VIEW, 'timeline_missing_party_start_end')
 for date in ('2015-12-02', '2015-12-17'):
@@ -33,6 +34,21 @@ require('fair2015:' not in HOLIDAY and 'fair#' not in HOLIDAY and 'halloween#' n
 require("holidayRef('party/client/ClientParty-HolidayParty2015.swf')" in HOLIDAY and
         "ref('client/QuestCommunicator.swf')" in HOLIDAY, 'holiday_runtime_or_shared_transport_missing')
 require("ref('content/party-runtime-2015.swf')" not in HOLIDAY, 'halloween_robot_runtime_leaked')
+# Source-level regressions that passed earlier SWF inventory checks while the
+# genuine late-AS3 party UI stayed inert at runtime. The archived ClientParty
+# explicitly resolves these four date-specific dialogue crumbs, QUEST_UI_PATH,
+# and ITEM_COLLECT_UI_PATH. The inherited 2012 map did not include 2015 rooms.
+require("map: 'approximation:modern_map.swf'" in HOLIDAY, 'old_2012_map_inherited')
+require("activeFeatures: '20151100'" in HOLIDAY, 'holiday_feature_selector_missing')
+require('getVirtualDate(0)' in PARTY_HANDLER and
+        "partyConfig?.id === 'holiday-2015'" in PARTY_HANDLER and
+        'unlockDayIndex = Math.min(' in PARTY_HANDLER,
+        'holiday_partyservice_not_derived_from_selected_date')
+for crumb in ('w.app.december1.loginprompt', 'w.app.december2.loginprompt',
+              'w.app.december3.loginprompt', 'w.app.december4.loginprompt',
+              'w.app.itemcollect.partyinterface', 'w.app.generic.partyinterface'):
+    require(crumb in HOLIDAY, 'original_holiday_crumb_missing=' + crumb)
+
 paths = {a['relativePath'] for a in MANIFEST['assets']}
 refs = set(re.findall(r"""holidayRef\((?:'|")([^'"]+)(?:'|")\)""", HOLIDAY))
 missing = refs - paths
