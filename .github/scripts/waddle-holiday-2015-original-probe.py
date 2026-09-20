@@ -17,7 +17,7 @@ FILES = (
  'party/close_ups/Close_upsCharacter_dialogue_december_login-HolidayParty2015.swf',
  'party/close_ups/Close_upsQuest_interface-HolidayParty2015.swf',
 )
-IMPORTANT = re.compile(r'party|holiday|walrus|advent|december|quest|coin|donat|calendar|dialog|close_ups|map|activefeature|2015|2016|room|features|login|cfc|w\\.app|w\\.p', re.I)
+IMPORTANT = re.compile(r'party|holiday|walrus|advent|december|quest|coin|donat|calendar|dialog|close_ups|map|activefeature|2015|2016|room|features|login|cfc|w\.app|w\.p', re.I)
 
 def u30(data, pos):
     value = 0
@@ -66,7 +66,7 @@ def inspect(path):
         if pos + length > len(data): raise ValueError('truncated SWF tag')
         if tag == 82:
             block = data[pos:pos+length]
-            sep = block.find(b'\\0', 4)
+            sep = block.find(b'\0', 4)
             if sep >= 0:
                 strings.extend(strings_in_abc(block[sep+1:]))
                 abc += 1
