@@ -66,6 +66,13 @@ def inspect(path):
             # null-delimited byte scan is not a JSON decoder; log evidence
             # without failing the independently SHA-verified archived files.
             print('HOLIDAY2015_ORIGINAL_FEATURES_FRAGMENT ' + json.dumps({'reason':str(exc), 'prefix':candidate[:700].decode('utf-8','replace')},ensure_ascii=True))
+    if path.name == 'ClientParty-HolidayParty2015.swf':
+        for m in re.finditer(rb'20[01][0-9]{5}', data):
+            needle = m.group()
+            if needle in (b'20151100', b'20151200', b'20151201', b'20151217'):
+                print('HOLIDAY2015_FEATURE_IDENTIFIER ' + json.dumps({'id':needle.decode('ascii'),'before':data[max(0,m.start()-110):m.start()].decode('ascii','replace'),'after':data[m.end():m.end()+110].decode('ascii','replace')},ensure_ascii=True))
+    if path.name == 'ContentFeatures-HolidayParty2015.swf':
+        print('HOLIDAY2015_FEATURE_MONTHS ' + json.dumps(sorted(set(re.findall(rb'"month"\\s*:\\s*"[^"]+"', data)).__iter__().__str__()) if False else [s.decode('ascii','replace') for s in sorted(set(re.findall(rb'"month"\\s*:\\s*"[^"]+"', data)))]))
     rect = (5 + 4*(data[0] >> 3) + 7)//8
     pos = rect + 4  # frame rate and count
     strings = []
