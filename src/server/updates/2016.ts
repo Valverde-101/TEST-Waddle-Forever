@@ -2,8 +2,11 @@ import { Update } from ".";
 
 export const UPDATES_2016: Update[] = [
   {
-    // placeholder 2017 version
-    date: '2016-01-01',
+    // The inherited generic 2016 placeholder previously activated on Jan 1,
+    // overwriting Holiday's decorated rooms, music and interface mid-party.
+    // Start it after the historical Jan 6 closing date instead.
+    date: '2016-01-07',
+    end: ['party'],
     dateReference: 'placeholder-2016',
     websiteFolder: 'modern',
     indexHtml: 'modern-as3',
