@@ -66,6 +66,23 @@ def inspect(path):
             # null-delimited byte scan is not a JSON decoder; log evidence
             # without failing the independently SHA-verified archived files.
             print('HOLIDAY2015_ORIGINAL_FEATURES_FRAGMENT ' + json.dumps({'reason':str(exc), 'prefix':candidate[:700].decode('utf-8','replace')},ensure_ascii=True))
+    # The original 2015 client is AVM1/AS2 (zero DoABC tags). The generic
+    # alphabetically truncated string inventory cannot show which path key is
+    # stored next to QUEST_UI_PATH/LOGIN_PROMPT_PATH in AVM1 action bytecode.
+    # Print only bounded byte-neighborhoods of relevant constants as evidence,
+    # without mutating or decompiling original SWFs into the game runtime.
+    if path.name in ('ClientParty-HolidayParty2015.swf', 'ClientInterface-HolidayParty2015.swf'):
+        for token in (b'QUEST_UI_PATH', b'LOGIN_PROMPT_PATH', b'CFC_UI_PATH', b'PARTY_ICON_PATH', b'PARTY_ID_2015_DECEMBERPARTY'):
+            for match in list(re.finditer(re.escape(token), data))[:2]:
+                nearby = data[max(0,match.start()-105):match.end()+180]
+                visible = [(m.group().decode('latin1')) for m in re.finditer(rb'[ -~]{3,110}',nearby)]
+                print('HOLIDAY2015_ORIGINAL_PATH_CONTEXT ' + json.dumps({'file':path.name, 'token':token.decode('ascii'), 'strings':visible[:15]},ensure_ascii=True))
+    if path.name == 'ContentFeatures-HolidayParty2015.swf':
+        for token in (b'questSettingList', b'month', b'questTaskId', b'party5'):
+            for match in list(re.finditer(re.escape(token), data))[:3]:
+                nearby = data[max(0,match.start()-75):match.end()+120]
+                visible = [m.group().decode('latin1') for m in re.finditer(rb'[ -~]{4,180}',nearby)]
+                print('HOLIDAY2015_ORIGINAL_QUEST_CONTEXT ' + json.dumps({'token':token.decode('ascii'),'strings':visible[:10]},ensure_ascii=True))
     if path.name == 'ClientParty-HolidayParty2015.swf':
         for m in re.finditer(rb'20[01][0-9]{5}', data):
             needle = m.group()
