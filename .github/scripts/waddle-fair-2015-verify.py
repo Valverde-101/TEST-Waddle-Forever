@@ -53,7 +53,22 @@ for entry in cp_assets:
 # These three files are deliberately isolated from the 194 archive originals;
 # no Halloween asset is copied into the Fair namespace.
 assert not (seen & cp_seen), "Fair supplement collides with archive originals"
-assert len(list(assets.rglob("*.swf"))) == 197
+assert len([file for file in assets.rglob("*.swf") if 'compat' not in file.relative_to(assets).parts]) == 197
+# Derived Fair-only map is pinned separately and must not mutate the archived
+# 194 Fair SWFs, CPImagined's three supplemental SWFs, or the base island map.
+compat_manifest_file = assets / "compat/island_map_manifest.json"
+assert compat_manifest_file.is_file(), "WADDLE_FAIR_MAP_COMPAT=FAIL missing_provenance"
+compat_map_info = json.loads(compat_manifest_file.read_text(encoding="utf-8"))
+assert compat_map_info["schema"] == "waddle-fair2015-derived-island-map/v1"
+assert compat_map_info["derivedPath"] == "fair2015/compat/FairIslandMap.swf"
+compat_map_file = assets / "compat/FairIslandMap.swf"
+assert compat_map_file.is_file(), "WADDLE_FAIR_MAP_COMPAT=FAIL derived_asset_missing"
+assert compat_map_file.read_bytes()[:3] in (b"FWS", b"CWS")
+assert hashlib.sha256(compat_map_file.read_bytes()).hexdigest() == compat_map_info["derivedSha256"]
+assert hashlib.sha256((repo / "media/default/approximation/modern_map.swf").read_bytes()).hexdigest() == compat_map_info["originalSha256"]
+assert hashlib.sha256((assets / "close_ups/ENCloseUpsPartyMapNote-TheFair2015.swf").read_bytes()).hexdigest() == compat_map_info["originalFairNoteSha256"]
+assert hashlib.sha256((assets / "close_ups/ENCloseUpsPartyMap-TheFair2015.swf").read_bytes()).hexdigest() == compat_map_info["originalFairPartyMapSha256"]
+print("WADDLE_FAIR_MAP_COMPAT=PASS derived_sha_pinned=true archived_swfs_unchanged=true")
 print("WADDLE_FAIR2015_RUNTIME_READY=PASS controller=cpimagined_party pinned=true isolated=true")
 
 code = (repo / "src/server/updates/2015.ts").read_text(encoding="utf-8")
@@ -64,7 +79,7 @@ assert "date:'2015-10-21'" in code and "partyName:'Halloween Party 2015'" in cod
 fair = code[code.index("date: '2015-05-20'"):code.index("date: '2015-06-11'")]
 assert "party2015:" not in fair and "halloween-2015" not in fair
 references = set(re.findall(r"fairRef\('([^']+)'\)", code))
-known_refs = seen | cp_seen
+known_refs = seen | cp_seen | {"compat/FairIslandMap.swf"}
 assert references and references.issubset(known_refs), f"missing refs {sorted(references - known_refs)}"
 rooms = re.search(r"const FAIR_2015_ROOMS = \{(.*?)\n\};", code, re.S).group(1)
 music = re.search(r"const FAIR_2015_MUSIC = \{(.*?)\n\};", code, re.S).group(1)
@@ -115,7 +130,7 @@ assert "intro_to_cp.swf': 'svanilla:media/play/v2/client/world.swf" not in fair
 # archived party map/note in every available Fair locale. All mapped files
 # must be genuine pinned Fair assets and must disappear outside this party.
 assert "mapNote: fairRef('close_ups/ENCloseUpsPartyMapNote-TheFair2015.swf')" in fair
-assert "'play/v2/content/global/content/map.swf': 'approximation:modern_map.swf'" in fair
+assert "'play/v2/content/global/content/map.swf': fairRef('compat/FairIslandMap.swf')" in fair
 assert "'w.p2015.may.partymap', 'w.party.map', 'party_map'" in fair
 assert "'party_map_note', 'w.p2015.may.partymapnote'" in fair
 for closeup,source,languages in (
@@ -131,6 +146,7 @@ for closeup,source,languages in (
         assert f in seen, f"Fair UI original not pinned: {f}"
         assert f"fairRef('{f}')" in fair, f"Fair UI original not mounted: {f}"
 assert (repo / 'media/default/approximation/modern_map.swf').is_file()
+assert "NOTE.noteContainer.goThereBtn.onPress" in (repo / '.github/scripts/waddle-fair-2015-island-map-compat.py').read_text(encoding='utf-8')
 assert "'play/v2/content/global/content/map.swf': 'approximation:modern_map.swf'" not in code[code.index("date:'2015-10-21'"):]
 print("WADDLE_FAIR2015_MAP_NOTE=PASS native_marker=true map_scoped=true six_locales=true notes_and_maps_pinned=true")
 print("WADDLE_FAIR2015_CONTRACT=PASS first_login=fmsgviewed interactive_keys=8 silver_join=fsilverjr game_routes=9")
