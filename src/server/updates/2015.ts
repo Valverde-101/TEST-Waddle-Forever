@@ -298,6 +298,12 @@ const HOLIDAY_2015_ADVENT: CPUpdate = {
 };
 const HOLIDAY_2015_PARTY: CPUpdate = {
   partyName: 'Holiday Party 2015',
+  // 2015 late-AS3 world/map expects the post-June-2015 island layout with
+  // the Mall and School. The inherited MapAug2012 predates those rooms and
+  // silently serves an unrelated map even though party rooms load correctly.
+  // Use Waddle's already-versioned modern map; do not import a 2022/2024
+  // CPImagined custom map as if it were the original Holiday 2015 asset.
+  map: 'approximation:modern_map.swf',
   // The original ClientParty SWF defines PARTY_ID_2015_DECEMBERPARTY=20151100.
   // Without an explicit feature ID, Waddle inherits 20141002 from an old party
   // and DecemberParty refuses to activate its icon, map, rooms and dialogues.
