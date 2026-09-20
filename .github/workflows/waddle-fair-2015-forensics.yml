@@ -74,6 +74,21 @@ jobs:
               })
               Write-Host "WADDLE_FAIR_MAP_SOURCE sample=$($sample.Key) matches=$($mapSource.Count)"
               foreach($line in $mapSource){Write-Host "WADDLE_FAIR_MAP_SOURCE sample=$($sample.Key) $line"}
+              $targetSources = if ($sample.Key -eq 'vanilla_map') {
+                @(@{Path='scripts/frame_1/DoAction.as'; Start=370; End=455}, @{Path='scripts/frame_1/DoAction.as'; Start=605; End=660})
+              } elseif ($sample.Key -eq 'fair_map_note') {
+                @(@{Path='scripts/frame_1/DoAction.as'; Start=1; End=50})
+              } else {
+                @(@{Path='scripts/__Packages/com/clubpenguin/world/rooms2015/may/ui/PartyMap.as'; Start=1; End=125})
+              }
+              foreach($segment in $targetSources){
+                $file=Join-Path $out $segment.Path
+                if(-not(Test-Path -LiteralPath $file -PathType Leaf)) { Write-Host "WADDLE_FAIR_MAP_DETAIL_MISSING=$($sample.Key)/$($segment.Path)"; continue }
+                $detail=@(Get-Content -LiteralPath $file)
+                for($idx=$segment.Start-1;$idx -lt [Math]::Min($segment.End,$detail.Count);$idx++){
+                  Write-Host ("WADDLE_FAIR_MAP_DETAIL sample={0} path={1}:{2} {3}" -f $sample.Key,$segment.Path,($idx+1),$detail[$idx])
+                }
+              }
             }
             if($sample.Key -eq 'fair_spin_bootstrap'){
               foreach($script in $scriptFiles){
