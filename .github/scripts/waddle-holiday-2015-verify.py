@@ -31,6 +31,16 @@ require("id: 'holiday-2015'" in HOLIDAY and "id: 'halloween-2015'" not in HOLIDA
         'party_state_not_isolated')
 require('fair2015:' not in HOLIDAY and 'fair#' not in HOLIDAY and 'halloween#' not in HOLIDAY,
         'cross_party_protocol_or_media')
+# Original FFDec TemplatedPartyConstants.as assigns the first December login
+# message to index 7; TemplatePartyCookieVO.sendMessageViewed rejects an index
+# at or above the cookie's length. A 4-slot configuration loaded the login SWF
+# but left the icon permanently hidden because msgviewed(7) was never emitted.
+require(re.search(r"id:\s*'holiday-2015'\s*,\s*messageCount:\s*11", HOLIDAY) is not None,
+        'original_cookie_11_slots_required_for_login_index_7')
+require("'w.app.generic.partyinterface'" in HOLIDAY and
+        "'w.app.december2.loginprompt'" in HOLIDAY and
+        "'w.app.itemcollect.partyinterface'" in HOLIDAY,
+        'original_client_party_UI_crumbs_missing')
 require("holidayRef('party/client/ClientParty-HolidayParty2015.swf')" in HOLIDAY and
         "ref('client/QuestCommunicator.swf')" in HOLIDAY, 'holiday_runtime_or_shared_transport_missing')
 require("ref('content/party-runtime-2015.swf')" not in HOLIDAY, 'halloween_robot_runtime_leaked')
