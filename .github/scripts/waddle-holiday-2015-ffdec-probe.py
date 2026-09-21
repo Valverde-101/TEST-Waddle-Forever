@@ -22,14 +22,16 @@ ORIGINALS = [
     ARCHIVE / "client/ClientParty-HolidayParty2015.swf",
     ARCHIVE / "content/ContentParty_icon-HolidayParty2015.swf",
     ARCHIVE / "close_ups/Close_upsCharacter_dialogue_december_login-HolidayParty2015.swf",
+    ARCHIVE / "close_ups/Close_upsItem_calendar_web-HolidayParty2015.swf",
+    ARCHIVE / "close_ups/Close_upsQuest_interface-HolidayParty2015.swf",
     ARCHIVE / "rooms/RoomsForts-HolidayParty2015.swf",
     ARCHIVE / "rooms/RoomsForest-HolidayParty2015.swf",
     ARCHIVE / "rooms/RoomsBeach-HolidayParty2015.swf",
     ARCHIVE / "rooms/RoomsPlaza-HolidayParty2015.swf",
     ARCHIVE / "rooms/RoomsDock-HolidayParty2015.swf",
 ]
-CLASS_NAMES = re.compile(r"DecemberParty|BaseParty|Party_icon|PartyIcon|DecemberQuest|Character_Dialogue_Login|Rooms(Forts|Forest|Beach|Plaza|Dock)|TemplatePartyCookieVO|Party_InterfaceOverrides|TemplatedPartyConstants|ServerCookieService", re.I)
-TOKENS = re.compile(r"partyIconVisible|showPartyIcon|hidePartyIcon|QUEST_UI_PATH|PARTY_MAP_PATH|partymap|LOGIN_PROMPT_PATH|setConditionalPartyIconVisibility|checkDisplayLoginPrompt|configurePartyJSON|loadPartyFeatures|showPartyMap|ornament|food|bell|donat|cfc|quest|_airtower\\.send|awardCoins|giveCoins", re.I)
+CLASS_NAMES = re.compile(r"DecemberParty|BaseParty|Party_icon|PartyIcon|DecemberQuest|Item_Collection|ItemCalendar|Item_calendar|Calendar|Character_Dialogue_Login|Rooms(Forts|Forest|Beach|Plaza|Dock)|TemplatePartyCookieVO|Party_InterfaceOverrides|TemplatedPartyConstants|ServerCookieService", re.I)
+TOKENS = re.compile(r"partyIconVisible|showPartyIcon|hidePartyIcon|QUEST_UI_PATH|PARTY_MAP_PATH|partymap|LOGIN_PROMPT_PATH|setConditionalPartyIconVisibility|checkDisplayLoginPrompt|configurePartyJSON|loadPartyFeatures|showPartyMap|unlockDay|unlockDate|PARTY_DAY|itemCollectionObject|ornament|food|bell|donat|cfc|quest|_airtower\\.send|awardCoins|giveCoins", re.I)
 
 with tempfile.TemporaryDirectory(prefix="holiday2015-ffdec-") as tmp:
     temp = Path(tmp)
@@ -81,7 +83,7 @@ with tempfile.TemporaryDirectory(prefix="holiday2015-ffdec-") as tmp:
                 excerpt = [str(i+1)+": "+line for i,line in enumerate(lines[:50])]
             # Exact conditional logic and protocol are needed to fix the icon
             # disappearing after the first dialogue, not only URL inventory.
-            if script.name in ("DecemberParty.as", "TemplatePartyCookieVO.as", "Party_InterfaceOverrides.as", "TemplatedPartyConstants.as", "Character_Dialogue_Login.as") or (original.name.startswith("Rooms") and CLASS_NAMES.search(script.name)):
+            if script.name in ("DecemberParty.as", "TemplatePartyCookieVO.as", "Party_InterfaceOverrides.as", "TemplatedPartyConstants.as", "Character_Dialogue_Login.as") or (original.name.startswith("Close_ups") and CLASS_NAMES.search(script.name)) or (original.name.startswith("Rooms") and CLASS_NAMES.search(script.name)):
                 print("HOLIDAY2015_AS2_FULL " + json.dumps({"asset":original.name,"class":str(script.relative_to(destination)),"source":source[:44000]},ensure_ascii=True),flush=True)
             if excerpt:
                 print("HOLIDAY2015_AS2_SCRIPT " + json.dumps({"asset":original.name,"class":str(script.relative_to(destination)),"lines":len(lines),"excerpt":"\n".join(excerpt)[:14000]},ensure_ascii=True),flush=True)
