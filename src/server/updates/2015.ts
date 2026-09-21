@@ -346,7 +346,14 @@ const HOLIDAY_2015_PARTY: CPUpdate = {
     'play/v2/content/global/content/features.swf': holidayRef('party/content/ContentFeatures-HolidayParty2015.swf'),
     'play/v2/content/global/content/party_icon.swf': holidayRef('party/content/ContentParty_icon-HolidayParty2015.swf'),
     'play/v2/content/global/logo/logo.swf': holidayRef('party/content/ContentLogo-HolidayParty2015.swf'),
+    // avatarId=1000 requests the canonical sprite and the room effect on join.
     'play/v2/content/global/avatar/sprites/frostbite.swf': holidayRef('party/avatar/sprites/AvatarPenguinFrostbite-HolidayParty2015.swf'),
+    'play/v2/content/global/avatar/sprites/1000.swf': holidayRef('party/avatar/sprites/AvatarPenguinFrostbite-HolidayParty2015.swf'),
+    'play/v2/content/global/penguin/penguin_frostbite.swf': holidayRef('party/avatar/sprites/AvatarPenguinFrostbite-HolidayParty2015.swf'),
+    'play/v2/content/global/rooms/effects/avatar.swf': holidayRef('party/avatar/sprites/RoomsEffectsAvatar-HolidayParty2015.swf'),
+    // These CPImagined donors are isolated; see holiday2015/compat/SOURCES.md.
+    'play/v2/content/global/rooms/ufo.swf': holidayRef('compat/cpimagined-common-ufo.swf'),
+    'play/v2/content/global/close_ups/cfc_interface.swf': holidayRef('compat/cpimagined-2112-cfc_interface.swf'),
     'play/v2/content/global/telescope/telescope.swf': holidayRef('party/other/Telescope-HolidayParty2015.swf'),
     'play/v2/content/global/binoculars/binoculars.swf': holidayRef('party/other/Binoculars-HolidayParty2015.swf'),
     ...holidayMusicFiles
@@ -363,7 +370,10 @@ const HOLIDAY_2015_PARTY: CPUpdate = {
     'close_ups/dialogue_december_login.swf': [holidayRef('party/close_ups/Close_upsCharacter_dialogue_december_login-HolidayParty2015.swf'), 'w.app.loginprompt', 'w.app.december2.loginprompt'],
     'close_ups/dialogue_december_congrats.swf': [holidayRef('party/close_ups/Close_upsCharacter_dialogue_december_congrats-HolidayParty2015.swf'), 'w.app.december4.loginprompt'],
     'close_ups/dialogue_walrus_collect.swf': [holidayRef('party/close_ups/Close_upsCharacter_dialogue_walrus_collect-HolidayParty2015.swf'), 'w.app.december3.loginprompt'],
-    'avatar/sprites/frostbite.swf': holidayRef('party/avatar/sprites/AvatarPenguinFrostbite-HolidayParty2015.swf'),
+    'avatar/sprites/frostbite.swf': [holidayRef('party/avatar/sprites/AvatarPenguinFrostbite-HolidayParty2015.swf'), 'w.p1212.holiday.penguin.frostBite'],
+    'penguin/penguin_frostbite.swf': holidayRef('party/avatar/sprites/AvatarPenguinFrostbite-HolidayParty2015.swf'),
+    // ClientParty.CFC_UI_PATH=w.p2015.holiday.cfcui. This crumb was missing.
+    'close_ups/cfc_interface.swf': [holidayRef('compat/cpimagined-2112-cfc_interface.swf'), 'w.p2015.holiday.cfcui'],
     'avatar/sprites/rooms_effects_avatar.swf': holidayRef('party/avatar/sprites/RoomsEffectsAvatar-HolidayParty2015.swf')
   },
   localChanges: {

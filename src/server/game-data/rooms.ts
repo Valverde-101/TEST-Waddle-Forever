@@ -49,6 +49,7 @@ export type RoomName = 'town' |
   'hotelroof' |
   'park' |
   'pufflewild' |
+  'ufo' |
   'berg' |
   'mine' |
   'beach' |
@@ -393,6 +394,12 @@ export const ROOMS: Record<RoomName, Room> = {
   'pufflepark': {
     id: 434,
     name: 'Puffle Park',
+    preCpipName: null
+  },
+  // Client rooms.json uses this original room ID, but the server map lacked it.
+  'ufo': {
+    id: 437,
+    name: 'UFO',
     preCpipName: null
   },
   'party': {
