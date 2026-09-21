@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Read-only source/manifest checks for Holiday 2015 timeline and party isolation."""
 from pathlib import Path
+import hashlib
 import json
 import re
 
@@ -61,9 +62,33 @@ for crumb in ('w.app.december1.loginprompt', 'w.app.december2.loginprompt',
 
 paths = {a['relativePath'] for a in MANIFEST['assets']}
 refs = set(re.findall(r"""holidayRef\((?:'|")([^'"]+)(?:'|")\)""", HOLIDAY))
-missing = refs - paths
+# The genuine 2015 manifest remains immutable (109 SWFs). Common UFO 437 and
+# later-recreation CFC interface are explicit, provenance-pinned compatibility
+# donors outside that original inventory. An unexpected additional asset still
+# fails closed: no implicit exemption for anything placed in compat/.
+compat = {
+    'compat/cpimagined-common-ufo.swf': '0ecbe4f8b9f27c677b4601240d355685e2663d1c',
+    'compat/cpimagined-2112-cfc_interface.swf': '5a4367a1d2f702a2585ef4e89c5d5b449b0e05bf'
+}
+missing = refs - paths - compat.keys()
 require(not missing, 'untracked_holiday_refs=' + ','.join(sorted(missing)))
 require(not (paths - refs), 'originals_not_mapped=' + ','.join(sorted(paths - refs)))
+require(not (compat.keys() - refs), 'compat_donor_unmapped')
+for relative, expected_blob in compat.items():
+    file = ROOT / 'media/default/holiday2015' / relative
+    require(file.is_file(), 'compat_file_missing=' + relative)
+    binary = file.read_bytes()
+    require(binary[:3] in (b'FWS', b'CWS', b'ZWS'),
+            'compat_not_swf=' + relative)
+    blob = hashlib.sha1(b'blob ' + str(len(binary)).encode('ascii') + b'\\x00' + binary).hexdigest()
+    require(blob == expected_blob, 'compat_source_blob_mismatch=' + relative)
+rooms_source = (ROOT / 'src/server/game-data/rooms.ts').read_text(encoding='utf-8')
+require("'ufo':" in rooms_source and 'id: 437' in rooms_source, 'ufo_437_server_room_missing')
+for route in ('play/v2/content/global/rooms/ufo.swf',
+              'play/v2/content/global/rooms/effects/avatar.swf',
+              'play/v2/content/global/penguin/penguin_frostbite.swf',
+              'w.p2015.holiday.cfcui'):
+    require(route in HOLIDAY, 'holiday_runtime_route_missing=' + route)
 rooms = [a for a in MANIFEST['assets'] if a['section'] == 'rooms' and a['phase'] == 'party']
 require(len(rooms) >= 40, 'room_inventory_incomplete')
 for asset in rooms:
@@ -73,4 +98,4 @@ for pair in MANIFEST['roomMusic']:
 print('WADDLE_HOLIDAY2015_TIMELINE=PASS advent=2015-12-02 party=2015-12-17'
       ' last_active=2016-01-06 exclusive_end=2016-01-07'
       ' rooms=' + str(len(rooms)) + ' mapped_assets=' + str(len(refs))
-      + ' isolated=true bot_push=false')
+      + ' compat_donors=2 original_archive_untouched=true isolated=true bot_push=false')
