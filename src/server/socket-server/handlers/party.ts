@@ -20,6 +20,32 @@ export const handleDonateCoins: PenguinHandler<[string, number]> = ({ prst, peng
   prst(penguin);
 }
 
+/**
+ * Holiday 2015 CFC compatibility. CPImagined's archived donation UI speaks
+ * party#cfcglobaltotal and party#cfcstationdonate, not the older e#dc packet.
+ * An offline Waddle player has no worldwide donation database: expose only
+ * this penguin's persisted local donation total rather than fabricating it.
+ * Keep the packet handlers inert for other parties.
+ */
+export const handleHolidayCfcTotal: PenguinHandler<[number]> = ({ penguin, msg, data }) => {
+  const config = data.getPartyProgress();
+  if (config?.id !== 'holiday-2015') return;
+  msg.send(penguin, 'cfcglobaltotal', penguin.partyProgress.getDonatedCoins(config));
+};
+
+export const handleHolidayCfcDonate: PenguinHandler<[number]> = ({ penguin, msg, prst, data }, requested) => {
+  const config = data.getPartyProgress();
+  if (config?.id !== 'holiday-2015') return;
+  // Reject invalid, fractional, negative, non-finite and unaffordable packets.
+  if (!Number.isSafeInteger(requested) || requested < 100 || requested > 10000 ||
+      penguin.currency.coins < requested) return;
+  penguin.currency.discount(requested);
+  const localTotal = penguin.partyProgress.addDonation(config, requested);
+  msg.send(penguin, 'dc', penguin.currency.coins);
+  msg.send(penguin, 'cfcglobaltotal', localTotal);
+  prst(penguin);
+};
+
 export const handleRetrieveMedieval2012: PenguinHandler<[]> = ({ penguin, msg }) => {
   const medievalMessage = penguin.medieval2012.message;
   msg.send(penguin, 'sent', JSON.stringify({
