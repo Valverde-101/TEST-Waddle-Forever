@@ -1,0 +1,50 @@
+name: Waddle Holiday Party 2015 Archived Media Verification
+
+on:
+  pull_request:
+    branches: [dev]
+    paths:
+      - '.github/workflows/waddle-holiday-2015-import.yml'
+      - '.github/scripts/waddle-holiday-2015-import.py'
+      - '.github/scripts/waddle-holiday-2015-original-probe.py'
+      - '.github/scripts/waddle-holiday-2015-ffdec-probe.py'
+      - 'media/default/holiday2015/**'
+      - 'src/server/updates/2015.ts'
+      - 'src/server/updates/2016.ts'
+      - 'src/server/game-data/files.ts'
+  workflow_dispatch:
+
+# Read-only: bots must never push, rebase, amend, or cancel developer commits.
+permissions:
+  contents: read
+
+concurrency:
+  group: waddle-holiday-2015-verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-archived-assets:
+    if: github.repository == 'Valverde-101/TEST-Waddle-Forever' && (github.event_name == 'workflow_dispatch' || github.head_ref == 'feat/holiday-party-2015')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify pinned local SWFs without network or repository writes
+        run: python .github/scripts/waddle-holiday-2015-import.py --verify-local
+      - name: Verify Holiday timeline and isolation
+        run: python .github/scripts/waddle-holiday-2015-verify.py
+      - name: Inspect ORIGINAL Holiday ABC references (read-only protocol evidence)
+        run: python .github/scripts/waddle-holiday-2015-original-probe.py
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Decode ORIGINAL Holiday AS2 party icon lifecycle (read-only, verified tool)
+        continue-on-error: true
+        run: python .github/scripts/waddle-holiday-2015-ffdec-probe.py

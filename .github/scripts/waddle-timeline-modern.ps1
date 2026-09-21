@@ -189,7 +189,15 @@ foreach ($needle in @('import { UPDATES_2015 } from "./2015";','import { UPDATES
 if ($party2015 -notmatch "date\s*:\s*'2015-10-21'") { throw 'WADDLE_TIMELINE_MODERN=FAIL halloween_2015_date_missing' }
 if ($party2015 -notmatch "partyName\s*:\s*'Halloween Party 2015'") { throw 'WADDLE_TIMELINE_MODERN=FAIL halloween_2015_party_missing' }
 if ($party2015 -notmatch "date\s*:\s*'2015-11-05'") { throw 'WADDLE_TIMELINE_MODERN=FAIL halloween_2015_exclusive_end_missing' }
-if (-not $updates2016.Contains("date: '2016-01-01'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL year_2016_update_missing' }
+# The 2016 placeholder can begin after a cross-year temporary party finishes.
+# Never require Jan 1 if Holiday is still active then: that reset hides its
+# rooms/icon/music before the historical January 6 final day.
+$jan1=$updates2016.Contains("date: '2016-01-01'")
+$holidayJan7=$updates2016.Contains("date: '2016-01-07'") -and
+  ($updates2016 -match "end\s*:\s*\['party'\]") -and
+  ($party2015 -match "date\s*:\s*'2015-12-17'") -and
+  ($party2015 -match "partyName\s*:\s*'Holiday Party 2015'")
+if (-not ($jan1 -or $holidayJan7)) { throw 'WADDLE_TIMELINE_MODERN=FAIL year_2016_update_missing_or_holiday_end_invalid' }
 if (-not $updates2016.Contains("indexHtml: 'modern-as3'")) { throw 'WADDLE_TIMELINE_MODERN=FAIL modern_as3_entry_missing' }
 
 $updates2010 = Read-Normalized (Join-Path $RepoRoot 'src/server/updates/2010.ts')

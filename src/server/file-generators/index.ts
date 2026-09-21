@@ -117,6 +117,8 @@ const getRuntimeRoomsJson: FileGenerator = (d, s) => {
     [key: string]: unknown;
   }>;
   const version = s.settings.version;
+  const selectedMusic = d.getRoomsMusic(s.mods.getMusic());
+  const halloween = d.getPartyProgress()?.id === 'halloween-2015';
   const communityPinActive = version >= '2017-01-31' && version < '2017-03-30';
   const coffee = rooms['110'];
 
@@ -132,7 +134,7 @@ const getRuntimeRoomsJson: FileGenerator = (d, s) => {
       room_key: 'mall',
       name: 'The Mall',
       display_name: 'The Mall',
-      music_id: 1032,
+      music_id: selectedMusic.get('mall') ?? selectedMusic.get('stage') ?? 1032,
       is_member: 0,
       path: 'mall.swf',
       max_users: 80,
@@ -155,7 +157,7 @@ const getRuntimeRoomsJson: FileGenerator = (d, s) => {
       // Keep room entry deterministic and silent instead of issuing a guaranteed
       // 404 that can race the room transition. Restore audio only from verified
       // 2015 evidence.
-      music_id: 0,
+      music_id: halloween ? 0 : (selectedMusic.get('school') ?? selectedMusic.get('eco') ?? 0),
       is_member: 0,
       path: 'school.swf',
       max_users: 80,

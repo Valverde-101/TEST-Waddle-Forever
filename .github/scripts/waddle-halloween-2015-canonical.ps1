@@ -180,14 +180,55 @@ $state = [ordered]@{
   verified = $verified
   assetTargets = $sortedTargets
 }
-$utf8 = New-Object System.Text.UTF8Encoding($false)
-# Compact JSON is the canonical on-disk representation. Windows PowerShell 5
-# otherwise emits version-specific alignment whitespace, which can create a
-# false generated-drift failure even when the state is semantically identical.
-$stateJson = ($state | ConvertTo-Json -Depth 5 -Compress) -replace "`r`n", "`n"
 $statePath = Join-Path $targetRoot 'canonical-state.json'
-$statePayload = $stateJson + "`n"
-[IO.File]::WriteAllText($statePath, $statePayload, $utf8)
+$stateMode = 'generated'
+if (Test-Path -LiteralPath $statePath -PathType Leaf) {
+  # Asset hydration is a verifier, not a repository author. A previously pinned
+  # canonical-state.json is an immutable versioned artifact: validate its
+  # manifest-derived content WITHOUT serializing it again in runner PowerShell.
+  # Windows PowerShell 5.1's JSON representation can differ byte-for-byte from
+  # the committed state even when every value is identical; re-writing made
+  # unrelated Holiday PRs fail Halloween's git-cleanliness gate.
+  try {
+    $saved = [IO.File]::ReadAllText($statePath) | ConvertFrom-Json -ErrorAction Stop
+  } catch {
+    throw "WADDLE_HALLOWEEN2015_CANONICAL=FAIL invalid_pinned_state error=$($_.Exception.Message)"
+  }
+  $expectedFields = @('schema','party','sourceRepository','sourceCommit','verified','assetTargets')
+  $actualFields = @($saved.PSObject.Properties.Name)
+  if ($actualFields.Count -ne $expectedFields.Count) {
+    throw "WADDLE_HALLOWEEN2015_CANONICAL=FAIL pinned_state_fields expected=$($expectedFields.Count) actual=$($actualFields.Count)"
+  }
+  foreach ($field in $expectedFields) {
+    if ($actualFields -cnotcontains $field) {
+      throw "WADDLE_HALLOWEEN2015_CANONICAL=FAIL pinned_state_field_missing=$field"
+    }
+  }
+  foreach ($field in @('schema','party','sourceRepository','sourceCommit')) {
+    if ([string]$saved.$field -cne [string]$state[$field]) {
+      throw "WADDLE_HALLOWEEN2015_CANONICAL=FAIL pinned_state_mismatch=$field"
+    }
+  }
+  if ([int]$saved.verified -ne $verified) {
+    throw "WADDLE_HALLOWEEN2015_CANONICAL=FAIL pinned_state_verified expected=$verified actual=$($saved.verified)"
+  }
+  $savedTargets = @($saved.assetTargets)
+  if ($savedTargets.Count -ne $sortedTargets.Count) {
+    throw "WADDLE_HALLOWEEN2015_CANONICAL=FAIL pinned_state_target_count expected=$($sortedTargets.Count) actual=$($savedTargets.Count)"
+  }
+  for ($i = 0; $i -lt $sortedTargets.Count; $i++) {
+    if ([string]$savedTargets[$i] -cne [string]$sortedTargets[$i]) {
+      throw "WADDLE_HALLOWEEN2015_CANONICAL=FAIL pinned_state_target_index=$i expected=$($sortedTargets[$i]) actual=$($savedTargets[$i])"
+    }
+  }
+  $stateMode = 'verified_immutable'
+} else {
+  # An initial local archive bootstrap may create the file. Its creation
+  # remains visible to the workflow's git cleanliness gate until committed.
+  $utf8 = New-Object System.Text.UTF8Encoding($false)
+  $stateJson = ($state | ConvertTo-Json -Depth 5 -Compress) -replace "`r`n", "`n"
+  [IO.File]::WriteAllText($statePath, ($stateJson + "`n"), $utf8)
+}
 
 # Report the exact deterministic artifact identity. If this ever drifts again,
 # CI can distinguish content drift from a line-ending/encoding issue immediately.

@@ -2218,6 +2218,8 @@ const SUBDIRECTORES = new Set([
   TOOL,
   UNKNOWN,
   PARTY2015,
+  // Holiday archive is isolated from the Halloween and Fair asset namespaces.
+  'holiday2015',
   'archives',
   'slegacy',
   'svanilla',

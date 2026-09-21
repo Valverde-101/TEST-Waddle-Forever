@@ -53,6 +53,8 @@ export const getPartyServiceConfig = (config: PartyProgressConfig | null): Party
 };
 
 export type PartyProgressState = {
+  /** Offline-only cumulative Coins for Change donations; not in the partycookie payload. */
+  donatedCoins?: number;
   msgViewedArray: number[];
   communicatorMsgArray: number[];
   questTaskStatus: number[];

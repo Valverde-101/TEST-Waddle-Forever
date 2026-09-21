@@ -1,4 +1,4 @@
-import { Update } from ".";
+import { CPUpdate, Update } from ".";
 
 const P = 'party2015:';
 const ref = (relative: string) => P + relative;
@@ -102,6 +102,292 @@ const tileGlobalChanges = Object.fromEntries(Array.from({length:9},(_,i)=>[`clos
 const tileLocalChanges = Object.fromEntries(Array.from({length:9},(_,i)=>[`close_ups/tiles_minigame${i}.swf`,{en:ref(`close_ups/Close_upsTiles_minigame${i}-HalloweenParty2015.swf`)}]));
 const musicFileChanges = Object.fromEntries(HALLOWEEN_2015_MUSIC_IDS.map(id=>[`play/v2/content/global/music/${id}.swf`,ref(`music/Music${id}.swf`)]));
 
+
+// Holiday 2015 uses its own archive namespace. Reuse only the genuinely generic
+// late-AS3 transport (shell, QuestCommunicator and party-cookie runtime); never
+// serve Halloween or Fair interfaces, rooms, quest cards, maps or game strings.
+const holidayRef = (relative: string) => 'holiday2015:' + relative;
+const HOLIDAY_2015_ROOMS = {
+  "agentlobbymulti": holidayRef("party/rooms/RoomsAgentlobbymulti-HolidayParty2015.swf"),
+  "attic": holidayRef("party/rooms/RoomsAttic-HolidayParty2015.swf"),
+  "beach": holidayRef("party/rooms/RoomsBeach-HolidayParty2015.swf"),
+  "beacon": holidayRef("party/rooms/RoomsBeacon-HolidayParty2015.swf"),
+  "berg": holidayRef("party/rooms/RoomsBerg-HolidayParty2015.swf"),
+  "book": holidayRef("party/rooms/RoomsBook-HolidayParty2015.swf"),
+  "cloudforest": holidayRef("party/rooms/RoomsCloudforest-HolidayParty2015.swf"),
+  "coffee": holidayRef("party/rooms/RoomsCoffee-HolidayParty2015.swf"),
+  "cove": holidayRef("party/rooms/RoomsCove-HolidayParty2015.swf"),
+  "dance": holidayRef("party/rooms/RoomsDance-HolidayParty2015.swf"),
+  "dock": holidayRef("party/rooms/RoomsDock-HolidayParty2015.swf"),
+  "dojo": holidayRef("party/rooms/RoomsDojo-HolidayParty2015.swf"),
+  "dojoext": holidayRef("party/rooms/RoomsDojoext-HolidayParty2015.swf"),
+  "dojofire": holidayRef("party/rooms/RoomsDojofire-HolidayParty2015.swf"),
+  "dojosnow": holidayRef("party/rooms/RoomsDojosnow-HolidayParty2015.swf"),
+  "forest": holidayRef("party/rooms/RoomsForest-HolidayParty2015.swf"),
+  "forts": holidayRef("party/rooms/RoomsForts-HolidayParty2015.swf"),
+  "hotellobby": holidayRef("party/rooms/RoomsHotellobby-HolidayParty2015.swf"),
+  "hotelroof": holidayRef("party/rooms/RoomsHotelroof-HolidayParty2015.swf"),
+  "hotelspa": holidayRef("party/rooms/RoomsHotelspa-HolidayParty2015.swf"),
+  "light": holidayRef("party/rooms/RoomsLight-HolidayParty2015.swf"),
+  "lodge": holidayRef("party/rooms/RoomsLodge-HolidayParty2015.swf"),
+  "lounge": holidayRef("party/rooms/RoomsLounge-HolidayParty2015.swf"),
+  "stage": holidayRef("party/rooms/RoomsMall-HolidayParty2015.swf"),
+  "mall": holidayRef("party/rooms/RoomsMall-HolidayParty2015.swf"),
+  "mtn": holidayRef("party/rooms/RoomsMtn-HolidayParty2015.swf"),
+  "park": holidayRef("party/rooms/RoomsPark-HolidayParty2015.swf"),
+  "pufflepark": holidayRef("party/rooms/RoomsPark-HolidayParty2015.swf"),
+  "party1": holidayRef("party/rooms/RoomsParty1-HolidayParty2015.swf"),
+  "party13": holidayRef("party/rooms/RoomsParty13-HolidayParty2015.swf"),
+  "party14": holidayRef("party/rooms/RoomsParty14-HolidayParty2015.swf"),
+  "party2": holidayRef("party/rooms/RoomsParty2-HolidayParty2015.swf"),
+  "party3": holidayRef("party/rooms/RoomsParty3-HolidayParty2015.swf"),
+  "party4": holidayRef("party/rooms/RoomsParty4-HolidayParty2015.swf"),
+  "pet": holidayRef("party/rooms/RoomsPet-HolidayParty2015.swf"),
+  "pizza": holidayRef("party/rooms/RoomsPizza-HolidayParty2015.swf"),
+  "plaza": holidayRef("party/rooms/RoomsPlaza-HolidayParty2015.swf"),
+  "pufflewild": holidayRef("party/rooms/RoomsPufflewild-HolidayParty2015.swf"),
+  "rink": holidayRef("party/rooms/RoomsRink-HolidayParty2015.swf"),
+  "school": holidayRef("party/rooms/RoomsSchool-HolidayParty2015.swf"),
+  "eco": holidayRef("party/rooms/RoomsSchool-HolidayParty2015.swf"),
+  "shack": holidayRef("party/rooms/RoomsShack-HolidayParty2015.swf"),
+  "ship": holidayRef("party/rooms/RoomsShip-HolidayParty2015.swf"),
+  "shiphold": holidayRef("party/rooms/RoomsShiphold-HolidayParty2015.swf"),
+  "shipnest": holidayRef("party/rooms/RoomsShipnest-HolidayParty2015.swf"),
+  "shipquarters": holidayRef("party/rooms/RoomsShipquarters-HolidayParty2015.swf"),
+  "shop": holidayRef("party/rooms/RoomsShop-HolidayParty2015.swf"),
+  "skatepark": holidayRef("party/rooms/RoomsSkatepark-HolidayParty2015.swf"),
+  "town": holidayRef("party/rooms/RoomsTown-HolidayParty2015.swf"),
+  "village": holidayRef("party/rooms/RoomsVillage-HolidayParty2015.swf")
+};
+const HOLIDAY_2015_MUSIC = {
+  "agentlobbymulti": 922,
+  "attic": 884,
+  "beach": 1068,
+  "beacon": 583,
+  "berg": 1069,
+  "book": 1070,
+  "cloudforest": 363,
+  "coffee": 1070,
+  "cove": 1071,
+  "dance": 1087,
+  "dock": 1072,
+  "dojo": 403,
+  "dojoext": 404,
+  "dojofire": 405,
+  "dojosnow": 407,
+  "forest": 1088,
+  "forts": 1073,
+  "hotellobby": 362,
+  "hotelroof": 360,
+  "hotelspa": 361,
+  "light": 588,
+  "lodge": 1074,
+  "lounge": 1075,
+  "stage": 1076,
+  "mall": 1076,
+  "mtn": 1077,
+  "park": 658,
+  "pufflepark": 658,
+  "party13": 1091,
+  "party14": 1080,
+  "pet": 659,
+  "pizza": 1081,
+  "plaza": 1089,
+  "pufflewild": 897,
+  "rink": 592,
+  "school": 1085,
+  "eco": 1085,
+  "shack": 1090,
+  "ship": 1082,
+  "shiphold": 1083,
+  "shipnest": 1082,
+  "shipquarters": 1083,
+  "shop": 1086,
+  "skatepark": 754,
+  "town": 1084,
+  "village": 1077
+};
+const HOLIDAY_2015_MUSIC_FILES = {
+  "360": holidayRef("party/music/Music360.swf"),
+  "361": holidayRef("party/music/Music361.swf"),
+  "362": holidayRef("party/music/Music362.swf"),
+  "363": holidayRef("party/music/Music363.swf"),
+  "403": holidayRef("party/music/Music403.swf"),
+  "404": holidayRef("party/music/Music404.swf"),
+  "405": holidayRef("party/music/Music405.swf"),
+  "407": holidayRef("party/music/Music407.swf"),
+  "583": holidayRef("party/music/Music583.swf"),
+  "588": holidayRef("party/music/Music588.swf"),
+  "592": holidayRef("party/music/Music592.swf"),
+  "658": holidayRef("party/music/Music658.swf"),
+  "659": holidayRef("party/music/Music659.swf"),
+  "754": holidayRef("party/music/Music754.swf"),
+  "884": holidayRef("party/music/Music884.swf"),
+  "897": holidayRef("party/music/Music897.swf"),
+  "922": holidayRef("party/music/Music922.swf"),
+  "1068": holidayRef("party/music/Music1068_2.swf"),
+  "1069": holidayRef("party/music/Music1069.swf"),
+  "1070": holidayRef("party/music/Music1070.swf"),
+  "1071": holidayRef("party/music/Music1071.swf"),
+  "1072": holidayRef("party/music/Music1072.swf"),
+  "1073": holidayRef("party/music/Music1073.swf"),
+  "1074": holidayRef("party/music/Music1074.swf"),
+  "1075": holidayRef("party/music/Music1075.swf"),
+  "1076": holidayRef("party/music/Music1076.swf"),
+  "1077": holidayRef("party/music/Music1077.swf"),
+  "1078": holidayRef("party/music/Music1078.swf"),
+  "1080": holidayRef("party/music/Music1080.swf"),
+  "1081": holidayRef("party/music/Music1081.swf"),
+  "1082": holidayRef("party/music/Music1082.swf"),
+  "1083": holidayRef("party/music/Music1083.swf"),
+  "1084": holidayRef("party/music/Music1084.swf"),
+  "1085": holidayRef("party/music/Music1085.swf"),
+  "1086": holidayRef("party/music/Music1086.swf"),
+  "1087": holidayRef("party/music/Music1087.swf"),
+  "1088": holidayRef("party/music/Music1088.swf"),
+  "1089": holidayRef("party/music/Music1089.swf"),
+  "1090": holidayRef("party/music/Music1090.swf"),
+  "1091": holidayRef("party/music/Music1091.swf")
+};
+const holidayMusicFiles = Object.fromEntries(Object.entries(HOLIDAY_2015_MUSIC_FILES)
+  .map(([id, file]) => [`play/v2/content/global/music/${id}.swf`, file]));
+
+// The original Advent Calendar opens before the decorated party. Its icon and
+// close-up must not replace the full penguin interface or persist after 16 Dec.
+// The archived Holiday interface and dialogue SWFs reference these exact string
+// keys. Content is isolated to Holiday dates; no Halloween generic labels leak
+// into the December party. The December UI labels are compatibility copy where
+// the complete original 2015 game_strings bundle is not archived.
+const HOLIDAY_2015_DIALOGUE_STRINGS: Record<string, string> = {
+  'w.app.p2015.december.login1': 'Hello. You can collect free gifts from this calendar. New ones unlock every day until Dec. 25. Happy holidays!',
+  'w.app.p2015.december.login2': 'The Holiday Party is here! Open the Calendar to collect gifts and help with Coins for Change.',
+  'w.app.generic.questui.header': 'Holiday Party',
+  'w.app.generic.questui.subheader1': 'Collect your holiday gifts in the Calendar.',
+  'w.app.questui.subheader2': 'Help Coins for Change by earning and donating coins.',
+  'w.app.december2015.ui.calendar': 'December',
+  'w.app.december2015.ui.calendarbtn': 'Open Calendar',
+  'w.app.december2015.ui.donate': 'Donate',
+  'w.app.december2015.ui.donations': 'Donations',
+  'w.app.december2015.ui.beach': 'Beach',
+  'w.app.december2015.ui.forest': 'Forest',
+  'w.app.december2015.ui.plaza': 'Plaza',
+  'w.app.december2015.ui.furnigloobtn': 'Furniture & Igloo',
+  'w.app.december2015.ui.penguinstylebtn': 'Penguin Style'
+};
+
+const HOLIDAY_2015_ADVENT: CPUpdate = {
+  partyName: 'Advent Calendar 2015',
+  decorated: false as const,
+  roomComment: 'The 2015 Advent Calendar opens in the Snow Forts',
+  gameStringChanges: { 'w.app.p2015.december.login1': HOLIDAY_2015_DIALOGUE_STRINGS['w.app.p2015.december.login1'] },
+  rooms: { forts: holidayRef('preparty/rooms/2015AdventCalendarforts.swf') },
+  music: { forts: 587 },
+  fileChanges: {
+    'play/v2/content/global/music/587.swf': holidayRef('preparty/music/Music587.swf'),
+    'play/v2/content/global/content/party_icon.swf': holidayRef('preparty/content/2015AdventCalendarpartyicon.swf')
+  },
+  globalChanges: {
+    'content/party_icon.swf': [holidayRef('preparty/content/2015AdventCalendarpartyicon.swf'), 'party_icon'],
+    'close_ups/advent_calendar.swf': [holidayRef('preparty/close_ups/2015AdventCalendarinterface.swf'), 'advent_calendar', 'w.app.itemcollect.partyinterface'],
+    'close_ups/advent_calendar_login.swf': [holidayRef('preparty/close_ups/2015AdventCalendarlogin.swf'), 'w.app.december1.loginprompt']
+  },
+  localChanges: {
+    'close_ups/advent_calendar.swf': { en: holidayRef('preparty/close_ups/2015AdventCalendarinterface.swf') },
+    'close_ups/advent_calendar_login.swf': { en: holidayRef('preparty/close_ups/2015AdventCalendarlogin.swf') },
+    'membership/party1.swf': { en: holidayRef('preparty/membership/2015AdventCalendarmembership.swf') }
+  }
+};
+const HOLIDAY_2015_PARTY: CPUpdate = {
+  partyName: 'Holiday Party 2015',
+  // 2015 late-AS3 world/map expects the post-June-2015 island layout with
+  // the Mall and School. The inherited MapAug2012 predates those rooms and
+  // silently serves an unrelated map even though party rooms load correctly.
+  // Use Waddle's already-versioned modern map; do not import a 2022/2024
+  // CPImagined custom map as if it were the original Holiday 2015 asset.
+  map: 'approximation:modern_map.swf',
+  // The original ClientParty SWF defines PARTY_ID_2015_DECEMBERPARTY=20151100.
+  // Without an explicit feature ID, Waddle inherits 20141002 from an old party
+  // and DecemberParty refuses to activate its icon, map, rooms and dialogues.
+  activeFeatures: '20151100',
+  gameStringChanges: HOLIDAY_2015_DIALOGUE_STRINGS,
+  migrator: true,
+  coinsForChange: true,
+  // Party cookie uses an independent ID, not Halloween's quest/task state.
+  partyProgress: {
+    // ORIGINAL TemplatedPartyConstants assigns login indices 7 (Dec 16),
+    // 8 (Dec 25) and 9 (Dec 26). The prior four-slot cookie caused
+    // TemplatePartyCookieVO.sendMessageViewed(7) to reject the packet locally;
+    // partyIconVisible then always returned false after the login prompt.
+    // Preserve the original 11-slot default and this party's isolated ID.
+    id: 'holiday-2015', messageCount: 11, communicatorMessageCount: 0,
+    // ContentFeatures-HolidayParty2015.swf declares numOfQuests=4. The
+    // 25 calendar dates are service days, not 25 questTaskStatus entries.
+    taskCount: 4, maxCoinUpdate: 10,
+    service: {
+      partyStartDate: '2015-12-17 00:00:00',
+      partyEndDate: '2016-01-07 00:00:00',
+      // Exclusive end is 2016-01-07: 21 days with 0-based indices 0..20.
+      // The server computes the active unlock index from the selected date.
+      unlockDayIndex: 20,
+      numOfDaysInParty: 21
+    }
+  },
+  rooms: HOLIDAY_2015_ROOMS,
+  music: HOLIDAY_2015_MUSIC,
+  fileChanges: {
+    // The Halloween runtime is patched for Robot Rampage and must NEVER
+    // bootstrap Holiday. Use the original archived Holiday party logic.
+    'play/v2/content/global/content/party.swf': holidayRef('party/client/ClientParty-HolidayParty2015.swf'),
+    'play/v2/client/QuestCommunicator.swf': ref('client/QuestCommunicator.swf'),
+    'play/v2/client/shell.swf': 'svanilla:media/play/v2/client/shell.swf',
+    'play/v2/client/interface.swf': holidayRef('party/client/ClientInterface-HolidayParty2015.swf'),
+    'play/v2/client/party.swf': holidayRef('party/client/ClientParty-HolidayParty2015.swf'),
+    'play/v2/content/global/content/interface.swf': holidayRef('party/client/ClientInterface-HolidayParty2015.swf'),
+    'play/v2/content/global/content/features.swf': holidayRef('party/content/ContentFeatures-HolidayParty2015.swf'),
+    'play/v2/content/global/content/party_icon.swf': holidayRef('party/content/ContentParty_icon-HolidayParty2015.swf'),
+    'play/v2/content/global/logo/logo.swf': holidayRef('party/content/ContentLogo-HolidayParty2015.swf'),
+    // avatarId=1000 requests the canonical sprite and the room effect on join.
+    'play/v2/content/global/avatar/sprites/frostbite.swf': holidayRef('party/avatar/sprites/AvatarPenguinFrostbite-HolidayParty2015.swf'),
+    'play/v2/content/global/avatar/sprites/1000.swf': holidayRef('party/avatar/sprites/AvatarPenguinFrostbite-HolidayParty2015.swf'),
+    'play/v2/content/global/penguin/penguin_frostbite.swf': holidayRef('party/avatar/sprites/AvatarPenguinFrostbite-HolidayParty2015.swf'),
+    'play/v2/content/global/rooms/effects/avatar.swf': holidayRef('party/avatar/sprites/RoomsEffectsAvatar-HolidayParty2015.swf'),
+    // These CPImagined donors are isolated; see holiday2015/compat/SOURCES.md.
+    'play/v2/content/global/rooms/ufo.swf': holidayRef('compat/cpimagined-common-ufo.swf'),
+    'play/v2/content/global/close_ups/cfc_interface.swf': holidayRef('compat/cpimagined-2112-cfc_interface.swf'),
+    'play/v2/content/global/telescope/telescope.swf': holidayRef('party/other/Telescope-HolidayParty2015.swf'),
+    'play/v2/content/global/binoculars/binoculars.swf': holidayRef('party/other/Binoculars-HolidayParty2015.swf'),
+    ...holidayMusicFiles
+  },
+  globalChanges: {
+    'content/party_icon.swf': [holidayRef('party/content/ContentParty_icon-HolidayParty2015.swf'), 'party_icon', 'scavenger_hunt_icon'],
+    'close_ups/quest_interface.swf': [holidayRef('party/close_ups/Close_upsQuest_interface-HolidayParty2015.swf'), 'w.app.generic.partyinterface'],
+    // The original ClientParty.ITEM_COLLECT_UI_PATH resolves this exact
+    // global crumb; advent_calendar alone is a legacy alias unused by it.
+    'close_ups/item_calendar_web.swf': [holidayRef('party/close_ups/Close_upsItem_calendar_web-HolidayParty2015.swf'), 'advent_calendar', 'w.app.itemcollect.partyinterface'],
+    'close_ups/advent_calendar_login.swf': [holidayRef('preparty/close_ups/2015AdventCalendarlogin.swf'), 'w.app.december1.loginprompt'],
+    // The ORIGINAL DecemberParty has four distinct date-specific path keys.
+    // The generic w.app.loginprompt alias alone is not read by that party.
+    'close_ups/dialogue_december_login.swf': [holidayRef('party/close_ups/Close_upsCharacter_dialogue_december_login-HolidayParty2015.swf'), 'w.app.loginprompt', 'w.app.december2.loginprompt'],
+    'close_ups/dialogue_december_congrats.swf': [holidayRef('party/close_ups/Close_upsCharacter_dialogue_december_congrats-HolidayParty2015.swf'), 'w.app.december4.loginprompt'],
+    'close_ups/dialogue_walrus_collect.swf': [holidayRef('party/close_ups/Close_upsCharacter_dialogue_walrus_collect-HolidayParty2015.swf'), 'w.app.december3.loginprompt'],
+    'avatar/sprites/frostbite.swf': [holidayRef('party/avatar/sprites/AvatarPenguinFrostbite-HolidayParty2015.swf'), 'w.p1212.holiday.penguin.frostBite'],
+    'penguin/penguin_frostbite.swf': holidayRef('party/avatar/sprites/AvatarPenguinFrostbite-HolidayParty2015.swf'),
+    // ClientParty.CFC_UI_PATH=w.p2015.holiday.cfcui. This crumb was missing.
+    'close_ups/cfc_interface.swf': [holidayRef('compat/cpimagined-2112-cfc_interface.swf'), 'w.p2015.holiday.cfcui'],
+    'avatar/sprites/rooms_effects_avatar.swf': holidayRef('party/avatar/sprites/RoomsEffectsAvatar-HolidayParty2015.swf')
+  },
+  localChanges: {
+    'close_ups/quest_interface.swf': { en: holidayRef('party/close_ups/Close_upsQuest_interface-HolidayParty2015.swf') },
+    'close_ups/item_calendar_web.swf': { en: holidayRef('party/close_ups/Close_upsItem_calendar_web-HolidayParty2015.swf') },
+    'close_ups/advent_calendar_login.swf': { en: holidayRef('preparty/close_ups/2015AdventCalendarlogin.swf') },
+    'close_ups/dialogue_december_login.swf': { en: holidayRef('party/close_ups/Close_upsCharacter_dialogue_december_login-HolidayParty2015.swf') },
+    'close_ups/dialogue_december_congrats.swf': { en: holidayRef('party/close_ups/Close_upsCharacter_dialogue_december_congrats-HolidayParty2015.swf') },
+    'close_ups/dialogue_walrus_collect.swf': { en: holidayRef('party/close_ups/Close_upsCharacter_dialogue_walrus_collect-HolidayParty2015.swf') },
+    'membership/party2.swf': { en: holidayRef('party/membership/MembershipParty2-HolidayParty2015.swf') },
+    'membership/party3.swf': { en: holidayRef('party/membership/MembershipParty3-HolidayParty2015.swf') }
+  }
+};
+
 export const UPDATES_2015: Update[] = [
   { date:'2015-05-01', rooms:{ lake:'archives:RoomsLake-May2015.swf' } },
   {
@@ -174,5 +460,9 @@ export const UPDATES_2015: Update[] = [
       }
     }}
   },
-  { date:'2015-11-05', end:['party'] }
+  { date:'2015-11-05', end:['party'] },
+  // Timeline shows the December pre-party separately from the live Holiday event.
+  { date:'2015-12-02', temp:{ event:HOLIDAY_2015_ADVENT } },
+  { date:'2015-12-17', end:['event'], temp:{ party:HOLIDAY_2015_PARTY } },
+  // The exclusive end is in 2016.ts to retain chronological update ordering.
 ];
