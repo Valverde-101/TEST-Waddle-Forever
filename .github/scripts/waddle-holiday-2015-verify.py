@@ -80,7 +80,7 @@ for relative, expected_blob in compat.items():
     binary = file.read_bytes()
     require(binary[:3] in (b'FWS', b'CWS', b'ZWS'),
             'compat_not_swf=' + relative)
-    blob = hashlib.sha1(b'blob ' + str(len(binary)).encode('ascii') + b'\\x00' + binary).hexdigest()
+    blob = hashlib.sha1(b'blob ' + str(len(binary)).encode('ascii') + bytes([0]) + binary).hexdigest()
     require(blob == expected_blob, 'compat_source_blob_mismatch=' + relative)
 rooms_source = (ROOT / 'src/server/game-data/rooms.ts').read_text(encoding='utf-8')
 require("'ufo':" in rooms_source and 'id: 437' in rooms_source, 'ufo_437_server_room_missing')
