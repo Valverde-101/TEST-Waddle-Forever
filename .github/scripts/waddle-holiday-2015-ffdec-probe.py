@@ -40,10 +40,14 @@ with tempfile.TemporaryDirectory(prefix="holiday2015-ffdec-") as tmp:
         jar_names = [name for name in archive.namelist() if Path(name).name == "ffdec.jar"]
         if len(jar_names) != 1:
             raise ValueError("FFDec jar not found in signed release ZIP")
-        (temp / "ffdec.jar").write_bytes(archive.read(jar_names[0]))
+        # FFDec depends on sibling lib/*.jar files. Extract the complete pinned
+        # distribution, not just ffdec.jar (otherwise NoClassDefFoundError).
+        ffdec_dir = temp / "ffdec"
+        archive.extractall(ffdec_dir)
+        jar_path = ffdec_dir / jar_names[0]
     for original in ORIGINALS:
         destination = temp / original.stem
-        cmd = ["java", "-Djava.awt.headless=true", "-Xmx1536m", "-jar", str(temp / "ffdec.jar"), "-export", "script", str(destination), str(original)]
+        cmd = ["java", "-Djava.awt.headless=true", "-Xmx1536m", "-jar", str(jar_path), "-export", "script", str(destination), str(original)]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=200, check=False)
         print("HOLIDAY2015_FFDEC_EXPORT " + json.dumps({"asset":original.name,"returncode":result.returncode,"stdout_tail":result.stdout[-700:],"stderr_tail":result.stderr[-700:]},ensure_ascii=True),flush=True)
         if result.returncode:
