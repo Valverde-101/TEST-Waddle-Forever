@@ -89,6 +89,13 @@ jobs:
           $certBase=Join-Path $root 'Certification\Waddle-Forever'
           New-Item -ItemType Directory -Force -Path $certBase | Out-Null
           $certRepo=Join-Path $certBase ('run-{0}-attempt-{1}-{2}' -f $env:GITHUB_RUN_ID,$env:GITHUB_RUN_ATTEMPT,$env:GITHUB_JOB)
+          # Publish the exact disposable path before worktree setup can be cancelled.
+          $env:WADDLE_LIVE_REPO=$liveRepo
+          $env:WADDLE_CERT_REPO=$certRepo
+          $env:WADDLE_CANONICAL_REPO=$certRepo
+          "WADDLE_LIVE_REPO=$liveRepo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WADDLE_CERT_REPO=$certRepo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "WADDLE_CANONICAL_REPO=$certRepo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           try {
             & $gitExe -c "safe.directory=$liveRepo" -C $liveRepo fetch --no-tags --depth=1 'https://github.com/${{ github.repository }}.git' $env:WADDLE_EXPECTED_SHA
             if($LASTEXITCODE -ne 0){throw "WADDLE_CERT=FAIL fetch_exact_sha exit=$LASTEXITCODE sha=$env:WADDLE_EXPECTED_SHA"}
@@ -135,9 +142,6 @@ jobs:
             Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue
           }
 
-          "WADDLE_LIVE_REPO=$liveRepo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "WADDLE_CERT_REPO=$certRepo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "WADDLE_CANONICAL_REPO=$certRepo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "WADDLE_CERT_WORKTREE=PASS mode=isolated sha=$actual repo=$certRepo live_repo=$liveRepo node_modules_facade=junctions:$junctionCount files:$fileCount core=$coreVersion"
 
       - name: Validate canonical promotion PowerShell syntax
@@ -282,7 +286,25 @@ jobs:
           $certRepo=$env:WADDLE_CERT_REPO
           $liveRepo=$env:WADDLE_LIVE_REPO
           $gitExe=$env:WADDLE_GIT_EXE
-          if([string]::IsNullOrWhiteSpace($certRepo) -or -not(Test-Path -LiteralPath $certRepo)){Write-Host 'WADDLE_CERT_CLEANUP=PASS mode=nothing_to_remove';exit 0}
+          $root=[string]$env:ANDROIDBUILD_ROOT
+          if([string]::IsNullOrWhiteSpace($root) -or -not(Test-Path -LiteralPath (Join-Path $root 'Core\Current\AndroidBuild.psd1') -PathType Leaf)){
+            $roots=New-Object System.Collections.Generic.List[string]
+            if($root){$roots.Add($root)}
+            foreach($drive in [IO.DriveInfo]::GetDrives()){try{if($drive.IsReady){$candidate=[IO.Path]::Combine($drive.RootDirectory.FullName,'AndroidBuild');if(-not $roots.Contains($candidate)){$roots.Add($candidate)}}}catch{}}
+            $root=$null
+            foreach($candidate in $roots){try{$full=(Resolve-Path -LiteralPath $candidate -ErrorAction Stop).Path}catch{continue};if(Test-Path -LiteralPath (Join-Path $full 'Core\Current\AndroidBuild.psd1') -PathType Leaf){$root=$full;break}}
+          }
+          if([string]::IsNullOrWhiteSpace($root)){Write-Host 'WADDLE_CERT_CLEANUP=PASS mode=core_root_unavailable_no_workspace_created';exit 0}
+          $root=[IO.Path]::GetFullPath($root)
+          $certBase=[IO.Path]::GetFullPath((Join-Path $root 'Certification\Waddle-Forever'))
+          $expectedName='run-{0}-attempt-{1}-{2}' -f $env:GITHUB_RUN_ID,$env:GITHUB_RUN_ATTEMPT,$env:GITHUB_JOB
+          $expectedCertRepo=[IO.Path]::GetFullPath((Join-Path $certBase $expectedName))
+          if([string]::IsNullOrWhiteSpace($certRepo)){$certRepo=$expectedCertRepo}
+          $certRepo=[IO.Path]::GetFullPath($certRepo)
+          if([IO.Path]::GetDirectoryName($certRepo).TrimEnd('\') -ine $certBase.TrimEnd('\') -or [IO.Path]::GetFileName($certRepo) -ine $expectedName){Write-Host "WADDLE_CERT_CLEANUP=FAIL unsafe_workspace=$certRepo expected=$expectedCertRepo";exit 1}
+          if([string]::IsNullOrWhiteSpace($liveRepo)){$liveRepo=Join-Path $root 'Repositories\TEST-Waddle-Forever'}
+          if([string]::IsNullOrWhiteSpace($gitExe)){try{$gitExe=[string](Get-Command git.exe -ErrorAction Stop).Source}catch{}}
+          if(-not(Test-Path -LiteralPath $certRepo)){Write-Host "WADDLE_CERT_CLEANUP=PASS mode=nothing_to_remove path=$certRepo";exit 0}
 
           $state=Join-Path $certRepo '.work\state\waddle-client.json'
           if(Test-Path -LiteralPath $state -PathType Leaf){
